@@ -1,14 +1,12 @@
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from sqlalchemy.orm import Session
 
-from app.database import get_db
 from app.dependencies import require_account
-from app.esi import search_systems_auth, get_system_info, get_planet_info, ensure_valid_token
+from app.esi import get_system_info, get_planet_info
 from app.market import get_sell_prices_by_names
-from app.models import Character
 from app.pi_analyzer import analyze_system
 from app.pi_data import PLANET_TYPE_COLORS, PLANET_RESOURCES
+from app.sde import search_systems_local
 from app.templates_env import templates
 
 router = APIRouter(prefix="/system", tags=["system"])
@@ -39,34 +37,11 @@ def system_analyzer(
 
 
 @router.get("/search")
-def search_system(q: str, account=Depends(require_account), db: Session = Depends(get_db)):
+def search_system(q: str, account=Depends(require_account)):
     if len(q) < 3:
         return JSONResponse(content={"systems": []})
     try:
-        # Hauptcharakter für Auth-Suche ermitteln
-        char = None
-        if account.main_character_id:
-            char = db.query(Character).filter(Character.id == account.main_character_id).first()
-        if not char:
-            char = db.query(Character).filter(Character.account_id == account.id).first()
-        if not char:
-            return JSONResponse(content={"systems": []})
-
-        access_token = ensure_valid_token(char, db)
-        if not access_token:
-            return JSONResponse(content={"systems": []})
-
-        result = search_systems_auth(char.eve_character_id, access_token, q)
-        system_ids = result.get("solar_system", [])[:10]
-        systems = []
-        for sid in system_ids:
-            info = get_system_info(sid)
-            if info:
-                systems.append({
-                    "id": sid,
-                    "name": info.get("name", f"System {sid}"),
-                    "security": round(info.get("security_status", 0.0), 1),
-                })
+        systems = search_systems_local(q, limit=10)
         return JSONResponse(content={"systems": systems})
     except Exception as e:
         return JSONResponse(content={"systems": [], "error": str(e)})

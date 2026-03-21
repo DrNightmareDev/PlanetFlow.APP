@@ -6,6 +6,7 @@ from app.esi import get_system_info, get_planet_info
 from app.market import get_sell_prices_by_names
 from app.pi_analyzer import analyze_system
 from app.pi_data import PLANET_TYPE_COLORS, PLANET_RESOURCES
+from app import sde
 from app.sde import search_systems_local
 from app.templates_env import templates
 
@@ -63,7 +64,14 @@ def analyze(system_id: int, account=Depends(require_account)):
         type_resources: dict = {}
         for pid in planet_ids[:16]:  # Max 16 Planeten
             pinfo = get_planet_info(pid)
-            raw_type = pinfo.get("type_name", "").lower()
+            # ESI returns type_id (int), not type_name. Resolve via SDE types.
+            type_id = pinfo.get("type_id")
+            raw_type = ""
+            if type_id:
+                type_name = sde.get_type_name(type_id) or ""
+                # "Planet (Temperate)" → "temperate"
+                if "(" in type_name and type_name.endswith(")"):
+                    raw_type = type_name[type_name.index("(") + 1:-1].lower()
             mapped = PLANET_TYPE_MAP.get(raw_type)
             if mapped:
                 planet_types.append(mapped)

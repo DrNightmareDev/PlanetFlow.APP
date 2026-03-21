@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.dependencies import require_account
 from app.esi import get_system_info, get_planet_info
-from app.market import get_sell_prices_by_names
+from app.market import get_prices_by_names, get_market_trends, PI_TYPE_IDS
 from app.pi_analyzer import analyze_system
 from app.pi_data import PLANET_TYPE_COLORS, PLANET_RESOURCES
 from app import sde
@@ -115,9 +115,38 @@ def analyze(system_id: int, account=Depends(require_account)):
         )
 
         recommendations = analyze_system(planet_types)
-        prices = get_sell_prices_by_names([r["name"] for r in recommendations])
+        rec_names = [r["name"] for r in recommendations]
+
+        # Preise: Sell + Buy + Angebot (eine Fuzzwork Batch-Anfrage)
+        prices = get_prices_by_names(rec_names)
+
+        # Preistrends: ESI Market History, 24h gecacht, parallel gefetcht
+        unique_type_ids = list({PI_TYPE_IDS[n] for n in rec_names if n in PI_TYPE_IDS})
+        trends = get_market_trends(unique_type_ids)
+
         for rec in recommendations:
-            rec["isk_sell"] = prices.get(rec["name"], 0.0)
+            price_data = prices.get(rec["name"], {})
+            rec["isk_sell"] = price_data.get("sell", 0.0)
+            rec["isk_buy"] = price_data.get("buy", 0.0)
+            # Angebot-Indikator anhand Anzahl Sell-Orders in Jita
+            order_count = int(price_data.get("sell_order_count", 0))
+            if order_count == 0:
+                rec["supply_level"] = "none"
+            elif order_count <= 30:
+                rec["supply_level"] = "green"
+            elif order_count <= 150:
+                rec["supply_level"] = "yellow"
+            else:
+                rec["supply_level"] = "red"
+            # Trend-Daten aus ESI History
+            type_id = PI_TYPE_IDS.get(rec["name"])
+            trend_data = trends.get(type_id, {}) if type_id else {}
+            rec["trend_1d"] = trend_data.get("trend_1d")
+            rec["trend_7d"] = trend_data.get("trend_7d")
+            rec["trend_30d"] = trend_data.get("trend_30d")
+
+        # Nach Jita Sell absteigend sortieren
+        recommendations.sort(key=lambda x: x.get("isk_sell", 0), reverse=True)
 
         return JSONResponse(content={
             "system_name": system_name,

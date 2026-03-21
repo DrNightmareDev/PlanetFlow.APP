@@ -2,6 +2,8 @@
 Marktpreise für EVE Online PI-Produkte
 Primär: Janice API, Fallback: Fuzzwork
 """
+import time as _time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -15,6 +17,10 @@ CACHE_TTL_MINUTES = 15
 
 JANICE_API_URL = "https://janice.e-351.com/api/rest/v2/pricer"
 FUZZWORK_API_URL = "https://market.fuzzwork.co.uk/aggregates/"
+ESI_HISTORY_URL = "https://esi.evetech.net/latest/markets/10000002/history/"
+HISTORY_CACHE_TTL = 86400.0  # 24h in-memory cache for market history
+
+_history_cache: dict[int, tuple[float, list]] = {}  # type_id -> (timestamp, sorted_data)
 
 # Vollständige PI Type-IDs (verifiziert via Fuzzwork SDE) — P1 bis P4
 # P1 – Basisprodukte (Basic Industry Facility)
@@ -183,7 +189,14 @@ def _fetch_fuzzwork_prices(type_ids: list[int]) -> dict[int, dict]:
             tid = int(type_id_str)
             buy = float(info.get("buy", {}).get("max", 0) or 0)
             sell = float(info.get("sell", {}).get("min", 0) or 0)
-            result[tid] = {"buy": buy, "sell": sell}
+            sell_volume = float(info.get("sell", {}).get("volume", 0) or 0)
+            sell_order_count = int(info.get("sell", {}).get("orderCount", 0) or 0)
+            result[tid] = {
+                "buy": buy,
+                "sell": sell,
+                "sell_volume": sell_volume,
+                "sell_order_count": sell_order_count,
+            }
         except (ValueError, TypeError):
             continue
     return result
@@ -399,6 +412,93 @@ def get_sell_prices_by_names(names: list[str]) -> dict[str, float]:
         return {name: fuzz.get(tid, {}).get("sell", 0.0) for name, tid in name_to_id.items()}
     except Exception:
         return {}
+
+
+def get_prices_by_names(names: list[str]) -> dict[str, dict]:
+    """
+    Holt Sell+Buy+Angebot für Item-Namen via Fuzzwork (eine Batch-Anfrage).
+    Returns: dict von name -> {sell, buy, sell_volume, sell_order_count}
+    """
+    if not names:
+        return {}
+    name_to_id = {n: _PI_NAME_TO_ID[n] for n in names if n in _PI_NAME_TO_ID}
+    if not name_to_id:
+        return {}
+    try:
+        fuzz = _fetch_fuzzwork_prices(list(name_to_id.values()))
+        result = {}
+        for name, tid in name_to_id.items():
+            d = fuzz.get(tid, {})
+            result[name] = {
+                "sell": d.get("sell", 0.0),
+                "buy": d.get("buy", 0.0),
+                "sell_volume": d.get("sell_volume", 0.0),
+                "sell_order_count": d.get("sell_order_count", 0),
+            }
+        return result
+    except Exception:
+        return {}
+
+
+def _get_market_history(type_id: int) -> list[dict]:
+    """Holt ESI Markthistorie für The Forge (Jita). Cached 24h in-memory."""
+    now = _time.time()
+    cached = _history_cache.get(type_id)
+    if cached and (now - cached[0]) < HISTORY_CACHE_TTL:
+        return cached[1]
+    try:
+        resp = requests.get(
+            ESI_HISTORY_URL,
+            params={"type_id": type_id, "datasource": "tranquility"},
+            headers={"Accept": "application/json", "User-Agent": "EVE PI Manager"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = sorted(resp.json(), key=lambda x: x.get("date", ""))
+        _history_cache[type_id] = (now, data)
+        return data
+    except Exception:
+        return []
+
+
+def _calc_trend(history: list[dict], days: int) -> float | None:
+    """Berechnet %-Preisänderung über 'days' Tage anhand ESI-Durchschnittspreis."""
+    if len(history) < 2:
+        return None
+    current = history[-1].get("average", 0)
+    if not current:
+        return None
+    target_idx = max(0, len(history) - 1 - days)
+    past = history[target_idx].get("average", 0)
+    if not past:
+        return None
+    return round((current - past) / past * 100, 2)
+
+
+def get_market_trends(type_ids: list[int]) -> dict[int, dict]:
+    """
+    Holt Preistrends (24h/7T/30T) für mehrere Type-IDs via ESI Market History.
+    Cached 24h in-memory. Parallele Requests für nicht-gecachte IDs (max 10 Threads).
+    Returns: dict von type_id -> {trend_1d, trend_7d, trend_30d}
+    """
+    now = _time.time()
+    unique_ids = list(set(type_ids))
+    uncached = [
+        tid for tid in unique_ids
+        if tid not in _history_cache or (now - _history_cache[tid][0]) >= HISTORY_CACHE_TTL
+    ]
+    if uncached:
+        with ThreadPoolExecutor(max_workers=min(len(uncached), 10)) as executor:
+            list(executor.map(_get_market_history, uncached))
+    result = {}
+    for type_id in type_ids:
+        history = _get_market_history(type_id)
+        result[type_id] = {
+            "trend_1d": _calc_trend(history, 1),
+            "trend_7d": _calc_trend(history, 7),
+            "trend_30d": _calc_trend(history, 30),
+        }
+    return result
 
 
 def refresh_all_pi_prices(db: Session) -> None:

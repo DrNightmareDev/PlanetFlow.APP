@@ -65,21 +65,20 @@ def analyze_system(planet_types: list[str]) -> list[dict]:
     # Schritt 4: Verfügbare P3-Produkte bestimmen
     available_p3: set[str] = set()
     for p3, inputs in P2_TO_P3.items():
-        # Prüfe ob alle P2-Inputs verfügbar sind
-        normalized_inputs = []
-        for inp in inputs:
-            if inp in available_p2 or inp in P1_TO_P2:
-                normalized_inputs.append(inp)
         if all(inp in available_p2 for inp in inputs):
             available_p3.add(p3)
 
     for p3 in sorted(available_p3):
         inputs = P2_TO_P3.get(p3, [])
+        needed_planets: set[str] = set()
+        for p2 in inputs:
+            for pt in _planets_for_p1_list(P1_TO_P2.get(p2, []), planet_types):
+                needed_planets.add(pt)
         results.append({
             "name": p3,
             "tier": "P3",
             "inputs": inputs,
-            "planets_needed": [],
+            "planets_needed": sorted(needed_planets),
             "available": True,
             "score": 60,
         })
@@ -89,11 +88,19 @@ def analyze_system(planet_types: list[str]) -> list[dict]:
     if has_advanced_planet:
         for p4, inputs in P3_TO_P4.items():
             if all(inp in available_p3 for inp in inputs):
+                needed_planets = set()
+                for p3_inp in inputs:
+                    for p2 in P2_TO_P3.get(p3_inp, []):
+                        for pt in _planets_for_p1_list(P1_TO_P2.get(p2, []), planet_types):
+                            needed_planets.add(pt)
+                for advanced in ("Barren", "Temperate"):
+                    if advanced in planet_types:
+                        needed_planets.add(advanced)
                 results.append({
                     "name": p4,
                     "tier": "P4",
                     "inputs": inputs,
-                    "planets_needed": ["Barren/Temperate"],
+                    "planets_needed": sorted(needed_planets),
                     "available": True,
                     "score": 150,
                 })

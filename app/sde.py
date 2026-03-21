@@ -305,7 +305,7 @@ def get_system_local(system_id: int) -> dict | None:
 def search_systems_local(query: str, limit: int = 10) -> list[dict]:
     """
     Lokale System-Suche in den Fuzzwork-Daten.
-    Gibt eine Liste von {id, name, security} zurück, Prefix-Treffer zuerst.
+    Gibt eine Liste von {id, name, security, region} zurück, Prefix-Treffer zuerst.
     """
     if not _systems or len(query) < 3:
         return []
@@ -313,10 +313,13 @@ def search_systems_local(query: str, limit: int = 10) -> list[dict]:
     prefix: list[dict] = []
     contains: list[dict] = []
     for name_lower, (sys_id, name, security) in _systems.items():
+        sys_data = _systems_by_id.get(sys_id, {})
+        region_name = _regions.get(sys_data.get("region_id", 0), "")
+        entry = {"id": sys_id, "name": name, "security": round(security, 1), "region": region_name}
         if name_lower.startswith(q):
-            prefix.append({"id": sys_id, "name": name, "security": round(security, 1)})
+            prefix.append(entry)
         elif q in name_lower:
-            contains.append({"id": sys_id, "name": name, "security": round(security, 1)})
+            contains.append(entry)
         if len(prefix) >= limit:
             break
     results = prefix + contains

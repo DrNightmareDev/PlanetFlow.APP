@@ -1,0 +1,25 @@
+[Unit]
+Description=EVE PI Manager - Planetary Industry Dashboard
+After=postgresql.service network.target
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=evepi
+Group=evepi
+WorkingDirectory=/opt/eve-pi-manager
+EnvironmentFile=/opt/eve-pi-manager/.env
+ExecStart=/opt/eve-pi-manager/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=eve-pi-manager
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/eve-pi-manager
+
+[Install]
+WantedBy=multi-user.target

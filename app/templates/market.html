@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Jita Markt – EVE PI Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <h2 class="eve-page-title mb-0">
+        <i class="bi bi-graph-up-arrow me-2 eve-accent"></i>Jita 4-4 Marktpreise
+    </h2>
+    <div class="text-muted small">
+        <i class="bi bi-info-circle me-1"></i>Cache: 15 Minuten · Station: Jita IV - Moon 4 - Caldari Navy Assembly Plant
+    </div>
+</div>
+
+<div class="eve-card card border-0">
+    <div class="card-body p-0">
+        {% if market_data %}
+        <div class="table-responsive">
+            <table class="table eve-table mb-0" id="marketTable">
+                <thead>
+                    <tr>
+                        <th>PI Produkt</th>
+                        <th class="text-end">Bester Kauf</th>
+                        <th class="text-end">Bester Verkauf</th>
+                        <th class="text-end">Ø Volumen/Tag</th>
+                        <th class="text-end">Spread</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in market_data %}
+                    <tr>
+                        <td class="fw-medium">{{ item.name }}</td>
+                        <td class="text-end text-muted small">
+                            {% if item.best_buy %}
+                            {{ "{:,.2f}".format(item.best_buy) }} ISK
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="text-end eve-accent fw-medium small">
+                            {% if item.best_sell %}
+                            {{ "{:,.2f}".format(item.best_sell) }} ISK
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="text-end text-muted small">
+                            {% if item.avg_volume %}
+                            {{ "{:,.0f}".format(item.avg_volume) }}
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="text-end small">
+                            {% if item.best_buy and item.best_sell and item.best_buy > 0 %}
+                            {% set spread = ((item.best_sell - item.best_buy) / item.best_buy * 100) %}
+                            <span class="{{ 'eve-green' if spread < 5 else ('eve-gold' if spread < 15 else 'eve-red') }}">
+                                {{ "{:.1f}".format(spread) }}%
+                            </span>
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-graph-down fs-1 text-muted d-block mb-3"></i>
+            <p class="text-muted">Keine Marktdaten verfügbar.</p>
+            <small class="text-muted">ESI Verbindung prüfen oder später erneut versuchen.</small>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

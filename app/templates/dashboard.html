@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – EVE PI Manager{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+    <!-- Charakter-Header -->
+    {% if main_char %}
+    <div class="col-12">
+        <div class="eve-card card border-0">
+            <div class="card-body p-3 p-md-4">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <div class="position-relative">
+                        <img src="{{ main_char.portrait_url }}"
+                             alt="{{ main_char.character_name }}"
+                             class="eve-portrait-lg rounded"
+                             onerror="this.src='/static/img/default_char.svg'">
+                        <span class="eve-online-dot position-absolute bottom-0 end-0"
+                              title="Zuletzt online: {{ main_char.last_login or 'Unbekannt' }}"></span>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                            <h2 class="eve-char-heading mb-0">{{ main_char.character_name }}</h2>
+                            <span class="badge eve-badge-main">Main</span>
+                            {% if account.is_admin %}
+                            <span class="badge eve-badge-admin">
+                                <i class="bi bi-shield-fill me-1"></i>Admin
+                            </span>
+                            {% endif %}
+                            <span class="badge eve-badge-id">EVE ID: {{ main_char.eve_character_id }}</span>
+                        </div>
+                        <div class="text-muted mb-1">
+                            <i class="bi bi-building me-1"></i>
+                            {{ main_char.corporation_name or 'Keine Korporation' }}
+                            {% if main_char.alliance_name %}
+                            <span class="mx-2 text-muted">|</span>
+                            <i class="bi bi-diagram-2 me-1"></i>{{ main_char.alliance_name }}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a href="/dashboard/characters" class="btn btn-sm eve-btn-outline">
+                            <i class="bi bi-people me-1"></i>Charaktere verwalten
+                        </a>
+                        <a href="/auth/add-character" class="btn btn-sm eve-btn-outline">
+                            <i class="bi bi-person-plus me-1"></i>Alt hinzufügen
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="eve-card card border-0">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-person-x fs-1 text-muted mb-3 d-block"></i>
+                <h4>Kein Main-Charakter festgelegt</h4>
+                <p class="text-muted">Füge einen Charakter hinzu oder lege einen als Main fest.</p>
+                <a href="/auth/login" class="btn eve-btn-primary me-2">
+                    <i class="bi bi-person-plus me-1"></i>Charakter hinzufügen
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Statistiken -->
+    <div class="col-6 col-lg-3">
+        <a href="/dashboard/characters" class="text-decoration-none">
+            <div class="eve-stat-card eve-stat-card-link card border-0 h-100">
+                <div class="card-body text-center p-3">
+                    <div class="eve-stat-icon mb-2"><i class="bi bi-people fs-3"></i></div>
+                    <div class="eve-stat-value">{{ char_count }}</div>
+                    <div class="eve-stat-label">Charaktere</div>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="eve-stat-card card border-0 h-100">
+            <div class="card-body text-center p-3">
+                <div class="eve-stat-icon mb-2"><i class="bi bi-globe2 fs-3"></i></div>
+                <div class="eve-stat-value">{{ colony_count }}</div>
+                <div class="eve-stat-label">PI Kolonien</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="eve-stat-card card border-0 h-100">
+            <div class="card-body text-center p-3">
+                <div class="eve-stat-icon mb-2"><i class="bi bi-currency-exchange fs-3"></i></div>
+                <div class="eve-stat-value">{{ total_isk_day | format_isk }}</div>
+                <div class="eve-stat-label">ISK / Tag</div>
+            </div>
+        </div>
+    </div>
+    <!-- Nächster Ablauf Karte -->
+    <div class="col-6 col-lg-3">
+        <div class="eve-stat-card card border-0 h-100">
+            <div class="card-body text-center p-3">
+                <div class="eve-stat-icon mb-2"><i class="bi bi-clock-history fs-3"></i></div>
+                {% if next_expiry_hours is not none %}
+                    {% if next_expiry_hours < 0 %}
+                        <div class="eve-stat-value eve-expiry-expired">Abgelaufen</div>
+                    {% elif next_expiry_hours < 12 %}
+                        <div class="eve-stat-value eve-expiry-crit eve-pulse">
+                            {{ next_expiry_hours | format_expiry }}
+                        </div>
+                    {% elif next_expiry_hours < 24 %}
+                        <div class="eve-stat-value eve-expiry-warn">
+                            {{ next_expiry_hours | format_expiry }}
+                        </div>
+                    {% else %}
+                        <div class="eve-stat-value eve-expiry-ok">
+                            {{ next_expiry_hours | format_expiry }}
+                        </div>
+                    {% endif %}
+                    {% if next_expiry_char %}
+                    <div class="eve-stat-label">Nächster Ablauf</div>
+                    <div class="text-muted" style="font-size:0.7rem; margin-top:2px; opacity:0.7;">{{ next_expiry_char }}</div>
+                    {% else %}
+                    <div class="eve-stat-label">Nächster Ablauf</div>
+                    {% endif %}
+                {% else %}
+                    <div class="eve-stat-value text-muted">—</div>
+                    <div class="eve-stat-label">Nächster Ablauf</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- PI Kolonien -->
+    <div class="col-12">
+        <div class="eve-card card border-0">
+            <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-globe2 eve-accent"></i>
+                    <span class="fw-medium">PI Kolonien</span>
+                    {% if colonies %}
+                    <span class="badge eve-badge-count" id="colonyCountBadge">{{ colony_count }}</span>
+                    {% endif %}
+                </div>
+                {% if colonies and char_count > 1 %}
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-person-fill text-muted small"></i>
+                    <select id="charFilter" class="eve-select form-select form-select-sm">
+                        <option value="">Alle Charaktere</option>
+                        {% set seen = [] %}
+                        {% for colony in colonies %}
+                            {% if colony.character_name not in seen %}
+                                {% set _ = seen.append(colony.character_name) %}
+                                <option value="{{ colony.character_name }}">{{ colony.character_name }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                {% if not main_char %}
+                <span class="text-muted small">Kein Main-Charakter</span>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                {% if colonies %}
+                <div class="table-responsive">
+                    <table class="table eve-table mb-0" id="coloniesTable">
+                        <thead>
+                            <tr>
+                                <th class="eve-sortable" data-col="char">
+                                    Charakter <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                                </th>
+                                <th class="eve-sortable" data-col="planet">
+                                    Ort <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                                </th>
+                                <th class="eve-sortable" data-col="type">
+                                    Typ <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                                </th>
+                                <th class="eve-sortable" data-col="level">
+                                    Stufe <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                                </th>
+                                <th class="eve-sortable" data-col="tier">
+                                    Tier <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                                </th>
+                                <th class="eve-sortable" data-col="expiry">
+                                    Ablauf <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                                </th>
+                                <th class="eve-sortable" data-col="isk">
+                                    ISK/Tag <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                                </th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for colony in colonies %}
+                            <tr data-char="{{ colony.character_name }}"
+                                data-sort-char="{{ colony.character_name }}"
+                                data-sort-planet="{{ colony.planet_name }}"
+                                data-sort-type="{{ colony.planet_type }}"
+                                data-sort-level="{{ colony.upgrade_level }}"
+                                data-sort-tier="{{ colony.highest_tier or 'P0' }}"
+                                data-sort-expiry="{{ colony.expiry_hours if colony.expiry_hours is not none else 9999999 }}"
+                                data-sort-isk="{{ colony.isk_day }}">
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle" onerror="this.src='/static/img/default_char.svg'">
+                                        <span class="small">{{ colony.character_name }}</span>
+                                    </div>
+                                </td>
+                                <td class="small">{{ colony.planet_name }}</td>
+                                <td>
+                                    <span class="badge eve-planet-badge"
+                                          style="background-color: {{ colony.color }}20; color: {{ colony.color }}; border: 1px solid {{ colony.color }}40;">
+                                        {{ colony.planet_type }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="eve-level-badge eve-level-{{ colony.upgrade_level }}">{{ colony.upgrade_level }}</span>
+                                </td>
+                                <td>
+                                    {% if colony.highest_tier %}
+                                    <span class="badge eve-tier-badge eve-tier-{{ colony.highest_tier | lower }}">{{ colony.highest_tier }}</span>
+                                    {% else %}
+                                    <span class="text-muted small">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="small">
+                                    {% if colony.expiry_hours is not none %}
+                                        {% if colony.expiry_hours < 0 %}
+                                            <span class="eve-expiry-expired">
+                                                <i class="bi bi-exclamation-circle me-1"></i>Abgelaufen
+                                            </span>
+                                        {% elif colony.expiry_hours < 12 %}
+                                            <span class="eve-expiry-crit">
+                                                <i class="bi bi-clock me-1"></i>{{ colony.expiry_hours | format_expiry }}
+                                            </span>
+                                        {% elif colony.expiry_hours < 24 %}
+                                            <span class="eve-expiry-warn">
+                                                <i class="bi bi-clock me-1"></i>{{ colony.expiry_hours | format_expiry }}
+                                            </span>
+                                        {% else %}
+                                            <span class="eve-expiry-ok">
+                                                <i class="bi bi-clock me-1"></i>{{ colony.expiry_hours | format_expiry }}
+                                            </span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="small">{{ colony.isk_day | format_isk }}</td>
+                                <td>
+                                    <button class="btn btn-sm eve-btn-outline disabled" disabled title="In Entwicklung">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-globe fs-1 text-muted d-block mb-3"></i>
+                    {% if main_char %}
+                    <p class="text-muted mb-0">Keine PI-Kolonien gefunden.</p>
+                    <small class="text-muted">Erstelle Kolonien in EVE Online um sie hier zu sehen.</small>
+                    {% else %}
+                    <p class="text-muted mb-0">Melde dich mit einem Charakter an um deine Kolonien zu sehen.</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- In Entwicklung -->
+    <div class="col-12">
+        <h5 class="text-muted mb-3">
+            <i class="bi bi-tools me-2"></i>In Entwicklung
+        </h5>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="eve-dev-card card border-0 h-100">
+                    <div class="card-body text-center p-4">
+                        <i class="bi bi-diagram-3 fs-2 eve-accent d-block mb-3"></i>
+                        <h6 class="fw-semibold">PI Chain Visualizer</h6>
+                        <p class="text-muted small mb-2">Visualisiere deine vollständigen Produktionsketten P0→P4</p>
+                        <span class="badge eve-badge-wip">Bald verfügbar</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="eve-dev-card card border-0 h-100">
+                    <div class="card-body text-center p-4">
+                        <i class="bi bi-graph-up-arrow fs-2 eve-accent d-block mb-3"></i>
+                        <h6 class="fw-semibold">Historische ISK-Auswertung</h6>
+                        <p class="text-muted small mb-2">Verfolge deinen PI-Gewinn über Zeit</p>
+                        <span class="badge eve-badge-wip">Bald verfügbar</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="eve-dev-card card border-0 h-100">
+                    <div class="card-body text-center p-4">
+                        <i class="bi bi-bell fs-2 eve-accent d-block mb-3"></i>
+                        <h6 class="fw-semibold">Push-Benachrichtigungen</h6>
+                        <p class="text-muted small mb-2">Werde benachrichtigt wenn deine Extraktoren ablaufen</p>
+                        <span class="badge eve-badge-wip">Bald verfügbar</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

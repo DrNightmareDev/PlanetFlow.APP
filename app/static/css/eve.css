@@ -1,0 +1,940 @@
+/* ===================================================
+   EVE PI Manager - Custom EVE Online Dark Theme
+   =================================================== */
+
+:root {
+    --eve-bg:           #080c10;
+    --eve-bg-2:         #0d1117;
+    --eve-bg-3:         #111820;
+    --eve-card:         #111820;
+    --eve-card-border:  #1e2d3d;
+    --eve-accent:       #00b4d8;
+    --eve-gold:         #f4a300;
+    --eve-red:          #e63946;
+    --eve-green:        #2dc653;
+    --eve-text:         #c9d1d9;
+    --eve-text-muted:   #586e75;
+    --eve-navbar-h:     58px;
+}
+
+/* ============ Base ============ */
+body.eve-body {
+    background-color: var(--eve-bg);
+    color: var(--eve-text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+main {
+    flex: 1;
+}
+
+/* ============ Navbar ============ */
+.eve-navbar {
+    background-color: rgba(8, 12, 16, 0.96);
+    border-bottom: 1px solid var(--eve-card-border);
+    backdrop-filter: blur(12px);
+    height: var(--eve-navbar-h);
+}
+
+.eve-brand {
+    color: var(--eve-accent) !important;
+    font-weight: 700;
+    font-size: 1.1rem;
+    letter-spacing: 0.05em;
+    text-decoration: none;
+}
+
+.eve-diamond {
+    font-size: 1.1rem;
+    filter: drop-shadow(0 0 6px var(--eve-accent));
+}
+
+.eve-diamond-sm {
+    font-size: 0.8rem;
+    color: var(--eve-accent);
+}
+
+.navbar-nav .nav-link {
+    color: var(--eve-text-muted) !important;
+    font-size: 0.875rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+}
+
+.navbar-nav .nav-link:hover {
+    color: var(--eve-text) !important;
+    background: rgba(0, 180, 216, 0.08);
+}
+
+.navbar-nav .nav-link.active {
+    color: var(--eve-accent) !important;
+    background: rgba(0, 180, 216, 0.12);
+}
+
+.eve-admin-link {
+    color: var(--eve-gold) !important;
+}
+.eve-admin-link:hover {
+    color: var(--eve-gold) !important;
+    background: rgba(244, 163, 0, 0.1) !important;
+}
+.eve-admin-link.active {
+    color: var(--eve-gold) !important;
+    background: rgba(244, 163, 0, 0.12) !important;
+}
+
+.eve-disabled {
+    color: var(--eve-text-muted) !important;
+    cursor: default;
+    opacity: 0.6;
+}
+
+/* ============ Character Button ============ */
+.eve-char-btn {
+    background: var(--eve-bg-3);
+    border: 1px solid var(--eve-card-border);
+    color: var(--eve-text);
+    padding: 0.3rem 0.75rem;
+    border-radius: 6px;
+    transition: border-color 0.15s;
+}
+
+.eve-char-btn:hover {
+    border-color: var(--eve-accent);
+    color: var(--eve-text);
+    background: var(--eve-bg-3);
+}
+
+.eve-char-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--eve-text);
+    line-height: 1.2;
+}
+
+.eve-char-corp {
+    font-size: 0.72rem;
+    line-height: 1.2;
+}
+
+/* ============ Dropdown ============ */
+.eve-dropdown {
+    background: var(--eve-bg-2);
+    border: 1px solid var(--eve-card-border);
+    border-radius: 8px;
+    padding: 0.5rem;
+    min-width: 240px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.eve-dropdown .dropdown-item {
+    color: var(--eve-text);
+    border-radius: 4px;
+    font-size: 0.875rem;
+    padding: 0.5rem 0.75rem;
+    transition: background 0.12s;
+}
+
+.eve-dropdown .dropdown-item:hover {
+    background: rgba(0, 180, 216, 0.1);
+    color: var(--eve-text);
+}
+
+.eve-dropdown .dropdown-item.text-danger:hover {
+    background: rgba(230, 57, 70, 0.1);
+}
+
+.eve-alt-item {
+    cursor: default;
+    padding: 0.4rem 0.6rem !important;
+}
+
+.eve-divider {
+    border-color: var(--eve-card-border);
+    margin: 0.3rem 0;
+}
+
+/* ============ Cards ============ */
+.eve-card {
+    background: var(--eve-card);
+    border: 1px solid var(--eve-card-border) !important;
+    border-radius: 8px;
+}
+
+.eve-card-header {
+    background: rgba(30, 45, 61, 0.5);
+    border-bottom: 1px solid var(--eve-card-border);
+    padding: 0.75rem 1rem;
+    color: var(--eve-text);
+    font-size: 0.9rem;
+}
+
+.eve-stat-card {
+    background: var(--eve-bg-3);
+    border: 1px solid var(--eve-card-border) !important;
+    border-radius: 8px;
+}
+
+.eve-stat-icon {
+    color: var(--eve-accent);
+}
+
+.eve-stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--eve-text);
+    line-height: 1.1;
+}
+
+.eve-stat-label {
+    font-size: 0.8rem;
+    color: var(--eve-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.eve-stat-card-link {
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.eve-stat-card-link:hover {
+    border-color: var(--eve-accent) !important;
+    box-shadow: 0 0 12px rgba(0, 180, 216, 0.15);
+}
+
+.eve-disabled-card {
+    opacity: 0.6;
+}
+
+.eve-dev-card {
+    background: var(--eve-bg-3);
+    border: 1px dashed var(--eve-card-border) !important;
+    border-radius: 8px;
+    transition: border-color 0.2s;
+}
+
+.eve-dev-card:hover {
+    border-color: var(--eve-accent) !important;
+}
+
+/* ============ Character Cards ============ */
+.eve-char-card {
+    background: var(--eve-card);
+    border: 1px solid var(--eve-card-border) !important;
+    border-radius: 8px;
+    transition: border-color 0.2s;
+}
+
+.eve-char-card:hover {
+    border-color: rgba(0, 180, 216, 0.4) !important;
+}
+
+.eve-char-name-lg {
+    font-size: 1rem;
+    color: var(--eve-text);
+}
+
+.eve-main-ribbon {
+    position: absolute;
+    top: 12px;
+    right: -4px;
+    z-index: 1;
+}
+
+.eve-main-ribbon span {
+    background: var(--eve-accent);
+    color: #000;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 10px 2px 8px;
+    border-radius: 3px 0 0 3px;
+    display: block;
+    letter-spacing: 0.05em;
+}
+
+.eve-add-char-card {
+    background: var(--eve-bg-3);
+    border: 2px dashed var(--eve-card-border) !important;
+    border-radius: 8px;
+    color: var(--eve-text-muted);
+    transition: border-color 0.2s, color 0.2s;
+}
+
+.eve-add-char-card:hover {
+    border-color: var(--eve-accent) !important;
+    color: var(--eve-accent);
+}
+
+/* ============ Portraits ============ */
+.eve-portrait-lg {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border: 2px solid var(--eve-card-border);
+}
+
+.eve-portrait-md {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border: 1px solid var(--eve-card-border);
+    flex-shrink: 0;
+}
+
+.eve-portrait-sm {
+    width: 32px;
+    height: 32px;
+    object-fit: cover;
+    border: 1px solid var(--eve-card-border);
+}
+
+.eve-portrait-xs {
+    width: 24px;
+    height: 24px;
+    object-fit: cover;
+    border: 1px solid var(--eve-card-border);
+}
+
+.eve-no-portrait {
+    background: var(--eve-bg-2);
+    border: 1px solid var(--eve-card-border);
+}
+
+.eve-online-dot {
+    width: 12px;
+    height: 12px;
+    background: var(--eve-green);
+    border-radius: 50%;
+    border: 2px solid var(--eve-card);
+    display: block;
+}
+
+.eve-main-glow {
+    box-shadow: 0 0 0 2px var(--eve-accent);
+}
+
+.eve-admin-indicator {
+    background: var(--eve-gold);
+    color: #000;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ============ Buttons ============ */
+.eve-btn-primary {
+    background: var(--eve-accent);
+    border-color: var(--eve-accent);
+    color: #000;
+    font-weight: 600;
+    transition: background 0.15s, box-shadow 0.15s;
+}
+
+.eve-btn-primary:hover {
+    background: #00c9f0;
+    border-color: #00c9f0;
+    color: #000;
+    box-shadow: 0 0 12px rgba(0, 180, 216, 0.4);
+}
+
+.eve-btn-outline {
+    background: transparent;
+    border-color: var(--eve-card-border);
+    color: var(--eve-text);
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.eve-btn-outline:hover {
+    border-color: var(--eve-accent);
+    color: var(--eve-accent);
+    background: transparent;
+}
+
+.eve-btn-outline.disabled,
+.eve-btn-outline:disabled {
+    color: var(--eve-text-muted);
+    border-color: var(--eve-card-border);
+}
+
+.eve-btn-danger {
+    background: transparent;
+    border-color: var(--eve-red);
+    color: var(--eve-red);
+    transition: background 0.15s;
+}
+
+.eve-btn-danger:hover {
+    background: rgba(230, 57, 70, 0.15);
+    border-color: var(--eve-red);
+    color: var(--eve-red);
+}
+
+.eve-btn-gold {
+    background: transparent;
+    border-color: var(--eve-gold);
+    color: var(--eve-gold);
+    transition: background 0.15s;
+}
+
+.eve-btn-gold:hover {
+    background: rgba(244, 163, 0, 0.15);
+    border-color: var(--eve-gold);
+    color: var(--eve-gold);
+}
+
+.eve-btn-ghost {
+    background: transparent;
+    border: none;
+    color: var(--eve-text-muted);
+    font-size: 0.8rem;
+    transition: color 0.15s;
+}
+
+.eve-btn-ghost:hover {
+    color: var(--eve-text);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* ============ Tables ============ */
+.eve-table {
+    color: var(--eve-text);
+    font-size: 0.875rem;
+}
+
+.eve-table thead th {
+    background: rgba(30, 45, 61, 0.5);
+    color: var(--eve-text-muted);
+    font-weight: 500;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-color: var(--eve-card-border);
+    padding: 0.65rem 1rem;
+}
+
+.eve-table tbody tr {
+    border-color: rgba(30, 45, 61, 0.5);
+    transition: background 0.12s;
+}
+
+.eve-table tbody tr:hover {
+    background: rgba(0, 180, 216, 0.04);
+}
+
+.eve-table td {
+    border-color: rgba(30, 45, 61, 0.5);
+    padding: 0.65rem 1rem;
+    vertical-align: middle;
+}
+
+.eve-table-sm {
+    font-size: 0.8rem;
+    color: var(--eve-text);
+}
+
+.eve-table-sm th {
+    background: rgba(30, 45, 61, 0.3);
+    color: var(--eve-text-muted);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-color: var(--eve-card-border);
+    padding: 0.4rem 0.75rem;
+}
+
+.eve-table-sm td {
+    border-color: rgba(30, 45, 61, 0.3);
+    padding: 0.4rem 0.75rem;
+    vertical-align: middle;
+}
+
+/* ============ Badges ============ */
+.eve-badge-main {
+    background: rgba(0, 180, 216, 0.15);
+    color: var(--eve-accent);
+    border: 1px solid rgba(0, 180, 216, 0.3);
+}
+
+.eve-badge-admin {
+    background: rgba(244, 163, 0, 0.15);
+    color: var(--eve-gold);
+    border: 1px solid rgba(244, 163, 0, 0.3);
+}
+
+.eve-badge-admin-lg {
+    background: rgba(244, 163, 0, 0.15);
+    color: var(--eve-gold);
+    border: 1px solid rgba(244, 163, 0, 0.3);
+    font-size: 0.85rem;
+    padding: 0.3rem 0.75rem;
+}
+
+.eve-badge-id {
+    background: rgba(88, 110, 117, 0.2);
+    color: var(--eve-text-muted);
+    border: 1px solid rgba(88, 110, 117, 0.3);
+    font-size: 0.72rem;
+}
+
+.eve-badge-id-sm {
+    background: rgba(88, 110, 117, 0.15);
+    color: var(--eve-text-muted);
+    border: 1px solid rgba(88, 110, 117, 0.2);
+    font-size: 0.68rem;
+}
+
+.eve-badge-wip {
+    background: rgba(244, 163, 0, 0.1);
+    color: var(--eve-gold);
+    border: 1px solid rgba(244, 163, 0, 0.2);
+    font-size: 0.68rem;
+}
+
+.eve-badge-count {
+    background: rgba(0, 180, 216, 0.1);
+    color: var(--eve-accent);
+    border: 1px solid rgba(0, 180, 216, 0.2);
+    font-size: 0.72rem;
+}
+
+.eve-badge-ok {
+    background: rgba(45, 198, 83, 0.15);
+    color: var(--eve-green);
+    border: 1px solid rgba(45, 198, 83, 0.3);
+}
+
+.eve-badge-err {
+    background: rgba(230, 57, 70, 0.15);
+    color: var(--eve-red);
+    border: 1px solid rgba(230, 57, 70, 0.3);
+}
+
+.eve-badge-self {
+    background: rgba(0, 180, 216, 0.2);
+    color: var(--eve-accent);
+    border: 1px solid rgba(0, 180, 216, 0.4);
+}
+
+.eve-badge-alt {
+    background: rgba(88, 110, 117, 0.15);
+    color: var(--eve-text-muted);
+    border: 1px solid rgba(88, 110, 117, 0.2);
+    font-size: 0.7rem;
+}
+
+/* ============ Planet Badges ============ */
+.eve-planet-badge {
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* ============ Upgrade Pips ============ */
+.eve-upgrade-pips {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+}
+
+.eve-pip {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    background: var(--eve-card-border);
+    display: block;
+}
+
+.eve-pip-active {
+    background: var(--eve-accent);
+    box-shadow: 0 0 4px rgba(0, 180, 216, 0.5);
+}
+
+/* ============ Token Info ============ */
+.eve-token-info {
+    background: rgba(13, 17, 23, 0.5);
+    border: 1px solid var(--eve-card-border);
+}
+
+/* ============ Scope List ============ */
+.eve-scope-list {
+    background: rgba(13, 17, 23, 0.5);
+    border: 1px solid var(--eve-card-border);
+    font-size: 0.75rem;
+}
+
+/* ============ Character Heading ============ */
+.eve-char-heading {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--eve-text);
+}
+
+/* ============ Page Title ============ */
+.eve-page-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--eve-text);
+}
+
+/* ============ Admin Account Entries ============ */
+.eve-account-entry {
+    background: var(--eve-bg-2);
+    border: 1px solid var(--eve-card-border);
+    transition: border-color 0.2s;
+}
+
+.eve-account-entry:hover {
+    border-color: rgba(0, 180, 216, 0.2);
+}
+
+/* ============ Footer ============ */
+.eve-footer {
+    background: rgba(8, 12, 16, 0.95);
+    border-top: 1px solid var(--eve-card-border);
+    margin-top: auto;
+}
+
+.eve-esi-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--eve-text-muted);
+    display: inline-block;
+    transition: background 0.3s;
+}
+
+.eve-esi-dot.online { background: var(--eve-green); box-shadow: 0 0 6px var(--eve-green); }
+.eve-esi-dot.offline { background: var(--eve-red); }
+
+/* ============ Utility Colors ============ */
+.eve-accent { color: var(--eve-accent) !important; }
+.eve-gold { color: var(--eve-gold) !important; }
+.eve-red { color: var(--eve-red) !important; }
+.eve-green { color: var(--eve-green) !important; }
+
+/* ============ Forms / Inputs ============ */
+.eve-input {
+    background: var(--eve-bg-2);
+    border: 1px solid var(--eve-card-border);
+    color: var(--eve-text);
+    border-radius: 6px;
+}
+
+.eve-input:focus {
+    background: var(--eve-bg-2);
+    border-color: var(--eve-accent);
+    color: var(--eve-text);
+    box-shadow: 0 0 0 3px rgba(0, 180, 216, 0.15);
+}
+
+.eve-input::placeholder {
+    color: var(--eve-text-muted);
+}
+
+/* ============ Search Dropdown ============ */
+.eve-search-dropdown {
+    background: var(--eve-bg-2);
+    border: 1px solid var(--eve-card-border);
+    border-radius: 6px;
+    z-index: 1050;
+    max-height: 250px;
+    overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    top: calc(100% + 4px);
+}
+
+.eve-search-item {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+    color: var(--eve-text);
+    transition: background 0.12s;
+}
+
+.eve-search-item:hover {
+    background: rgba(0, 180, 216, 0.1);
+}
+
+/* ============ Info Alerts ============ */
+.eve-info-alert {
+    background: rgba(0, 180, 216, 0.06);
+    border: 1px solid rgba(0, 180, 216, 0.2) !important;
+    color: var(--eve-text-muted);
+    font-size: 0.82rem;
+}
+
+/* ============ Spinner ============ */
+.eve-spinner {
+    color: var(--eve-accent);
+}
+
+/* ============ Login Page ============ */
+.eve-login-body {
+    background-color: var(--eve-bg);
+    overflow: hidden;
+}
+
+.eve-grid-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.eve-grid-lines {
+    position: absolute;
+    inset: -50%;
+    background-image:
+        linear-gradient(rgba(0, 180, 216, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 180, 216, 0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+    animation: gridDrift 25s linear infinite;
+}
+
+@keyframes gridDrift {
+    from { transform: translate(0, 0); }
+    to { transform: translate(60px, 60px); }
+}
+
+.eve-login-container {
+    position: relative;
+    z-index: 1;
+}
+
+.eve-login-card {
+    background: rgba(17, 24, 32, 0.92) !important;
+    border: 1px solid var(--eve-card-border) !important;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 440px;
+    backdrop-filter: blur(16px);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 180, 216, 0.1);
+}
+
+.eve-logo-ring {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0, 180, 216, 0.1) 0%, transparent 70%);
+    border: 2px solid rgba(0, 180, 216, 0.3);
+    box-shadow: 0 0 30px rgba(0, 180, 216, 0.15), inset 0 0 20px rgba(0, 180, 216, 0.05);
+    animation: logoGlow 3s ease-in-out infinite alternate;
+}
+
+@keyframes logoGlow {
+    from { box-shadow: 0 0 20px rgba(0, 180, 216, 0.1), inset 0 0 15px rgba(0, 180, 216, 0.03); }
+    to { box-shadow: 0 0 40px rgba(0, 180, 216, 0.25), inset 0 0 25px rgba(0, 180, 216, 0.08); }
+}
+
+.eve-login-title {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--eve-text);
+    letter-spacing: 0.05em;
+}
+
+.eve-login-subtitle {
+    font-size: 0.9rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+}
+
+.eve-features {
+    background: rgba(13, 17, 23, 0.5);
+    border: 1px solid var(--eve-card-border);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.eve-feature-item {
+    font-size: 0.875rem;
+    color: var(--eve-text);
+}
+
+.eve-feature-icon {
+    color: var(--eve-accent);
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.eve-sso-btn {
+    background: linear-gradient(135deg, #1a2634 0%, #0d1117 100%);
+    border: 1px solid var(--eve-accent);
+    color: var(--eve-text);
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    font-size: 1rem;
+    transition: all 0.2s;
+    text-decoration: none;
+}
+
+.eve-sso-btn:hover {
+    background: linear-gradient(135deg, #1e3040 0%, #111820 100%);
+    border-color: #00c9f0;
+    color: var(--eve-text);
+    box-shadow: 0 0 20px rgba(0, 180, 216, 0.3);
+    transform: translateY(-1px);
+}
+
+/* ============ Scrollbar ============ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--eve-bg); }
+::-webkit-scrollbar-thumb { background: var(--eve-card-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--eve-text-muted); }
+
+/* ============ Bootstrap Overrides ============ */
+.card { background: var(--eve-card); border-color: var(--eve-card-border); }
+.dropdown-menu { --bs-dropdown-bg: var(--eve-bg-2); }
+.form-label { color: var(--eve-text-muted); font-size: 0.82rem; }
+
+/* Fix Bootstrap collapse animation */
+.collapsing { transition: height 0.2s ease; }
+
+/* ============ Page Tabs ============ */
+.eve-page-tabs {
+    border-bottom: 2px solid var(--eve-card-border);
+    gap: 0;
+}
+
+.eve-page-tabs .nav-link {
+    color: var(--eve-text-muted);
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    padding: 0.5rem 1.1rem;
+    font-size: 0.9rem;
+    border-radius: 0;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.eve-page-tabs .nav-link:hover {
+    color: var(--eve-text);
+    border-bottom-color: var(--eve-card-border);
+    background: transparent;
+}
+
+.eve-page-tabs .nav-link.active {
+    color: var(--eve-accent);
+    border-bottom-color: var(--eve-accent);
+    background: transparent;
+    font-weight: 600;
+}
+
+/* ============ Expiry Farben ============ */
+.eve-expiry-ok { color: var(--eve-green); }
+.eve-expiry-warn { color: var(--eve-gold); }
+.eve-expiry-crit { color: var(--eve-red); font-weight: 600; }
+.eve-expiry-expired { color: var(--eve-red); opacity: 0.7; }
+
+/* Puls für kritische Ablaufzeit */
+@keyframes evePulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+.eve-pulse { animation: evePulse 1.5s ease-in-out infinite; }
+
+/* ============ Responsive ============ */
+@media (max-width: 576px) {
+    .eve-char-heading { font-size: 1.1rem; }
+    .eve-stat-value { font-size: 1.5rem; }
+    .eve-login-card { border-radius: 0; border-left: none; border-right: none; }
+}
+
+/* ============ PI Tier Badges ============ */
+.eve-tier-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+}
+.eve-tier-p1 { background: rgba(88, 110, 117, 0.2); color: #93a1a1; border: 1px solid rgba(88,110,117,0.3); }
+.eve-tier-p2 { background: rgba(0, 180, 216, 0.12); color: var(--eve-accent); border: 1px solid rgba(0,180,216,0.25); }
+.eve-tier-p3 { background: rgba(244, 163, 0, 0.12); color: var(--eve-gold); border: 1px solid rgba(244,163,0,0.25); }
+.eve-tier-p4 { background: rgba(230, 57, 70, 0.15); color: #e63946; border: 1px solid rgba(230,57,70,0.3); font-weight: 800; }
+
+/* ============ Planet Badge gleiche Breite ============ */
+.eve-planet-badge {
+    min-width: 5.6rem;
+    display: inline-block;
+    text-align: center;
+}
+
+/* ============ Sortierbare Tabellen-Header ============ */
+.eve-sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+.eve-sortable:hover { color: var(--eve-accent); }
+.eve-sort-icon { opacity: 0.35; font-size: 0.7rem; transition: opacity 0.15s; }
+.eve-sortable:hover .eve-sort-icon { opacity: 0.7; }
+.eve-sortable.sort-asc .eve-sort-icon,
+.eve-sortable.sort-desc .eve-sort-icon { opacity: 1; color: var(--eve-accent); }
+
+/* ============ Char-Filter Select ============ */
+.eve-select {
+    background-color: var(--eve-bg-2);
+    border-color: rgba(0,180,216,0.2);
+    color: var(--eve-text);
+    font-size: 0.8rem;
+    min-width: 10rem;
+}
+.eve-select:focus {
+    border-color: var(--eve-accent);
+    box-shadow: 0 0 0 2px rgba(0,180,216,0.15);
+    background-color: var(--eve-bg-2);
+    color: var(--eve-text);
+}
+.eve-select option { background-color: #1a1f2e; }
+
+/* ============ Upgrade Level Badge ============ */
+.eve-level-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+.eve-level-0 { background: rgba(88,110,117,0.08); color: var(--eve-text-muted); border: 1px solid rgba(88,110,117,0.15); }
+.eve-level-1 { background: rgba(88,110,117,0.15); color: #93a1a1; border: 1px solid rgba(88,110,117,0.3); }
+.eve-level-2 { background: rgba(0,180,216,0.08); color: #5bc8e0; border: 1px solid rgba(0,180,216,0.2); }
+.eve-level-3 { background: rgba(0,180,216,0.14); color: var(--eve-accent); border: 1px solid rgba(0,180,216,0.3); }
+.eve-level-4 { background: rgba(244,163,0,0.12); color: var(--eve-gold); border: 1px solid rgba(244,163,0,0.25); }
+.eve-level-5 { background: rgba(45,198,83,0.15); color: var(--eve-green); border: 1px solid rgba(45,198,83,0.3); box-shadow: 0 0 5px rgba(45,198,83,0.2); }
+
+/* ============ System Analyzer Tier Filter ============ */
+.eve-tier-filter-btn {
+    background: transparent;
+    border: 1px solid var(--eve-card-border);
+    color: var(--eve-text-muted);
+    font-size: 0.75rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    transition: all 0.15s;
+}
+.eve-tier-filter-btn:hover {
+    border-color: var(--eve-accent);
+    color: var(--eve-accent);
+}
+.eve-tier-filter-btn.active {
+    background: rgba(0,180,216,0.1);
+    border-color: var(--eve-accent);
+    color: var(--eve-accent);
+}

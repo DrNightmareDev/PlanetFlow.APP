@@ -1,0 +1,47 @@
+# Umgebungsvariablen (enthält Secrets)
+.env
+
+# SDE Daten (werden beim Start automatisch heruntergeladen)
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtuelle Umgebungen
+venv/
+.venv/
+env/
+.env/
+
+# Datenbanken
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Alembic (generierte Dateien, aber Versionen committen)
+# alembic/versions/ ist bewusst NICHT ausgeschlossen

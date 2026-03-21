@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="de" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EVE PI Manager – Anmelden</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="/static/css/eve.css">
+</head>
+<body class="eve-login-body">
+
+<!-- Animiertes Hintergrund-Grid -->
+<div class="eve-grid-bg">
+    <div class="eve-grid-lines"></div>
+</div>
+
+<div class="eve-login-container d-flex align-items-center justify-content-center min-vh-100">
+    <div class="eve-login-card card border-0 shadow-lg">
+        <div class="card-body p-4 p-md-5 text-center">
+
+            <!-- Logo / Glowing Ring -->
+            <div class="eve-logo-ring mb-4">
+                <div class="eve-globe-icon">
+                    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+                        <circle cx="50" cy="50" r="45" fill="none" stroke="#00b4d8" stroke-width="2"/>
+                        <ellipse cx="50" cy="50" rx="25" ry="45" fill="none" stroke="#00b4d8" stroke-width="1.5" opacity="0.7"/>
+                        <line x1="5" y1="50" x2="95" y2="50" stroke="#00b4d8" stroke-width="1.5" opacity="0.7"/>
+                        <line x1="18" y1="25" x2="82" y2="25" stroke="#00b4d8" stroke-width="1" opacity="0.5"/>
+                        <line x1="18" y1="75" x2="82" y2="75" stroke="#00b4d8" stroke-width="1" opacity="0.5"/>
+                        <circle cx="50" cy="50" r="4" fill="#f4a300"/>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Titel -->
+            <h1 class="eve-login-title mb-1">EVE PI Manager</h1>
+            <p class="eve-login-subtitle text-muted mb-4">Planetary Industry Dashboard</p>
+
+            <!-- Feature-Liste -->
+            <div class="eve-features mb-4 text-start">
+                <div class="eve-feature-item d-flex align-items-center gap-3 mb-2">
+                    <i class="bi bi-diagram-3 eve-feature-icon"></i>
+                    <span>PI Chains Visualisierung</span>
+                </div>
+                <div class="eve-feature-item d-flex align-items-center gap-3 mb-2">
+                    <i class="bi bi-globe2 eve-feature-icon"></i>
+                    <span>System Analyzer für optimale Planeten</span>
+                </div>
+                <div class="eve-feature-item d-flex align-items-center gap-3 mb-2">
+                    <i class="bi bi-graph-up-arrow eve-feature-icon"></i>
+                    <span>Jita Marktpreise in Echtzeit</span>
+                </div>
+                <div class="eve-feature-item d-flex align-items-center gap-3 mb-2">
+                    <i class="bi bi-people eve-feature-icon"></i>
+                    <span>Main & Alt Verwaltung</span>
+                </div>
+                <div class="eve-feature-item d-flex align-items-center gap-3">
+                    <i class="bi bi-clock-history eve-feature-icon"></i>
+                    <span>Kolonien-Timer & Übersicht</span>
+                </div>
+            </div>
+
+            <!-- EVE SSO Login Button -->
+            <a href="/auth/login" class="eve-sso-btn btn d-flex align-items-center justify-content-center gap-3 w-100 mb-4">
+                <!-- EVE Online Logo SVG -->
+                <svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" width="28" height="28">
+                    <path d="M30 0C13.43 0 0 13.43 0 30s13.43 30 30 30 30-13.43 30-30S46.57 0 30 0z" fill="#1a2634"/>
+                    <path d="M30 6C16.74 6 6 16.74 6 30s10.74 24 24 24 24-10.74 24-24S43.26 6 30 6z" fill="none" stroke="#00b4d8" stroke-width="1.5"/>
+                    <path d="M15 22h30M15 30h30M15 38h30" stroke="#00b4d8" stroke-width="2.5" stroke-linecap="round"/>
+                    <path d="M20 18l20 12-20 12V18z" fill="#f4a300" opacity="0.9"/>
+                </svg>
+                <span class="fw-semibold">Mit EVE Online anmelden</span>
+            </a>
+
+            <!-- Info-Text für ersten Account -->
+            <div class="alert eve-info-alert border-0 py-2 px-3">
+                <i class="bi bi-info-circle me-2"></i>
+                <small>Der erste Account erhält automatisch Admin-Rechte.</small>
+            </div>
+
+            <!-- Footer-Info -->
+            <p class="text-muted mt-3 mb-0" style="font-size: 0.75rem;">
+                EVE Online und alle zugehörigen Marken sind Eigentum von CCP Games.
+                Diese App nutzt die offizielle ESI API.
+            </p>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

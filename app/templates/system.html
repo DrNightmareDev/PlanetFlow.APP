@@ -1,0 +1,318 @@
+{% extends "base.html" %}
+{% block title %}System Analyzer – EVE PI Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <h2 class="eve-page-title mb-0">
+        <i class="bi bi-globe2 me-2 eve-accent"></i>System Analyzer
+    </h2>
+    <div class="text-muted small">PI-Potential eines Systems analysieren</div>
+</div>
+
+<!-- Suchfeld -->
+<div class="eve-card card border-0 mb-4">
+    <div class="card-body p-3">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-8">
+                <label class="form-label text-muted small">System suchen</label>
+                <div class="position-relative">
+                    <input type="text" id="systemSearch"
+                           class="form-control eve-input"
+                           placeholder="z.B. Jita, Amarr, Dodixie..."
+                           autocomplete="off">
+                    <div id="searchResults" class="eve-search-dropdown position-absolute w-100 d-none"></div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <button id="analyzeBtn" class="btn eve-btn-primary w-100" disabled>
+                    <i class="bi bi-search me-1"></i>Analysieren
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading -->
+<div id="loadingState" class="text-center py-5 d-none">
+    <div class="spinner-border eve-spinner mb-3" role="status">
+        <span class="visually-hidden">Lädt...</span>
+    </div>
+    <p class="text-muted">Analysiere System...</p>
+</div>
+
+<!-- Ergebnisse -->
+<div id="analysisResult" class="d-none">
+
+    <!-- System Header -->
+    <div class="eve-card card border-0 mb-4">
+        <div class="card-body p-3">
+            <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+                <div>
+                    <h4 class="mb-1 fw-bold" id="systemName">—</h4>
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <div>
+                            <span class="text-muted small me-1">Security:</span>
+                            <span id="systemSecurity" class="fw-semibold"></span>
+                        </div>
+                        <div>
+                            <span class="text-muted small me-1">Planeten:</span>
+                            <span id="planetCount" class="fw-semibold eve-accent"></span>
+                        </div>
+                    </div>
+                </div>
+                <div id="planetTypeBadges" class="d-flex flex-wrap gap-2 align-items-center"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ressourcen pro Planetentyp -->
+    <div class="eve-card card border-0 mb-4">
+        <div class="card-header eve-card-header d-flex align-items-center gap-2">
+            <i class="bi bi-layers eve-accent"></i>
+            <span class="fw-medium">Verfügbare P0 Ressourcen</span>
+        </div>
+        <div class="card-body p-3">
+            <div id="resourceGrid" class="row g-3"></div>
+        </div>
+    </div>
+
+    <!-- Empfehlungen -->
+    <div class="eve-card card border-0">
+        <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-star eve-accent"></i>
+                <span class="fw-medium">PI Empfehlungen</span>
+                <span class="badge eve-badge-count" id="recCount"></span>
+            </div>
+            <div id="tierFilter" class="d-flex gap-1">
+                <button class="btn eve-tier-filter-btn active" data-tier="">Alle</button>
+                <button class="btn eve-tier-filter-btn" data-tier="P4">P4</button>
+                <button class="btn eve-tier-filter-btn" data-tier="P3">P3</button>
+                <button class="btn eve-tier-filter-btn" data-tier="P2">P2</button>
+                <button class="btn eve-tier-filter-btn" data-tier="P1">P1</button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table eve-table mb-0" id="recTable">
+                    <thead>
+                        <tr>
+                            <th>Produkt</th>
+                            <th>Tier</th>
+                            <th class="eve-sortable" data-col="isk" style="cursor:pointer;white-space:nowrap;">
+                                Jita Sell <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                            </th>
+                            <th>Benötigte Inputs</th>
+                            <th>Planetentypen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recommendationBody"></tbody>
+                </table>
+            </div>
+            <div id="recEmpty" class="text-center py-4 text-muted d-none">
+                <i class="bi bi-x-circle me-2"></i>Keine Produkte für diesen Tier verfügbar.
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const PLANET_COLORS = {{ planet_type_colors | tojson }};
+
+let selectedSystemId = null;
+let searchTimeout = null;
+let allRecs = [];
+let currentTier = '';
+let iskSortAsc = false;
+
+const searchInput = document.getElementById('systemSearch');
+const searchResults = document.getElementById('searchResults');
+const analyzeBtn = document.getElementById('analyzeBtn');
+const analysisResult = document.getElementById('analysisResult');
+const loadingState = document.getElementById('loadingState');
+
+searchInput.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const q = this.value.trim();
+    if (q.length < 3) { searchResults.classList.add('d-none'); return; }
+    searchTimeout = setTimeout(() => fetchSystems(q), 300);
+});
+
+searchInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && selectedSystemId) analyzeSystem();
+});
+
+async function fetchSystems(q) {
+    try {
+        const res = await fetch(`/system/search?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        showSearchResults(data.systems || []);
+    } catch(e) {
+        searchResults.classList.add('d-none');
+    }
+}
+
+function showSearchResults(systems) {
+    searchResults.innerHTML = '';
+    if (!systems.length) { searchResults.classList.add('d-none'); return; }
+    systems.forEach(sys => {
+        const item = document.createElement('div');
+        item.className = 'eve-search-item';
+        const secColor = sys.security >= 0.5 ? '#2dc653' : (sys.security > 0 ? '#f4a300' : '#e63946');
+        item.innerHTML = `<span>${sys.name}</span><span style="color:${secColor}" class="small fw-bold">${sys.security.toFixed(1)}</span>`;
+        item.addEventListener('click', () => selectSystem(sys));
+        searchResults.appendChild(item);
+    });
+    searchResults.classList.remove('d-none');
+}
+
+function selectSystem(sys) {
+    selectedSystemId = sys.id;
+    searchInput.value = sys.name;
+    searchResults.classList.add('d-none');
+    analyzeBtn.disabled = false;
+}
+
+analyzeBtn.addEventListener('click', analyzeSystem);
+
+async function analyzeSystem() {
+    if (!selectedSystemId) return;
+    analysisResult.classList.add('d-none');
+    loadingState.classList.remove('d-none');
+    analyzeBtn.disabled = true;
+    try {
+        const res = await fetch(`/system/analyze/${selectedSystemId}`);
+        const data = await res.json();
+        if (data.error) { alert('Fehler: ' + data.error); return; }
+        renderAnalysis(data);
+    } catch(e) {
+        alert('Verbindungsfehler: ' + e.message);
+    } finally {
+        loadingState.classList.add('d-none');
+        analyzeBtn.disabled = false;
+    }
+}
+
+function formatIsk(val) {
+    if (!val || val === 0) return '—';
+    if (val >= 1e9) return (val / 1e9).toFixed(2) + ' B ISK';
+    if (val >= 1e6) return (val / 1e6).toFixed(2) + ' M ISK';
+    if (val >= 1e3) return (val / 1e3).toFixed(1) + ' K ISK';
+    return val.toFixed(0) + ' ISK';
+}
+
+function renderAnalysis(data) {
+    // System header
+    document.getElementById('systemName').textContent = data.system_name || '—';
+    document.getElementById('planetCount').textContent = (data.planets || []).length;
+
+    const sec = data.security;
+    const secColor = sec >= 0.5 ? '#2dc653' : (sec > 0 ? '#f4a300' : '#e63946');
+    document.getElementById('systemSecurity').innerHTML =
+        `<span style="color:${secColor}">${sec.toFixed(2)}</span>`;
+
+    // Planet type badges with count
+    const ptBadges = document.getElementById('planetTypeBadges');
+    ptBadges.innerHTML = '';
+    (data.planet_types || []).forEach(pt => {
+        const badge = document.createElement('span');
+        badge.className = 'badge d-flex align-items-center gap-1';
+        badge.style.cssText = `background-color:${pt.color}20;color:${pt.color};border:1px solid ${pt.color}40;font-size:0.78rem;padding:0.35rem 0.65rem;`;
+        badge.innerHTML = `${pt.type}<span style="opacity:0.65;font-size:0.7rem;margin-left:3px;">×${pt.count}</span>`;
+        ptBadges.appendChild(badge);
+    });
+
+    // Resource grid
+    const resGrid = document.getElementById('resourceGrid');
+    resGrid.innerHTML = '';
+    (data.planet_types || []).forEach(pt => {
+        const col = document.createElement('div');
+        col.className = 'col-md-6 col-xl-4';
+        const resources = (pt.resources || []).map(r =>
+            `<span class="badge me-1 mb-1" style="background:${pt.color}12;color:${pt.color};border:1px solid ${pt.color}28;font-size:0.72rem;">${r}</span>`
+        ).join('');
+        col.innerHTML = `
+            <div class="p-2 rounded h-100" style="border:1px solid ${pt.color}28;background:${pt.color}06;">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="badge fw-semibold" style="background:${pt.color}22;color:${pt.color};border:1px solid ${pt.color}3a;">${pt.type}</span>
+                    <span class="text-muted small">×${pt.count} Planeten</span>
+                </div>
+                <div>${resources || '<span class="text-muted small">—</span>'}</div>
+            </div>`;
+        resGrid.appendChild(col);
+    });
+
+    // Recommendations
+    allRecs = data.recommendations || [];
+    currentTier = '';
+    iskSortAsc = false;
+    document.querySelectorAll('.eve-tier-filter-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.tier === ''));
+    // Reset ISK sort icon
+    const iskTh = document.querySelector('.eve-sortable[data-col="isk"]');
+    if (iskTh) iskTh.querySelector('.eve-sort-icon').className = 'bi bi-chevron-expand eve-sort-icon';
+
+    renderRecs();
+}
+
+function renderRecs() {
+    const filtered = currentTier ? allRecs.filter(r => r.tier === currentTier) : allRecs;
+    const tierColors = { P1: '#586e75', P2: '#00b4d8', P3: '#f4a300', P4: '#e63946' };
+
+    document.getElementById('recCount').textContent = filtered.length;
+    document.getElementById('recEmpty').classList.toggle('d-none', filtered.length > 0);
+
+    const tbody = document.getElementById('recommendationBody');
+    tbody.innerHTML = '';
+    filtered.forEach(rec => {
+        const tc = tierColors[rec.tier] || '#c9d1d9';
+        const tr = document.createElement('tr');
+        const iskDisplay = rec.isk_sell > 0
+            ? `<span style="color:var(--eve-gold);">${formatIsk(rec.isk_sell)}</span>`
+            : `<span class="text-muted">—</span>`;
+        tr.innerHTML = `
+            <td class="fw-medium">${rec.name}</td>
+            <td><span class="badge" style="background:${tc}1a;color:${tc};border:1px solid ${tc}3a;">${rec.tier}</span></td>
+            <td class="small">${iskDisplay}</td>
+            <td class="small text-muted">${(rec.inputs || []).join(', ') || '—'}</td>
+            <td class="small text-muted">${(rec.planets_needed || []).join(', ') || '—'}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// Tier filter
+document.getElementById('tierFilter').addEventListener('click', function(e) {
+    const btn = e.target.closest('.eve-tier-filter-btn');
+    if (!btn) return;
+    currentTier = btn.dataset.tier;
+    document.querySelectorAll('.eve-tier-filter-btn').forEach(b =>
+        b.classList.toggle('active', b === btn));
+    renderRecs();
+});
+
+// ISK sort
+const iskTh = document.querySelector('.eve-sortable[data-col="isk"]');
+if (iskTh) {
+    iskTh.addEventListener('click', function() {
+        iskSortAsc = !iskSortAsc;
+        allRecs.sort((a, b) => iskSortAsc ? a.isk_sell - b.isk_sell : b.isk_sell - a.isk_sell);
+        const icon = this.querySelector('.eve-sort-icon');
+        this.classList.toggle('sort-asc', iskSortAsc);
+        this.classList.toggle('sort-desc', !iskSortAsc);
+        icon.className = iskSortAsc ? 'bi bi-chevron-up eve-sort-icon' : 'bi bi-chevron-down eve-sort-icon';
+        renderRecs();
+    });
+}
+
+// Close dropdown on outside click
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#systemSearch') && !e.target.closest('#searchResults')) {
+        searchResults.classList.add('d-none');
+    }
+});
+</script>
+{% endblock %}

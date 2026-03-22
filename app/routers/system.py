@@ -155,7 +155,7 @@ def analyze(system_id: int, account=Depends(require_account)):
             "region": region_name,
             "planets": planet_details,
             "planet_types": planet_types_summary,
-            "recommendations": recommendations[:40],
+            "recommendations": recommendations,
         })
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)

@@ -316,15 +316,13 @@ function clearFilters() {
 }
 
 function updatePlanetTiles() {
-    // Planetentypen im Filter (nicht P0-Ressourcen)
-    const hasPlanetTypeFilter = [...activeFilters].some(f => PLANET_COLORS[f]);
+    // Nur Planetentyp-Namen (keine P0-Ressourcen) steuern die Tile-Darstellung
+    const planetTypeFilters = [...activeFilters].filter(f => PLANET_COLORS[f]);
     document.querySelectorAll('.eve-planet-tile').forEach(el => {
         const pt = el.dataset.planetType;
-        const tileResources = (el.dataset.resources || '').split(',').filter(Boolean);
-        const tileActive = activeFilters.has(pt) || tileResources.some(r => activeFilters.has(r));
-        // Dimmen nur wenn ein Planetentyp-Filter gesetzt ist (nicht bei reinen Ressourcen-Filtern)
-        el.style.opacity = activeFilters.size === 0 || !hasPlanetTypeFilter || tileActive ? '1' : '0.35';
-        el.style.boxShadow = tileActive ? `0 0 0 2px ${PLANET_COLORS[pt] || '#ccc'}` : 'none';
+        const active = activeFilters.has(pt);
+        el.style.opacity = planetTypeFilters.length === 0 || active ? '1' : '0.35';
+        el.style.boxShadow = active ? `0 0 0 2px ${PLANET_COLORS[pt] || '#ccc'}` : 'none';
     });
 }
 
@@ -508,10 +506,11 @@ function renderRecs() {
     let filtered = currentTier ? allRecs.filter(r => r.tier === currentTier) : [...allRecs];
 
     if (activeFilters.size > 0) {
+        // AND-Filter: jeder aktive Filter muss in inputs ODER planets_needed enthalten sein
         filtered = filtered.filter(r => {
             const planets = r.planets_needed || [];
             const inputs  = r.inputs || [];
-            return [...activeFilters].some(f =>
+            return [...activeFilters].every(f =>
                 planets.includes(f) || inputs.includes(f)
             );
         });

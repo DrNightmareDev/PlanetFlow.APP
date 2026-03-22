@@ -23,22 +23,27 @@ def _load_latest(account_id: int, planet_ids: list[int], db: Session) -> dict:
     """Returns {planet_id: [{"product_name": ..., "quantity": ...}]}"""
     if not planet_ids:
         return {}
-    subq = (
+    # Step 1: latest entry-id per planet
+    rows = (
         db.query(SkyhookEntry.planet_id, sqlfunc.max(SkyhookEntry.id).label("max_id"))
         .filter(SkyhookEntry.account_id == account_id, SkyhookEntry.planet_id.in_(planet_ids))
         .group_by(SkyhookEntry.planet_id)
-        .subquery()
-    )
-    entries = (
-        db.query(SkyhookEntry)
-        .join(subq, SkyhookEntry.id == subq.c.max_id)
-        .options(joinedload(SkyhookEntry.items))
         .all()
     )
-    return {
-        e.planet_id: [{"product_name": i.product_name, "quantity": i.quantity} for i in e.items]
-        for e in entries
-    }
+    if not rows:
+        return {}
+    entry_id_to_planet = {r.max_id: r.planet_id for r in rows}
+    entry_ids = list(entry_id_to_planet.keys())
+
+    # Step 2: all items for those entries
+    items = db.query(SkyhookItem).filter(SkyhookItem.entry_id.in_(entry_ids)).all()
+
+    result: dict = {}
+    for it in items:
+        pid = entry_id_to_planet.get(it.entry_id)
+        if pid is not None:
+            result.setdefault(pid, []).append({"product_name": it.product_name, "quantity": it.quantity})
+    return result
 
 
 def _load_history(account_id: int, planet_ids: list[int], db: Session, limit: int = 3) -> dict:

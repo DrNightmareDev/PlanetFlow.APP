@@ -241,7 +241,12 @@
                                         <span class="small">{{ colony.character_name }}</span>
                                     </div>
                                 </td>
-                                <td class="small">{{ colony.planet_name }}</td>
+                                <td class="small">
+                                    <div>{{ colony.planet_name }}</div>
+                                    {% if colony.solar_system_name and colony.solar_system_name != '—' %}
+                                    <div style="color:#4a6a8a;font-size:.7rem;">{{ colony.solar_system_name }}</div>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     <span class="badge eve-planet-badge"
                                           style="background-color: {{ colony.color }}20; color: {{ colony.color }}; border: 1px solid {{ colony.color }}40;">

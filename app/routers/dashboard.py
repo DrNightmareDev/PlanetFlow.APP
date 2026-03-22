@@ -112,6 +112,7 @@ def _compute_storage(pins: list) -> list[dict]:
     vols = _get_pi_volumes()
     result = []
     type_counters: dict[int, int] = {}
+
     for pin in pins:
         type_id = pin.get("type_id")
         if type_id not in _STORAGE_TYPE_IDS:

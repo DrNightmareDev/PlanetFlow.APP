@@ -78,7 +78,7 @@
                 <span class="fw-medium">Verfügbare P0 Ressourcen</span>
                 <span class="text-muted small" style="font-size:0.72rem;">— Kacheln anklicken zum Filtern</span>
             </div>
-            <button id="clearPlanetFilter" class="btn btn-sm eve-tier-filter-btn d-none" onclick="clearPlanetFilters()">
+            <button id="clearPlanetFilter" class="btn btn-sm eve-tier-filter-btn d-none" onclick="clearFilters()">
                 <i class="bi bi-x-circle me-1"></i>Filter löschen
             </button>
         </div>
@@ -116,16 +116,14 @@
                 <table class="table eve-table mb-0" id="recTable">
                     <thead>
                         <tr>
-                            <th>Produkt</th>
-                            <th>Tier</th>
-                            <th class="eve-sortable" data-col="isk" style="cursor:pointer;white-space:nowrap;">
-                                Jita Sell <i class="bi bi-chevron-down eve-sort-icon"></i>
-                            </th>
-                            <th style="white-space:nowrap;">Jita Buy</th>
-                            <th title="Anzahl Sell-Orders in Jita 4-4">Angebot</th>
-                            <th>Trend</th>
-                            <th>Benötigte Inputs</th>
-                            <th>Planetentypen</th>
+                            <th class="eve-sortable" data-sort-col="name" style="cursor:pointer;white-space:nowrap;">Produkt <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                            <th class="eve-sortable" data-sort-col="tier" style="cursor:pointer;white-space:nowrap;">Tier <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                            <th class="eve-sortable" data-sort-col="isk_sell" style="cursor:pointer;white-space:nowrap;">Jita Sell <i class="bi bi-chevron-down eve-sort-icon"></i></th>
+                            <th class="eve-sortable" data-sort-col="isk_buy" style="cursor:pointer;white-space:nowrap;">Jita Buy <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                            <th class="eve-sortable" data-sort-col="supply" style="cursor:pointer;white-space:nowrap;" title="Sell-Orders in Jita 4-4">Angebot <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                            <th class="eve-sortable" data-sort-col="trend" style="cursor:pointer;white-space:nowrap;">Trend <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                            <th>Inputs</th>
+                            <th>Planeten</th>
                         </tr>
                     </thead>
                     <tbody id="recommendationBody"></tbody>
@@ -144,19 +142,29 @@
 <script>
 const PLANET_COLORS = {{ planet_type_colors | tojson }};
 
+// Input-Farben: Farbe basiert auf dem Tier des INPUTS (eine Stufe unterhalb des Produkts)
+const INPUT_COLORS = {
+    P1: '#4a5568', // P0-Rohstoffe
+    P2: '#586e75', // P1-Produkte
+    P3: '#00b4d8', // P2-Produkte
+    P4: '#f4a300', // P3-Produkte
+};
+
 let selectedSystemId = null;
 let searchTimeout = null;
 let allRecs = [];
 let currentTier = '';
-let iskSortAsc = false;
-let activePlanetFilters = new Set();
 let currentTrendPeriod = 'trend_1d';
+let activeFilters = new Set(); // enthält Planetentypen UND Input-Namen
+let sortState = { col: 'isk_sell', asc: false };
 
-const searchInput = document.getElementById('systemSearch');
+const searchInput  = document.getElementById('systemSearch');
 const searchResults = document.getElementById('searchResults');
-const analyzeBtn = document.getElementById('analyzeBtn');
+const analyzeBtn   = document.getElementById('analyzeBtn');
 const analysisResult = document.getElementById('analysisResult');
 const loadingState = document.getElementById('loadingState');
+
+// ── Suche ──────────────────────────────────────────────────────────────────
 
 searchInput.addEventListener('input', function() {
     clearTimeout(searchTimeout);
@@ -205,6 +213,13 @@ function selectSystem(sys) {
     analyzeBtn.disabled = false;
 }
 
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#systemSearch') && !e.target.closest('#searchResults'))
+        searchResults.classList.add('d-none');
+});
+
+// ── Analyse ────────────────────────────────────────────────────────────────
+
 analyzeBtn.addEventListener('click', analyzeSystem);
 
 async function analyzeSystem() {
@@ -224,6 +239,8 @@ async function analyzeSystem() {
         analyzeBtn.disabled = false;
     }
 }
+
+// ── Formatierung ───────────────────────────────────────────────────────────
 
 function formatIsk(val) {
     if (!val || val === 0) return '—';
@@ -253,27 +270,155 @@ function trendHtml(rec) {
     return `<span style="color:#586e75;font-size:0.85rem;">→ ${abs}%</span>`;
 }
 
+function inputBadge(text, tier) {
+    const c = INPUT_COLORS[tier] || '#586e75';
+    const isActive = activeFilters.has(text);
+    const bg  = isActive ? `${c}35` : `${c}18`;
+    const bdr = isActive ? `${c}80` : `${c}30`;
+    return `<span class="badge me-1 mb-1 eve-filter-badge"
+                  data-filter="${text}"
+                  style="cursor:pointer;background:${bg};color:${c};border:1px solid ${bdr};font-size:0.7rem;transition:all 0.12s;"
+                  title="Filter: ${text}">${text}</span>`;
+}
+
+function planetBadge(text) {
+    const c = PLANET_COLORS[text] || '#586e75';
+    const isActive = activeFilters.has(text);
+    const bg  = isActive ? `${c}35` : `${c}18`;
+    const bdr = isActive ? `${c}80` : `${c}30`;
+    return `<span class="badge me-1 mb-1 eve-filter-badge"
+                  data-filter="${text}"
+                  style="cursor:pointer;background:${bg};color:${c};border:1px solid ${bdr};font-size:0.7rem;transition:all 0.12s;"
+                  title="Filter: ${text}">${text}</span>`;
+}
+
+// ── Filter ─────────────────────────────────────────────────────────────────
+
+function toggleFilter(value) {
+    if (activeFilters.has(value)) {
+        activeFilters.delete(value);
+    } else {
+        activeFilters.add(value);
+    }
+    updatePlanetTiles();
+    document.getElementById('clearPlanetFilter').classList.toggle('d-none', activeFilters.size === 0);
+    renderRecs();
+}
+
+function clearFilters() {
+    activeFilters.clear();
+    updatePlanetTiles();
+    document.getElementById('clearPlanetFilter').classList.add('d-none');
+    renderRecs();
+}
+
+function updatePlanetTiles() {
+    document.querySelectorAll('.eve-planet-tile').forEach(el => {
+        const pt = el.dataset.planetType;
+        const active = activeFilters.has(pt);
+        el.style.opacity = activeFilters.size === 0 || active ? '1' : '0.35';
+        el.style.boxShadow = active ? `0 0 0 2px ${PLANET_COLORS[pt] || '#ccc'}` : 'none';
+    });
+}
+
+// Klick auf Filter-Badges in der Tabelle
+document.getElementById('recommendationBody')?.addEventListener('click', e => {
+    const badge = e.target.closest('.eve-filter-badge');
+    if (badge) toggleFilter(badge.dataset.filter);
+});
+
+// ── Sortierung ─────────────────────────────────────────────────────────────
+
+const SUPPLY_ORDER = { none: 0, green: 1, yellow: 2, red: 3 };
+const TIER_ORDER   = { P1: 1, P2: 2, P3: 3, P4: 4 };
+
+const SORT_FNS = {
+    name:    (a, b) => a.name.localeCompare(b.name),
+    tier:    (a, b) => (TIER_ORDER[a.tier] || 0) - (TIER_ORDER[b.tier] || 0),
+    isk_sell:(a, b) => (a.isk_sell || 0) - (b.isk_sell || 0),
+    isk_buy: (a, b) => (a.isk_buy  || 0) - (b.isk_buy  || 0),
+    supply:  (a, b) => (SUPPLY_ORDER[a.supply_level] || 0) - (SUPPLY_ORDER[b.supply_level] || 0),
+    trend:   (a, b) => (a[currentTrendPeriod] || 0) - (b[currentTrendPeriod] || 0),
+    inputs:  (a, b) => (a.inputs || []).join(',').localeCompare((b.inputs || []).join(',')),
+    planets: (a, b) => (a.planets_needed || []).join(',').localeCompare((b.planets_needed || []).join(',')),
+};
+
+function applySort() {
+    const fn = SORT_FNS[sortState.col];
+    if (!fn) return;
+    allRecs.sort((a, b) => sortState.asc ? fn(a, b) : -fn(a, b));
+}
+
+function updateSortIcons() {
+    document.querySelectorAll('[data-sort-col]').forEach(th => {
+        const col = th.dataset.sortCol;
+        const icon = th.querySelector('.eve-sort-icon');
+        if (!icon) return;
+        if (sortState.col === col) {
+            icon.className = sortState.asc ? 'bi bi-chevron-up eve-sort-icon' : 'bi bi-chevron-down eve-sort-icon';
+        } else {
+            icon.className = 'bi bi-chevron-expand eve-sort-icon';
+        }
+    });
+}
+
+document.querySelector('#recTable thead').addEventListener('click', function(e) {
+    const th = e.target.closest('[data-sort-col]');
+    if (!th) return;
+    const col = th.dataset.sortCol;
+    sortState.asc = sortState.col === col ? !sortState.asc : false;
+    sortState.col = col;
+    applySort();
+    updateSortIcons();
+    renderRecs();
+});
+
+// ── Tier-Filter ────────────────────────────────────────────────────────────
+
+document.getElementById('tierFilter').addEventListener('click', function(e) {
+    const btn = e.target.closest('.eve-tier-filter-btn[data-tier]');
+    if (!btn) return;
+    currentTier = btn.dataset.tier;
+    document.querySelectorAll('.eve-tier-filter-btn[data-tier]').forEach(b =>
+        b.classList.toggle('active', b === btn));
+    renderRecs();
+});
+
+// ── Trend-Periode ──────────────────────────────────────────────────────────
+
+document.getElementById('trendPeriodFilter').addEventListener('click', function(e) {
+    const btn = e.target.closest('[data-period]');
+    if (!btn) return;
+    currentTrendPeriod = btn.dataset.period;
+    document.querySelectorAll('[data-period]').forEach(b =>
+        b.classList.toggle('active', b === btn));
+    if (sortState.col === 'trend') { applySort(); }
+    renderRecs();
+});
+
+// ── Render ─────────────────────────────────────────────────────────────────
+
 function renderAnalysis(data) {
     analysisResult.classList.remove('d-none');
 
-    // Reset planet filters
-    activePlanetFilters.clear();
+    // Filter + Sort zurücksetzen
+    activeFilters.clear();
+    sortState = { col: 'isk_sell', asc: false };
     document.getElementById('clearPlanetFilter').classList.add('d-none');
 
-    // System header
-    document.getElementById('systemName').textContent = data.system_name || '—';
-    document.getElementById('planetCount').textContent = (data.planets || []).length;
-    document.getElementById('systemRegion').textContent = data.region || '—';
+    // System Header
+    document.getElementById('systemName').textContent    = data.system_name || '—';
+    document.getElementById('planetCount').textContent   = (data.planets || []).length;
+    document.getElementById('systemRegion').textContent  = data.region || '—';
 
     const sec = data.security;
     const secColor = sec >= 0.5 ? '#2dc653' : (sec > 0 ? '#f4a300' : '#e63946');
     document.getElementById('systemSecurity').innerHTML =
         `<span style="color:${secColor}">${sec.toFixed(2)}</span>`;
-    if (data.true_sec != null) {
+    if (data.true_sec != null)
         document.getElementById('systemTrueSec').textContent = `(${data.true_sec.toFixed(4)})`;
-    }
 
-    // Planet type badges
+    // Planet-Typ-Badges (Header)
     const ptBadges = document.getElementById('planetTypeBadges');
     ptBadges.innerHTML = '';
     (data.planet_types || []).forEach(pt => {
@@ -284,7 +429,7 @@ function renderAnalysis(data) {
         ptBadges.appendChild(badge);
     });
 
-    // Resource grid (clickable planet tiles)
+    // Ressourcen-Kacheln (klickbar)
     const resGrid = document.getElementById('resourceGrid');
     resGrid.innerHTML = '';
     (data.planet_types || []).forEach(pt => {
@@ -306,67 +451,30 @@ function renderAnalysis(data) {
         resGrid.appendChild(col);
     });
 
-    document.querySelectorAll('.eve-planet-tile').forEach(el => {
-        el.addEventListener('click', () => togglePlanetFilter(el.dataset.planetType));
-    });
+    document.querySelectorAll('.eve-planet-tile').forEach(el =>
+        el.addEventListener('click', () => toggleFilter(el.dataset.planetType)));
 
-    // Recommendations — initial sort by isk_sell desc
+    // Empfehlungen
     allRecs = data.recommendations || [];
     currentTier = '';
-    iskSortAsc = false;
-    allRecs.sort((a, b) => (b.isk_sell || 0) - (a.isk_sell || 0));
-
     document.querySelectorAll('.eve-tier-filter-btn[data-tier]').forEach(b =>
         b.classList.toggle('active', b.dataset.tier === ''));
-
-    const iskTh = document.querySelector('.eve-sortable[data-col="isk"]');
-    if (iskTh) {
-        iskTh.classList.remove('sort-asc');
-        iskTh.classList.add('sort-desc');
-        iskTh.querySelector('.eve-sort-icon').className = 'bi bi-chevron-down eve-sort-icon';
-    }
-
-    renderRecs();
-}
-
-function togglePlanetFilter(planetType) {
-    if (activePlanetFilters.has(planetType)) {
-        activePlanetFilters.delete(planetType);
-    } else {
-        activePlanetFilters.add(planetType);
-    }
-    document.querySelectorAll('.eve-planet-tile').forEach(el => {
-        const isActive = activePlanetFilters.size === 0 || activePlanetFilters.has(el.dataset.planetType);
-        el.style.opacity = isActive ? '1' : '0.35';
-        el.style.boxShadow = activePlanetFilters.has(el.dataset.planetType)
-            ? `0 0 0 2px ${PLANET_COLORS[el.dataset.planetType] || '#ccc'}`
-            : 'none';
-    });
-    document.getElementById('clearPlanetFilter').classList.toggle('d-none', activePlanetFilters.size === 0);
-    renderRecs();
-}
-
-function clearPlanetFilters() {
-    activePlanetFilters.clear();
-    document.querySelectorAll('.eve-planet-tile').forEach(el => {
-        el.style.opacity = '1';
-        el.style.boxShadow = 'none';
-    });
-    document.getElementById('clearPlanetFilter').classList.add('d-none');
+    applySort();
+    updateSortIcons();
     renderRecs();
 }
 
 function renderRecs() {
     let filtered = currentTier ? allRecs.filter(r => r.tier === currentTier) : [...allRecs];
 
-    if (activePlanetFilters.size > 0) {
+    if (activeFilters.size > 0) {
         filtered = filtered.filter(r =>
-            (r.planets_needed || []).some(p => activePlanetFilters.has(p))
+            (r.planets_needed || []).some(p => activeFilters.has(p)) ||
+            (r.inputs || []).some(i => activeFilters.has(i))
         );
     }
 
     const tierColors = { P1: '#586e75', P2: '#00b4d8', P3: '#f4a300', P4: '#e63946' };
-
     document.getElementById('recCount').textContent = filtered.length;
     document.getElementById('recEmpty').classList.toggle('d-none', filtered.length > 0);
 
@@ -375,12 +483,17 @@ function renderRecs() {
     filtered.forEach(rec => {
         const tc = tierColors[rec.tier] || '#c9d1d9';
         const tr = document.createElement('tr');
+
         const iskSellDisplay = rec.isk_sell > 0
             ? `<span style="color:var(--eve-gold);">${formatIsk(rec.isk_sell)}</span>`
             : `<span class="text-muted">—</span>`;
         const iskBuyDisplay = rec.isk_buy > 0
             ? `<span style="color:#2dc653;">${formatIsk(rec.isk_buy)}</span>`
             : `<span class="text-muted">—</span>`;
+
+        const inputBadges  = (rec.inputs || []).map(i => inputBadge(i, rec.tier)).join('');
+        const planetBadges = (rec.planets_needed || []).map(p => planetBadge(p)).join('');
+
         tr.innerHTML = `
             <td class="fw-medium">${rec.name}</td>
             <td><span class="badge" style="background:${tc}1a;color:${tc};border:1px solid ${tc}3a;">${rec.tier}</span></td>
@@ -388,54 +501,11 @@ function renderRecs() {
             <td class="small">${iskBuyDisplay}</td>
             <td class="text-center">${supplyHtml(rec.supply_level)}</td>
             <td class="small">${trendHtml(rec)}</td>
-            <td class="small text-muted">${(rec.inputs || []).join(', ') || '—'}</td>
-            <td class="small text-muted">${(rec.planets_needed || []).join(', ') || '—'}</td>
+            <td class="small">${inputBadges || '<span class="text-muted">—</span>'}</td>
+            <td class="small">${planetBadges || '<span class="text-muted">—</span>'}</td>
         `;
         tbody.appendChild(tr);
     });
 }
-
-// Tier filter
-document.getElementById('tierFilter').addEventListener('click', function(e) {
-    const btn = e.target.closest('.eve-tier-filter-btn[data-tier]');
-    if (!btn) return;
-    currentTier = btn.dataset.tier;
-    document.querySelectorAll('.eve-tier-filter-btn[data-tier]').forEach(b =>
-        b.classList.toggle('active', b === btn));
-    renderRecs();
-});
-
-// Trend period selector
-document.getElementById('trendPeriodFilter').addEventListener('click', function(e) {
-    const btn = e.target.closest('[data-period]');
-    if (!btn) return;
-    currentTrendPeriod = btn.dataset.period;
-    document.querySelectorAll('[data-period]').forEach(b =>
-        b.classList.toggle('active', b === btn));
-    renderRecs();
-});
-
-// ISK sort
-const iskTh = document.querySelector('.eve-sortable[data-col="isk"]');
-if (iskTh) {
-    iskTh.addEventListener('click', function() {
-        iskSortAsc = !iskSortAsc;
-        allRecs.sort((a, b) => iskSortAsc
-            ? (a.isk_sell || 0) - (b.isk_sell || 0)
-            : (b.isk_sell || 0) - (a.isk_sell || 0));
-        const icon = this.querySelector('.eve-sort-icon');
-        this.classList.toggle('sort-asc', iskSortAsc);
-        this.classList.toggle('sort-desc', !iskSortAsc);
-        icon.className = iskSortAsc ? 'bi bi-chevron-up eve-sort-icon' : 'bi bi-chevron-down eve-sort-icon';
-        renderRecs();
-    });
-}
-
-// Close dropdown on outside click
-document.addEventListener('click', function(e) {
-    if (!e.target.closest('#systemSearch') && !e.target.closest('#searchResults')) {
-        searchResults.classList.add('d-none');
-    }
-});
 </script>
 {% endblock %}

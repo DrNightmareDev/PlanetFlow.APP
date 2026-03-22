@@ -67,28 +67,45 @@
         </div>
     </div>
 
-    <div class="row g-4">
-
-        <!-- Produktionskette -->
-        <div class="col-lg-8">
-            <div class="eve-card card border-0">
-                <div class="card-header eve-card-header d-flex align-items-center gap-2">
-                    <i class="bi bi-diagram-3 eve-accent"></i>
-                    <span class="fw-medium">Produktionskette</span>
-                </div>
-                <div class="card-body p-3" id="chainTree"></div>
+    <!-- Produktions-Graph -->
+    <div class="eve-card card border-0 mb-4">
+        <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-share-fill eve-accent"></i>
+                <span class="fw-medium">Produktions-Graph</span>
+            </div>
+            <span class="text-muted small d-flex align-items-center gap-2">
+                <span>
+                    <span style="color:#586e75;">●</span> P1 &nbsp;
+                    <span style="color:#00b4d8;">●</span> P2 &nbsp;
+                    <span style="color:#f4a300;">●</span> P3 &nbsp;
+                    <span style="color:#e63946;">●</span> P4
+                </span>
+                <span class="text-muted" style="opacity:.5;">|</span>
+                <span>← Eingaben &nbsp; Weiterverarbeitung →</span>
+                <span class="text-muted" style="opacity:.5;">|</span>
+                <span>Knoten anklicken zum Wechseln</span>
+            </span>
+        </div>
+        <div class="card-body p-0">
+            <div id="graphContainer" style="overflow-x:auto;">
+                <svg id="chainGraph" width="100%" style="display:block;"></svg>
             </div>
         </div>
+    </div>
 
-        <!-- Planeten + Ressourcen -->
-        <div class="col-lg-4">
-            <div class="eve-card card border-0 mb-4">
+    <!-- Planeten + P0 -->
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="eve-card card border-0">
                 <div class="card-header eve-card-header d-flex align-items-center gap-2">
                     <i class="bi bi-globe2 eve-accent"></i>
                     <span class="fw-medium">Benötigte Planetentypen</span>
                 </div>
                 <div class="card-body p-3" id="chainPlanets"></div>
             </div>
+        </div>
+        <div class="col-md-6">
             <div class="eve-card card border-0">
                 <div class="card-header eve-card-header d-flex align-items-center gap-2">
                     <i class="bi bi-layers eve-accent"></i>
@@ -97,20 +114,6 @@
                 <div class="card-body p-3" id="chainP0"></div>
             </div>
         </div>
-
-    </div>
-
-    <!-- Weiterverarbeitung -->
-    <div class="eve-card card border-0 mt-4">
-        <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-            <div class="d-flex align-items-center gap-2">
-                <i class="bi bi-arrow-up-right-circle-fill eve-accent"></i>
-                <span class="fw-medium">Weiterverarbeitung</span>
-                <span class="text-muted small">— welche Produkte können daraus hergestellt werden?</span>
-            </div>
-            <span id="usedInSummary" class="badge eve-badge-count"></span>
-        </div>
-        <div class="card-body p-3" id="usedInBody"></div>
     </div>
 
 </div>
@@ -118,7 +121,7 @@
 
 {% block extra_scripts %}
 <script>
-// ── PI-Daten (vom Backend) ────────────────────────────────────────────────────
+// ── PI-Daten ──────────────────────────────────────────────────────────────────
 const P0_TO_P1       = {{ p0_to_p1 | tojson }};
 const P1_TO_P2       = {{ p1_to_p2 | tojson }};
 const P2_TO_P3       = {{ p2_to_p3 | tojson }};
@@ -128,26 +131,76 @@ const PLANET_COLORS  = {{ planet_type_colors | tojson }};
 const ALL_PRODUCTS   = {{ all_products | tojson }};
 
 const TIER_COLORS = {P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
+const TIER_ORDER  = ['P1', 'P2', 'P3', 'P4'];
+
+// P1-Name-Set für schnelle Tier-Erkennung
+const P1_NAMES = new Set(Object.values(P0_TO_P1));
+
+// ── Reverse-Lookup ────────────────────────────────────────────────────────────
+const P1_USED_IN_P2 = {}, P2_USED_IN_P3 = {}, P3_USED_IN_P4 = {};
+for (const [p2, p1s] of Object.entries(P1_TO_P2))
+    for (const p1 of p1s) (P1_USED_IN_P2[p1] = P1_USED_IN_P2[p1] || []).push(p2);
+for (const [p3, p2s] of Object.entries(P2_TO_P3))
+    for (const p2 of p2s) (P2_USED_IN_P3[p2] = P2_USED_IN_P3[p2] || []).push(p3);
+for (const [p4, ins] of Object.entries(P3_TO_P4))
+    for (const inp of ins)
+        if (inp in P2_TO_P3) (P3_USED_IN_P4[inp] = P3_USED_IN_P4[inp] || []).push(p4);
+
+// ── Hilfsfunktionen ───────────────────────────────────────────────────────────
+function getTier(name) {
+    if (name in P3_TO_P4) return 'P4';
+    if (name in P2_TO_P3) return 'P3';
+    if (name in P1_TO_P2) return 'P2';
+    if (P1_NAMES.has(name)) return 'P1';
+    return null;
+}
+
+function getInputs(name, tier) {
+    if (tier === 'P4') return P3_TO_P4[name] || [];
+    if (tier === 'P3') return P2_TO_P3[name] || [];
+    if (tier === 'P2') return P1_TO_P2[name] || [];
+    if (tier === 'P1') return Object.entries(P0_TO_P1).filter(([, p1]) => p1 === name).map(([p0]) => p0);
+    return [];
+}
+
+function getDirectUsers(name, tier) {
+    if (tier === 'P1') return (P1_USED_IN_P2[name] || []).map(n => ({name: n, tier: 'P2'}));
+    if (tier === 'P2') return (P2_USED_IN_P3[name] || []).map(n => ({name: n, tier: 'P3'}));
+    if (tier === 'P3') return (P3_USED_IN_P4[name] || []).map(n => ({name: n, tier: 'P4'}));
+    return [];
+}
+
+function collectRequirements(name, tier, p0Set, planetSet, visited) {
+    const key = name + '|' + tier;
+    if (visited.has(key)) return;
+    visited.add(key);
+    const inputs = getInputs(name, tier);
+    if (tier === 'P1') {
+        inputs.forEach(p0 => {
+            p0Set.add(p0);
+            for (const [pt, res] of Object.entries(PLANET_RESOURCES))
+                if (res.includes(p0)) planetSet.add(pt);
+        });
+    } else {
+        inputs.forEach(inp => { const t = getTier(inp); if (t) collectRequirements(inp, t, p0Set, planetSet, visited); });
+    }
+}
+
+function r(n) { return Math.round(n * 10) / 10; }
 
 // ── Produktsuche ──────────────────────────────────────────────────────────────
 let activeTierFilter = '';
-let selectedProduct = null;
+let selectedProduct  = null;
+const searchInput = document.getElementById('productSearch');
+const dropdown    = document.getElementById('productDropdown');
 
-const searchInput   = document.getElementById('productSearch');
-const dropdown      = document.getElementById('productDropdown');
-
-searchInput.addEventListener('input', function() {
-    const q = this.value.trim().toLowerCase();
-    showDropdown(q);
-});
-searchInput.addEventListener('focus', function() {
-    showDropdown(this.value.trim().toLowerCase());
-});
+searchInput.addEventListener('input', function() { showDropdown(this.value.trim().toLowerCase()); });
+searchInput.addEventListener('focus', function() { showDropdown(this.value.trim().toLowerCase()); });
+searchInput.addEventListener('keydown', function(e) { if (e.key === 'Escape') dropdown.classList.add('d-none'); });
 document.addEventListener('click', e => {
     if (!e.target.closest('#productSearch') && !e.target.closest('#productDropdown'))
         dropdown.classList.add('d-none');
 });
-
 document.getElementById('tierFilter').addEventListener('click', function(e) {
     const btn = e.target.closest('[data-tier]');
     if (!btn) return;
@@ -161,7 +214,6 @@ function showDropdown(q) {
     if (activeTierFilter) filtered = filtered.filter(p => p.tier === activeTierFilter);
     if (q) filtered = filtered.filter(p => p.name.toLowerCase().includes(q));
     filtered = filtered.slice(0, 20);
-
     dropdown.innerHTML = '';
     if (!filtered.length) { dropdown.classList.add('d-none'); return; }
     filtered.forEach(p => {
@@ -191,58 +243,219 @@ function clearSelection() {
     document.getElementById('chainResult').classList.add('d-none');
 }
 
-// ── Ketten-Berechnung ─────────────────────────────────────────────────────────
+// ── Graph ─────────────────────────────────────────────────────────────────────
+function renderGraph(product) {
+    const NODE_W = 152, NODE_H = 32, GAP_Y = 12;
+    const COL_SPACING = 210, TIER_H = 24, PAD_V = 16, PAD_H = 20, P0_ZONE = 20;
 
-// Gibt den Tier eines Produkts zurück (P1/P2/P3/P4) oder null
-function getTier(name) {
-    if (P3_TO_P4[name] !== undefined) return 'P4';  // P4 keys are product names — wait, P3_TO_P4 maps P4->P3 inputs
-    // Actually: P3_TO_P4 maps P4 name -> [P3 inputs]
-    if (name in P3_TO_P4) return 'P4';
-    if (name in P2_TO_P3) return 'P3';
-    if (name in P1_TO_P2) return 'P2';
-    // P1: appears as value in P0_TO_P1
-    const p1Names = new Set(Object.values(P0_TO_P1));
-    if (p1Names.has(name)) return 'P1';
-    return null;
-}
+    // Build nodes and edges
+    const nodes  = new Map();   // name → {name, tier, isSelected, p0s:[]}
+    const edgeSet = new Set();  // "a||b"
 
-// Gibt direkte Inputs zurück (oder [])
-function getInputs(name, tier) {
-    if (tier === 'P4') return P3_TO_P4[name] || [];
-    if (tier === 'P3') return P2_TO_P3[name] || [];
-    if (tier === 'P2') return P1_TO_P2[name] || [];
-    if (tier === 'P1') {
-        // Find which P0 produces this P1
-        return Object.entries(P0_TO_P1).filter(([p0, p1]) => p1 === name).map(([p0]) => p0);
+    const addNode = (name, tier, sel = false) => {
+        if (!nodes.has(name)) nodes.set(name, {name, tier, isSelected: sel, p0s: []});
+        if (sel) nodes.get(name).isSelected = true;
+    };
+    const addEdge = (a, b) => { if (a !== b) edgeSet.add(a + '||' + b); };
+
+    addNode(product.name, product.tier, true);
+
+    // ── Inputs (links vom gewählten Produkt) ─────────────────────────────────
+    (function addInputs(name, tier, depth) {
+        if (depth > 6) return;
+        const inputs = getInputs(name, tier);
+        if (tier === 'P1') {
+            if (nodes.has(name)) nodes.get(name).p0s = inputs;
+            return;
+        }
+        for (const inp of inputs) {
+            const t = getTier(inp);
+            if (!t) continue;
+            addNode(inp, t);
+            addEdge(inp, name);
+            addInputs(inp, t, depth + 1);
+        }
+    })(product.name, product.tier, 0);
+
+    // ── Outputs (rechts vom gewählten Produkt) ────────────────────────────────
+    (function addOutputs(name, tier, depth) {
+        if (depth > 3) return;
+        for (const u of getDirectUsers(name, tier)) {
+            addNode(u.name, u.tier);
+            addEdge(name, u.name);
+            addOutputs(u.name, u.tier, depth + 1);
+        }
+    })(product.name, product.tier, 0);
+
+    // Group and sort nodes by tier
+    const byTier = {};
+    TIER_ORDER.forEach(t => byTier[t] = []);
+    for (const n of nodes.values()) if (byTier[n.tier]) byTier[n.tier].push(n);
+    for (const t of TIER_ORDER)
+        byTier[t].sort((a, b) => (b.isSelected - a.isSelected) || a.name.localeCompare(b.name));
+
+    const activeTiers = TIER_ORDER.filter(t => byTier[t].length > 0);
+    if (!activeTiers.length) return;
+
+    // Dimensions
+    const maxNodes = Math.max(...activeTiers.map(t => byTier[t].length));
+    const colH  = maxNodes * (NODE_H + GAP_Y) - GAP_Y;
+    const svgH  = TIER_H + PAD_V + colH + PAD_V + P0_ZONE;
+    const svgW  = PAD_H * 2 + NODE_W + (activeTiers.length - 1) * COL_SPACING;
+
+    // Column X positions
+    const tierX = {};
+    activeTiers.forEach((t, i) => { tierX[t] = PAD_H + NODE_W / 2 + i * COL_SPACING; });
+
+    // Node Y positions (vertically centered per column)
+    for (const tier of activeTiers) {
+        const tns    = byTier[tier];
+        const totalH = tns.length * (NODE_H + GAP_Y) - GAP_Y;
+        const startY = TIER_H + PAD_V + (colH - totalH) / 2;
+        tns.forEach((n, i) => { n.x = tierX[tier]; n.y = startY + i * (NODE_H + GAP_Y); });
     }
-    return [];
-}
 
-// Sammelt alle P0-Ressourcen und Planetentypen für ein Produkt
-function collectRequirements(name, tier, p0Set, planetSet, visited) {
-    const key = name + '|' + tier;
-    if (visited.has(key)) return;
-    visited.add(key);
+    const edges = [...edgeSet].map(e => { const [f, t] = e.split('||'); return {from: f, to: t}; });
 
-    const inputs = getInputs(name, tier);
-    if (tier === 'P1') {
-        // inputs are P0 resources
-        inputs.forEach(p0 => {
-            p0Set.add(p0);
-            for (const [pt, resources] of Object.entries(PLANET_RESOURCES)) {
-                if (resources.includes(p0)) planetSet.add(pt);
-            }
-        });
-    } else {
-        inputs.forEach(inp => {
-            const inpTier = getTier(inp);
-            if (inpTier) collectRequirements(inp, inpTier, p0Set, planetSet, visited);
-        });
+    // ── SVG content ──────────────────────────────────────────────────────────
+    let s = `<defs>
+  <filter id="glow-sel" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur stdDeviation="6" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="glow-edge" x="-10%" y="-10%" width="120%" height="120%">
+    <feGaussianBlur stdDeviation="1.5" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <marker id="arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+    <path d="M0,1 L6,3.5 L0,6 Z" fill-opacity="0.4"/>
+  </marker>
+</defs>`;
+
+    // Subtle column strip + tier label
+    for (const tier of activeTiers) {
+        const tc = TIER_COLORS[tier];
+        const cx = tierX[tier];
+        s += `<rect x="${r(cx - NODE_W/2 - 8)}" y="0" width="${NODE_W + 16}" height="${svgH}"
+                    fill="${tc}" fill-opacity="0.03" rx="6"/>
+              <line x1="${r(cx - NODE_W/2 - 8)}" y1="${TIER_H}" x2="${r(cx + NODE_W/2 + 8)}" y2="${TIER_H}"
+                    stroke="${tc}" stroke-opacity="0.12" stroke-width="1"/>
+              <text x="${r(cx)}" y="${TIER_H - 7}" text-anchor="middle"
+                    fill="${tc}" fill-opacity="0.5" font-size="9.5" font-weight="700"
+                    font-family="monospace" letter-spacing="2.5">${tier}</text>`;
     }
+
+    // Separator line between input and output side (right edge of selected tier column)
+    const selTier = product.tier;
+    if (tierX[selTier] !== undefined) {
+        const sepX = r(tierX[selTier] + NODE_W / 2 + 8);
+        // Only draw if there are tiers on both sides
+        const hasLeft  = activeTiers.some(t => TIER_ORDER.indexOf(t) < TIER_ORDER.indexOf(selTier));
+        const hasRight = activeTiers.some(t => TIER_ORDER.indexOf(t) > TIER_ORDER.indexOf(selTier));
+        if (hasLeft && hasRight) {
+            s += `<line x1="${r(tierX[selTier] + NODE_W/2 + (COL_SPACING - NODE_W)/2)}" y1="${TIER_H + 4}"
+                        x2="${r(tierX[selTier] + NODE_W/2 + (COL_SPACING - NODE_W)/2)}" y2="${svgH - 4}"
+                        stroke="#2a4a5e" stroke-width="1" stroke-dasharray="4 4" stroke-opacity="0.5"/>`;
+        }
+    }
+
+    // Edges
+    for (const {from, to} of edges) {
+        const fn = nodes.get(from), tn = nodes.get(to);
+        if (!fn || !tn) continue;
+
+        const sx = r(fn.x + NODE_W / 2), sy = r(fn.y + NODE_H / 2);
+        const tx = r(tn.x - NODE_W / 2), ty = r(tn.y + NODE_H / 2);
+        const mx = r((sx + tx) / 2);
+        const ec = TIER_COLORS[tn.tier] || '#586e75';
+        const connected = fn.isSelected || tn.isSelected;
+
+        s += `<path d="M${sx},${sy} C${mx},${sy} ${mx},${ty} ${tx},${ty}"
+                   fill="none" stroke="${ec}"
+                   stroke-opacity="${connected ? 0.6 : 0.2}"
+                   stroke-width="${connected ? 2 : 1.5}"
+                   ${connected ? 'filter="url(#glow-edge)"' : ''}
+                   marker-end="url(#arr)"/>`;
+        // Color the arrowhead marker via fill on the path's marker (use a group trick)
+        // Simple approach: just let the marker inherit color via currentColor not possible here
+        // Instead inject a colored marker per edge — too complex, skip arrowhead coloring
+    }
+
+    // Nodes
+    for (const node of nodes.values()) {
+        const tc  = TIER_COLORS[node.tier] || '#586e75';
+        const nx  = r(node.x - NODE_W / 2);
+        const ny  = r(node.y);
+        const sel = node.isSelected;
+        const label = node.name.length > 18 ? node.name.slice(0, 16) + '…' : node.name;
+        const safeN  = node.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const clickAttr = sel
+            ? `style="cursor:default;"`
+            : `style="cursor:pointer;" onclick="selectProduct({name:'${safeN}',tier:'${node.tier}'})"`;
+
+        s += `<g ${clickAttr} ${sel ? 'filter="url(#glow-sel)"' : ''}>
+          <title>${node.name} · ${node.tier}</title>`;
+
+        // Node background
+        s += `<rect x="${nx}" y="${ny}" width="${NODE_W}" height="${NODE_H}" rx="5"
+                    fill="${tc}" fill-opacity="${sel ? 0.22 : 0.07}"
+                    stroke="${tc}" stroke-opacity="${sel ? 1 : 0.3}"
+                    stroke-width="${sel ? 2 : 1}"/>`;
+
+        // Selected: second inner rim for depth
+        if (sel) {
+            s += `<rect x="${r(nx+2)}" y="${r(ny+2)}" width="${NODE_W-4}" height="${NODE_H-4}" rx="4"
+                        fill="${tc}" fill-opacity="0.1" stroke="${tc}" stroke-opacity="0.4" stroke-width="0.5"/>`;
+        }
+
+        // Hover rect (transparent, catches pointer events, changes fill via JS)
+        if (!sel) {
+            s += `<rect x="${nx}" y="${ny}" width="${NODE_W}" height="${NODE_H}" rx="5"
+                        fill="transparent" stroke="none"
+                        onmouseenter="this.previousElementSibling.setAttribute('fill-opacity','0.18')"
+                        onmouseleave="this.previousElementSibling.setAttribute('fill-opacity','0.07')"/>`;
+        }
+
+        // Label
+        s += `<text x="${r(node.x)}" y="${r(ny + NODE_H * 0.645)}" text-anchor="middle"
+                    fill="${tc}" fill-opacity="${sel ? 1 : 0.85}"
+                    font-size="${sel ? 11.5 : 10.5}" font-weight="${sel ? 700 : 400}"
+                    font-family="system-ui,-apple-system,sans-serif" pointer-events="none">${label}</text>`;
+
+        s += `</g>`;
+
+        // P0 resource dots below P1 nodes
+        if (node.p0s && node.p0s.length > 0) {
+            const dotR = 3.5, dotGap = 9;
+            const totalDW   = node.p0s.length * (dotR * 2 + dotGap) - dotGap;
+            const dotStartX = node.x - totalDW / 2 + dotR;
+            const dotY      = ny + NODE_H + 9;
+            node.p0s.forEach((p0, i) => {
+                const pl = Object.entries(PLANET_RESOURCES).filter(([, res]) => res.includes(p0));
+                const dc = pl.length ? (PLANET_COLORS[pl[0][0]] || '#586e75') : '#586e75';
+                s += `<circle cx="${r(dotStartX + i * (dotR * 2 + dotGap))}" cy="${dotY}"
+                               r="${dotR}" fill="${dc}" fill-opacity="0.75" style="cursor:default;">
+                          <title>${p0}</title>
+                      </circle>`;
+            });
+        }
+    }
+
+    // Update arrowhead color globally (all black/white — inherits stroke is not possible per edge)
+    // Fix: inject the marker fill to match via a style block
+    s = `<style>
+  #arr path { fill: #7a9ab5; }
+  .graph-node rect { transition: fill-opacity .12s; }
+</style>` + s;
+
+    const svgEl = document.getElementById('chainGraph');
+    svgEl.setAttribute('viewBox', `0 0 ${r(svgW)} ${svgH}`);
+    svgEl.setAttribute('height', svgH);
+    svgEl.style.minWidth = svgW + 'px';
+    svgEl.innerHTML = s;
 }
 
-// ── Render ────────────────────────────────────────────────────────────────────
-
+// ── Haupt-Render ──────────────────────────────────────────────────────────────
 function renderChain(product) {
     document.getElementById('emptyState').classList.add('d-none');
     document.getElementById('chainResult').classList.remove('d-none');
@@ -252,231 +465,29 @@ function renderChain(product) {
     document.getElementById('chainTierBadge').innerHTML =
         `<span class="badge fs-6" style="background:${tc}1a;color:${tc};border:1px solid ${tc}3a;">${product.tier}</span>`;
 
-    // Baum aufbauen
-    const chainTreeEl = document.getElementById('chainTree');
-    chainTreeEl.innerHTML = renderNode(product.name, product.tier, 0, new Set());
+    renderGraph(product);
 
-    // Requirements sammeln
-    const p0Set = new Set();
-    const planetSet = new Set();
+    const p0Set = new Set(), planetSet = new Set();
     collectRequirements(product.name, product.tier, p0Set, planetSet, new Set());
 
-    // Planeten rendern
-    const planetsEl = document.getElementById('chainPlanets');
-    planetsEl.innerHTML = [...planetSet].map(pt => {
-        const c = PLANET_COLORS[pt] || '#586e75';
-        return `<span class="badge me-1 mb-1" style="background:${c}18;color:${c};border:1px solid ${c}30;font-size:0.8rem;padding:0.4rem 0.7rem;">${pt}</span>`;
-    }).join('') || '<span class="text-muted small">—</span>';
-
-    // Weiterverarbeitung rendern
-    renderUsedIn(product);
-
-    // P0 rendern
-    const p0El = document.getElementById('chainP0');
-    p0El.innerHTML = [...p0Set].map(p0 => {
-        // Find which planets produce this P0
-        const planets = Object.entries(PLANET_RESOURCES)
-            .filter(([, res]) => res.includes(p0))
-            .map(([pt]) => pt);
-        const planetDots = planets.map(pt => {
+    document.getElementById('chainPlanets').innerHTML =
+        [...planetSet].map(pt => {
             const c = PLANET_COLORS[pt] || '#586e75';
-            return `<span style="color:${c};font-size:0.7rem;" title="${pt}">●</span>`;
-        }).join(' ');
-        return `<div class="d-flex align-items-center justify-content-between mb-1">
-            <span class="small text-muted">${p0}</span>
-            <span>${planetDots}</span>
-        </div>`;
-    }).join('') || '<span class="text-muted small">—</span>';
-}
+            return `<span class="badge me-1 mb-1"
+                         style="background:${c}18;color:${c};border:1px solid ${c}30;font-size:0.8rem;padding:.4rem .7rem;">${pt}</span>`;
+        }).join('') || '<span class="text-muted small">—</span>';
 
-function renderNode(name, tier, depth, visited) {
-    const key = name + '|' + depth;
-    if (depth > 6 || visited.has(key)) return '';
-    visited.add(key);
-
-    const tc = TIER_COLORS[tier] || '#586e75';
-    const inputs = getInputs(name, tier);
-    const indent = depth * 20;
-    const hasChildren = inputs.length > 0 && tier !== 'P0';
-
-    let html = `<div style="margin-left:${indent}px;margin-bottom:4px;" class="d-flex align-items-start gap-2">`;
-    if (depth > 0) html += `<span style="color:#2a3f52;margin-top:2px;">└</span>`;
-    html += `<span class="badge" style="background:${tc}18;color:${tc};border:1px solid ${tc}30;white-space:normal;">${name}</span>`;
-    html += `<span class="badge" style="background:#1a2d3d;color:#586e75;font-size:0.65rem;">${tier}</span>`;
-    html += `</div>`;
-
-    if (hasChildren) {
-        if (tier === 'P1') {
-            // P0 inputs
-            inputs.forEach(p0 => {
-                html += renderP0Node(p0, depth + 1);
-            });
-        } else {
-            inputs.forEach(inp => {
-                const inpTier = getTier(inp);
-                if (inpTier) {
-                    html += renderNode(inp, inpTier, depth + 1, new Set(visited));
-                } else {
-                    // Unknown — show as-is
-                    const dIndent = (depth + 1) * 20;
-                    html += `<div style="margin-left:${dIndent}px;margin-bottom:4px;" class="d-flex align-items-center gap-2">
-                        <span style="color:#2a3f52;">└</span>
-                        <span class="small text-muted">${inp}</span>
-                    </div>`;
-                }
-            });
-        }
-    }
-    return html;
-}
-
-function renderP0Node(p0name, depth) {
-    const indent = depth * 20;
-    const planets = Object.entries(PLANET_RESOURCES)
-        .filter(([, res]) => res.includes(p0name))
-        .map(([pt]) => pt);
-    const planetDots = planets.map(pt => {
-        const c = PLANET_COLORS[pt] || '#586e75';
-        return `<span style="color:${c};font-size:0.75rem;" title="${pt}">●</span>`;
-    }).join(' ');
-    return `<div style="margin-left:${indent}px;margin-bottom:4px;" class="d-flex align-items-center gap-2">
-        <span style="color:#2a3f52;">└</span>
-        <span class="small" style="color:#4a6278;">${p0name}</span>
-        <span class="badge" style="background:#1a2d3d;color:#586e75;font-size:0.6rem;">P0</span>
-        <span>${planetDots}</span>
-    </div>`;
-}
-
-// Beim Laden Dropdown öffnen wenn Eingabe vorhanden
-searchInput.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') dropdown.classList.add('d-none');
-});
-
-// ── Weiterverarbeitung ────────────────────────────────────────────────────────
-
-// Reverse-Lookup Maps aufbauen
-const P1_USED_IN_P2 = {};
-const P2_USED_IN_P3 = {};
-const P3_USED_IN_P4 = {};
-
-for (const [p2, p1s] of Object.entries(P1_TO_P2))
-    for (const p1 of p1s) { (P1_USED_IN_P2[p1] = P1_USED_IN_P2[p1] || []).push(p2); }
-
-for (const [p3, p2s] of Object.entries(P2_TO_P3))
-    for (const p2 of p2s) { (P2_USED_IN_P3[p2] = P2_USED_IN_P3[p2] || []).push(p3); }
-
-for (const [p4, inputs] of Object.entries(P3_TO_P4))
-    for (const inp of inputs) {
-        const t = getTier(inp);
-        if (t === 'P3') { (P3_USED_IN_P4[inp] = P3_USED_IN_P4[inp] || []).push(p4); }
-        // P4 can also directly consume P1 (e.g. Reactive Metals) — skip for upstream paths
-    }
-
-function getDirectUsers(name, tier) {
-    if (tier === 'P1') return (P1_USED_IN_P2[name] || []).map(n => ({name: n, tier: 'P2'}));
-    if (tier === 'P2') return (P2_USED_IN_P3[name] || []).map(n => ({name: n, tier: 'P3'}));
-    if (tier === 'P3') return (P3_USED_IN_P4[name] || []).map(n => ({name: n, tier: 'P4'}));
-    return [];
-}
-
-// Gibt alle vollständigen Pfade von name aufwärts zurück (max 3 Stufen)
-function getUpstreamPaths(name, tier, depth) {
-    if (depth > 3) return [];
-    const users = getDirectUsers(name, tier);
-    if (!users.length) return [];
-    const paths = [];
-    for (const u of users) {
-        const subPaths = getUpstreamPaths(u.name, u.tier, depth + 1);
-        if (subPaths.length === 0) {
-            paths.push([u]);
-        } else {
-            for (const sp of subPaths) paths.push([u, ...sp]);
-        }
-    }
-    return paths;
-}
-
-function renderUsedIn(product) {
-    const paths = getUpstreamPaths(product.name, product.tier, 0);
-    const summaryEl = document.getElementById('usedInSummary');
-
-    if (!paths.length) {
-        summaryEl.textContent = '';
-        document.getElementById('usedInBody').innerHTML =
-            `<div class="text-center py-3 text-muted small">
-                <i class="bi bi-check2-circle me-2 fs-5"></i>
-                Endprodukt — kann nicht weiter verarbeitet werden.
+    document.getElementById('chainP0').innerHTML =
+        [...p0Set].map(p0 => {
+            const planets = Object.entries(PLANET_RESOURCES).filter(([, r]) => r.includes(p0)).map(([pt]) => pt);
+            const dots = planets.map(pt => {
+                const c = PLANET_COLORS[pt] || '#586e75';
+                return `<span style="color:${c};font-size:.7rem;" title="${pt}">●</span>`;
+            }).join(' ');
+            return `<div class="d-flex align-items-center justify-content-between mb-1">
+                <span class="small text-muted">${p0}</span><span>${dots}</span>
             </div>`;
-        return;
-    }
-
-    // Einzigartige Endprodukte zählen (letzter Node jedes Pfads)
-    const endProducts = new Set(paths.map(p => p[p.length - 1].name));
-    summaryEl.textContent = endProducts.size + ' Endprodukt' + (endProducts.size !== 1 ? 'e' : '');
-
-    // Pfade gruppieren: nach erstem Schritt (direkte Nutzung)
-    const groups = {};
-    for (const path of paths) {
-        const key = path[0].name;
-        (groups[key] = groups[key] || []).push(path);
-    }
-
-    let html = '<div class="eve-upgrade-paths">';
-    for (const [firstStep, groupPaths] of Object.entries(groups)) {
-        const firstTier = groupPaths[0][0].tier;
-        const firstColor = TIER_COLORS[firstTier];
-
-        html += `<div class="eve-upgrade-group mb-3">`;
-        html += `<div class="d-flex align-items-start gap-2 flex-wrap">`;
-
-        // Aktuelles Produkt (Ausgangspunkt)
-        const srcColor = TIER_COLORS[product.tier];
-        html += `<div class="d-flex align-items-center gap-2 flex-wrap">`;
-        html += `<span class="eve-flow-source badge px-2 py-1"
-                    style="background:${srcColor}22;color:${srcColor};border:1px solid ${srcColor}50;font-size:0.8rem;">
-                    ${product.name}
-                 </span>`;
-
-        // Pfeil + Zwischenschritt
-        html += `<span class="eve-flow-arrow text-muted">→</span>`;
-        html += `<button class="eve-flow-node badge px-2 py-1 border-0"
-                    style="background:${firstColor}18;color:${firstColor};border:1px solid ${firstColor}30 !important;
-                           font-size:0.8rem;cursor:pointer;transition:all .15s;"
-                    onmouseenter="this.style.background='${firstColor}35'"
-                    onmouseleave="this.style.background='${firstColor}18'"
-                    onclick="selectProduct({name:'${firstStep.replace(/'/g,"\\'")}',tier:'${firstTier}'})">
-                    ${firstStep}
-                    <span style="font-size:0.65rem;opacity:0.7;">${firstTier}</span>
-                 </button>`;
-
-        // Weitere Schritte (ab Index 1 in jedem Pfad)
-        const furtherSteps = [...new Map(groupPaths.map(p => p.slice(1)).flat()
-            .map(n => [n.name, n])).values()];
-
-        if (furtherSteps.length > 0) {
-            html += `<span class="eve-flow-arrow text-muted">→</span>`;
-            html += `<div class="d-flex gap-1 flex-wrap">`;
-            for (const step of furtherSteps) {
-                const sc = TIER_COLORS[step.tier];
-                const isP4 = step.tier === 'P4';
-                html += `<button class="eve-flow-node badge px-2 py-1 border-0"
-                            style="background:${sc}18;color:${sc};border:1px solid ${sc}30 !important;
-                                   font-size:0.8rem;cursor:pointer;transition:all .15s;
-                                   ${isP4 ? 'box-shadow:0 0 6px '+sc+'40;' : ''}"
-                            onmouseenter="this.style.background='${sc}35'"
-                            onmouseleave="this.style.background='${sc}18'"
-                            onclick="selectProduct({name:'${step.name.replace(/'/g,"\\'")}',tier:'${step.tier}'})">
-                            ${isP4 ? '★ ' : ''}${step.name}
-                            <span style="font-size:0.65rem;opacity:0.7;">${step.tier}</span>
-                         </button>`;
-            }
-            html += `</div>`;
-        }
-
-        html += `</div></div></div>`;
-    }
-    html += '</div>';
-    document.getElementById('usedInBody').innerHTML = html;
+        }).join('') || '<span class="text-muted small">—</span>';
 }
 </script>
 {% endblock %}

@@ -3,7 +3,7 @@ import time as _time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
@@ -11,7 +11,7 @@ from app.database import get_db
 from app.dependencies import require_account
 from app.esi import ensure_valid_token, get_character_planets, get_planet_detail, get_planet_info, get_schematic, invalidate_planet_detail_cache
 from app.market import get_sell_prices_by_names
-from app.models import Character, IskSnapshot
+from app.models import Account, Character, IskSnapshot
 from app.pi_data import PLANET_TYPE_COLORS
 from app import sde as _sde
 from app.templates_env import templates
@@ -142,6 +142,38 @@ def _compute_storage(pins: list) -> list[dict]:
     type_totals = type_counters
     for entry in result:
         entry["label"] = entry["struct"] + (f" {entry['struct_num']}" if type_totals.get(entry["type_id"], 1) > 1 else "")
+    return result
+
+
+def _compute_missing_inputs(pins: list) -> list[dict]:
+    """Materialien die täglich importiert werden müssen (nicht lokal produziert)."""
+    from app.sde import get_type_name
+    local_products: set[str] = set()
+    daily_consumption: dict[str, float] = {}
+
+    for pin in pins:
+        factory = pin.get("factory_details") or {}
+        schematic_id = factory.get("schematic_id") or pin.get("schematic_id")
+        if not schematic_id:
+            continue
+        try:
+            schematic = get_schematic(int(schematic_id))
+        except Exception:
+            continue
+        cycle_time = schematic.get("cycle_time", 0)
+        product_name = schematic.get("schematic_name", "")
+        if not cycle_time or not product_name:
+            continue
+        local_products.add(product_name)
+        cycles_per_day = 86400.0 / float(cycle_time)
+        for type_id, qty in schematic.get("input_type_ids", {}).items():
+            name = get_type_name(type_id) or f"Type {type_id}"
+            daily_consumption[name] = daily_consumption.get(name, 0.0) + qty * cycles_per_day
+
+    result = []
+    for material, qty_day in sorted(daily_consumption.items(), key=lambda x: -x[1]):
+        if material not in local_products:
+            result.append({"name": material, "qty_per_day": round(qty_day)})
     return result
 
 
@@ -326,6 +358,7 @@ def _build_dashboard_payload(account, characters: list, db: Session) -> dict:
             next_expiry = expiry_time
             next_expiry_char = char.character_name
 
+        _sys_data = _sde.get_system_local(colony.get("solar_system_id")) or {}
         colonies.append({
             "planet_id": planet_id,
             "planet_name": planet_name,
@@ -334,16 +367,19 @@ def _build_dashboard_payload(account, characters: list, db: Session) -> dict:
             "num_pins": colony.get("num_pins", 0),
             "last_update": colony.get("last_update", "—"),
             "solar_system_id": colony.get("solar_system_id"),
-            "solar_system_name": (_sde.get_system_local(colony.get("solar_system_id")) or {}).get("name", "—"),
+            "solar_system_name": _sys_data.get("name", "—"),
+            "region_name": _sys_data.get("region_name") or "—",
             "color": PLANET_TYPE_COLORS.get(planet_type, "#586e75"),
             "character_name": char.character_name,
             "character_portrait": char.portrait_url,
+            "corporation_id": char.corporation_id,
             "expiry_hours": expiry_hours,
             "isk_day": isk_day,
             "highest_tier": highest_tier,
             "factories": _compute_factories(pins, prices),
             "storage": _compute_storage(pins),
             "extractor_status": _get_extractor_status(pins),
+            "missing_inputs": _compute_missing_inputs(pins),
         })
 
     colony_count = len(colonies)
@@ -443,6 +479,114 @@ def force_refresh(account=Depends(require_account)):
         db.close()
     _refresh_cooldown[account.id] = now
     return JSONResponse({"ok": True})
+
+
+@router.get("/overview", response_class=HTMLResponse)
+def overview_page(
+    request: Request,
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """Gesamt-Übersicht aller Kolonien (nur für Owner und Admins)."""
+    if not (account.is_owner or account.is_admin):
+        raise HTTPException(status_code=403, detail="Kein Zugriff")
+
+    all_accounts = db.query(Account).all()
+    all_colonies: list[dict] = []
+    uncached: list[dict] = []
+
+    for acc in all_accounts:
+        cached = _dashboard_cache.get(acc.id)
+        if cached:
+            for colony in cached.get("colonies", []):
+                all_colonies.append(colony)
+        else:
+            chars = db.query(Character).filter(Character.account_id == acc.id).all()
+            main = None
+            if acc.main_character_id:
+                main = db.query(Character).filter(Character.id == acc.main_character_id).first()
+            uncached.append({
+                "id": acc.id,
+                "main_name": main.character_name if main else f"Account #{acc.id}",
+                "char_count": len(chars),
+            })
+
+    all_colonies.sort(key=lambda x: (x.get("character_name", ""), x.get("planet_name", "")))
+    total_isk = sum(c.get("isk_day", 0) for c in all_colonies)
+
+    return templates.TemplateResponse("overview.html", {
+        "request": request,
+        "account": account,
+        "all_colonies": all_colonies,
+        "uncached": uncached,
+        "total_colonies": len(all_colonies),
+        "total_isk_day": total_isk,
+    })
+
+
+@router.get("/corp", response_class=HTMLResponse)
+def corp_view_page(
+    request: Request,
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """Korporation-Übersicht: nur für CEO, Owner und Admins."""
+    from app.esi import get_corporation_info
+
+    main_char = None
+    if account.main_character_id:
+        main_char = db.query(Character).filter(Character.id == account.main_character_id).first()
+
+    corp_id = main_char.corporation_id if main_char else None
+    corp_name = main_char.corporation_name if main_char else None
+    is_ceo = False
+
+    if corp_id:
+        try:
+            corp_info = get_corporation_info(corp_id)
+            corp_name = corp_info.get("name", corp_name or f"Corp #{corp_id}")
+            if corp_info.get("ceo_id") == (main_char.eve_character_id if main_char else None):
+                is_ceo = True
+        except Exception:
+            pass
+
+    if not (account.is_owner or account.is_admin or is_ceo):
+        raise HTTPException(status_code=403, detail="Kein Zugriff — nur für CEO, Admins und den Besitzer")
+
+    # Alle Chars in dieser Corp
+    if corp_id:
+        corp_chars = db.query(Character).filter(Character.corporation_id == corp_id).all()
+    else:
+        corp_chars = []
+
+    corp_char_names = {c.character_name for c in corp_chars}
+    account_ids = {c.account_id for c in corp_chars}
+
+    corp_colonies: list[dict] = []
+    uncached_count = 0
+    for acc_id in account_ids:
+        cached = _dashboard_cache.get(acc_id)
+        if cached:
+            for colony in cached.get("colonies", []):
+                if colony.get("character_name") in corp_char_names:
+                    corp_colonies.append(colony)
+        else:
+            uncached_count += 1
+
+    corp_colonies.sort(key=lambda x: (x.get("character_name", ""), x.get("planet_name", "")))
+    total_isk = sum(c.get("isk_day", 0) for c in corp_colonies)
+
+    return templates.TemplateResponse("corp_view.html", {
+        "request": request,
+        "account": account,
+        "corp_name": corp_name or "Unbekannte Korporation",
+        "corp_id": corp_id,
+        "corp_colonies": corp_colonies,
+        "uncached_count": uncached_count,
+        "total_colonies": len(corp_colonies),
+        "total_isk_day": total_isk,
+        "is_ceo": is_ceo,
+    })
 
 
 @router.get("/characters", response_class=HTMLResponse)

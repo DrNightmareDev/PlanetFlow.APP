@@ -246,6 +246,9 @@
                                     {% if colony.solar_system_name and colony.solar_system_name != '—' %}
                                     <div style="color:#4a6a8a;font-size:.7rem;">{{ colony.solar_system_name }}</div>
                                     {% endif %}
+                                    {% if colony.region_name and colony.region_name != '—' %}
+                                    <div style="color:#3a5a7a;font-size:.65rem;">{{ colony.region_name }}</div>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     <span class="badge eve-planet-badge"
@@ -459,6 +462,18 @@ const COLONY_EXTRACTOR = [
 
 {% endfor %}
 ];
+const COLONY_MISSING_INPUTS = [
+{% for colony in colonies %}
+  {{ colony.missing_inputs | tojson }}{% if not loop.last %},{% endif %}
+
+{% endfor %}
+];
+const COLONY_LOCATION = [
+{% for colony in colonies %}
+  {"system": {{ colony.solar_system_name | tojson }}, "region": {{ colony.region_name | tojson }}}{% if not loop.last %},{% endif %}
+
+{% endfor %}
+];
 
 // ── Colony Detail Modal ───────────────────────────────────────────────────────
 const colonyModal = new bootstrap.Modal(document.getElementById('colonyDetailModal'));
@@ -482,6 +497,8 @@ function openColonyDetail(idx) {
     const factories = COLONY_FACTORIES[idx] || [];
     const storage   = COLONY_STORAGE[idx]   || [];
     const extStatus = COLONY_EXTRACTOR[idx] || {total:0, expired:0};
+    const missing   = COLONY_MISSING_INPUTS[idx] || [];
+    const loc       = COLONY_LOCATION[idx] || {};
     const c = meta.color;
 
     // Titel mit Extractor-Status
@@ -495,9 +512,15 @@ function openColonyDetail(idx) {
                 <i class="bi bi-check-circle me-1"></i>${extStatus.total} Extraktoren aktiv</span>`;
         }
     }
+    let locLine = '';
+    if (loc.system && loc.system !== '—') {
+        locLine = `<div class="small text-muted mt-1"><i class="bi bi-geo-alt me-1"></i>${loc.system}`;
+        if (loc.region && loc.region !== '—') locLine += ` · ${loc.region}`;
+        locLine += '</div>';
+    }
     document.getElementById('colonyDetailTitle').innerHTML =
         `<span class="badge me-2" style="background:${c}20;color:${c};border:1px solid ${c}40;">${meta.type}</span>${meta.name}
-         <span class="text-muted small ms-2">${meta.char}</span>${extBadge}`;
+         <span class="text-muted small ms-2">${meta.char}</span>${extBadge}${locLine}`;
 
     let html = '';
 
@@ -550,6 +573,19 @@ function openColonyDetail(idx) {
         html += '</tbody></table></div>';
     }
     html += '</div>';
+
+    // ── Fehlende Inputs ──────────────────────────────────────────────
+    if (missing.length > 0) {
+        html += '<hr style="border-color:#1a2d3d;margin:.5rem 0;"><div class="p-3 pt-2">';
+        html += '<h6 class="small text-muted fw-semibold mb-2"><i class="bi bi-box-arrow-in-down me-1"></i>FEHLENDE INPUTS (täglich zu importieren)</h6>';
+        html += '<div class="d-flex flex-wrap gap-1">';
+        missing.forEach(m => {
+            html += `<span class="badge" style="background:#2a1a0a;color:#f4a300;border:1px solid #5a3a0a;font-size:.7em;">
+                <i class="bi bi-arrow-down-circle me-1"></i>${m.name}
+                <span style="color:#fff;opacity:.8;">${m.qty_per_day.toLocaleString()}/Tag</span></span>`;
+        });
+        html += '</div></div>';
+    }
 
     document.getElementById('colonyDetailBody').innerHTML = html;
     colonyModal.show();

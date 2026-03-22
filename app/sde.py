@@ -119,11 +119,17 @@ def _load_schematics():
                 continue
             # PI-Schematics haben genau 1 Produkt
             prod = next(iter(products.values()))
+            # Inputs: type_id -> quantity
+            input_type_ids: dict[int, int] = {}
+            for tid_str, inp in s.get("inputs", {}).items():
+                qty = inp.get("quantity", inp) if isinstance(inp, dict) else int(inp)
+                input_type_ids[int(tid_str)] = qty
             result[int(sid_str)] = {
                 "cycle_time": s.get("cycle_time", 0),
                 "schematic_name": s.get("name", {}).get("en", ""),
                 "output_quantity": prod.get("quantity", 1),
                 "output_type_id": prod.get("type_id", 0),
+                "input_type_ids": input_type_ids,
             }
         _schematics = result
         logger.info(f"SDE: {len(_schematics)} Schematics geladen (build: {_build_time})")

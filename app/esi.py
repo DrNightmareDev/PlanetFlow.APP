@@ -140,6 +140,22 @@ def search_entities(character_id: int, access_token: str, query: str) -> dict:
         return {}
 
 
+def universe_ids(names: list[str]) -> dict:
+    """Löst exakte EVE-Namen zu IDs auf (kein Auth erforderlich)."""
+    try:
+        response = requests.post(
+            f"{ESI_BASE}/universe/ids/",
+            json=names,
+            params={"datasource": "tranquility", "language": "en"},
+            headers=HEADERS,
+            timeout=15,
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception:
+        return {}
+
+
 def search_systems(query: str) -> dict:
     """Deprecated: ESI /search/ removed. Use search_systems_auth instead."""
     return {}

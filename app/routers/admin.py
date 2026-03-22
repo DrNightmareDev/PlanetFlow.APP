@@ -223,33 +223,66 @@ def search_access_policy_entity(
     account=Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Sucht Corps/Allianzen via ESI (benötigt Main-Charakter-Token des Besitzers)."""
+    """Sucht Corps/Allianzen via ESI. Unterstützt direkte ID-Eingabe und Namenssuche."""
     _require_owner(account)
-    if not q.strip():
+    q = q.strip()
+    if not q:
         return JSONResponse({"corporations": [], "alliances": []})
 
-    from app.esi import search_entities, get_corporation_info, get_alliance_info, ensure_valid_token
-    main_char = db.query(Character).filter(Character.id == account.main_character_id).first()
-    if not main_char:
-        return JSONResponse({"corporations": [], "alliances": []})
+    from app.esi import (
+        search_entities, universe_ids,
+        get_corporation_info, get_alliance_info, ensure_valid_token,
+    )
 
-    token = ensure_valid_token(main_char, db)
-    result = search_entities(main_char.eve_character_id, token, q.strip())
+    corps: list[dict] = []
+    alliances: list[dict] = []
+    seen_corp_ids: set[int] = set()
+    seen_alliance_ids: set[int] = set()
 
-    corps = []
-    for cid in result.get("corporation", [])[:8]:
+    def add_corp(cid: int):
+        if cid in seen_corp_ids:
+            return
+        seen_corp_ids.add(cid)
         try:
             info = get_corporation_info(cid)
-            corps.append({"id": cid, "name": info.get("name", str(cid))})
+            if info.get("name"):
+                corps.append({"id": cid, "name": info["name"]})
         except Exception:
             pass
 
-    alliances = []
-    for aid in result.get("alliance", [])[:8]:
+    def add_alliance(aid: int):
+        if aid in seen_alliance_ids:
+            return
+        seen_alliance_ids.add(aid)
         try:
             info = get_alliance_info(aid)
-            alliances.append({"id": aid, "name": info.get("name", str(aid))})
+            if info.get("name"):
+                alliances.append({"id": aid, "name": info["name"]})
         except Exception:
             pass
 
-    return JSONResponse({"corporations": corps, "alliances": alliances})
+    # 1) Direkte ID-Eingabe (z.B. von zkillboard kopiert)
+    if q.isdigit():
+        entity_id = int(q)
+        add_corp(entity_id)
+        add_alliance(entity_id)
+        return JSONResponse({"corporations": corps, "alliances": alliances})
+
+    # 2) Exakte Namensauflösung via /universe/ids/ (kein Auth nötig)
+    resolved = universe_ids([q])
+    for entry in resolved.get("corporations", []):
+        add_corp(entry["id"])
+    for entry in resolved.get("alliances", []):
+        add_alliance(entry["id"])
+
+    # 3) Fuzzy-Suche via character search (benötigt Auth-Token)
+    main_char = db.query(Character).filter(Character.id == account.main_character_id).first()
+    if main_char:
+        token = ensure_valid_token(main_char, db)
+        result = search_entities(main_char.eve_character_id, token, q)
+        for cid in result.get("corporation", [])[:8]:
+            add_corp(cid)
+        for aid in result.get("alliance", [])[:8]:
+            add_alliance(aid)
+
+    return JSONResponse({"corporations": corps[:10], "alliances": alliances[:10]})

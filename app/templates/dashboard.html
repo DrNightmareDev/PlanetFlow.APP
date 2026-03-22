@@ -26,7 +26,7 @@
                         <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
                             <h2 class="eve-char-heading mb-0">{{ main_char.character_name }}</h2>
                             <span class="badge eve-badge-main">Main</span>
-                            {% if account.is_admin %}
+                            {% if account.is_owner and account.is_admin %}
                             <span class="badge eve-badge-admin">
                                 <i class="bi bi-shield-fill me-1"></i>Admin
                             </span>

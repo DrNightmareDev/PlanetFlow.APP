@@ -553,24 +553,28 @@ def overview_page(
 @router.get("/corp", response_class=HTMLResponse)
 def corp_view_page(
     request: Request,
+    corp_id: int | None = None,
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
-    """Korporation-Übersicht: nur für CEO, Owner und Admins."""
+    """Corporation overview: CEO, owner and admins."""
     from app.esi import get_corporation_info
 
     main_char = None
     if account.main_character_id:
         main_char = db.query(Character).filter(Character.id == account.main_character_id).first()
 
-    corp_id = main_char.corporation_id if main_char else None
-    corp_name = main_char.corporation_name if main_char else None
+    own_corp_id   = main_char.corporation_id   if main_char else None
+    own_corp_name = main_char.corporation_name if main_char else None
     is_ceo = False
 
-    if corp_id:
+    # Owner can switch to any corp; otherwise use own corp
+    active_corp_id = corp_id if (account.is_owner and corp_id) else own_corp_id
+
+    if own_corp_id:
         try:
-            corp_info = get_corporation_info(corp_id)
-            corp_name = corp_info.get("name", corp_name or f"Corp #{corp_id}")
+            corp_info = get_corporation_info(own_corp_id)
+            own_corp_name = corp_info.get("name", own_corp_name or f"Corp #{own_corp_id}")
             if corp_info.get("ceo_id") == (main_char.eve_character_id if main_char else None):
                 is_ceo = True
         except Exception:
@@ -579,9 +583,15 @@ def corp_view_page(
     if not (account.is_owner or account.is_admin or is_ceo):
         raise HTTPException(status_code=403, detail="Kein Zugriff — nur für CEO, Admins und den Besitzer")
 
-    # Alle Chars in dieser Corp
-    if corp_id:
-        corp_chars = db.query(Character).filter(Character.corporation_id == corp_id).all()
+    # Corp name for selected corp
+    corp_name = own_corp_name
+    if account.is_owner and corp_id and corp_id != own_corp_id:
+        first_char = db.query(Character).filter(Character.corporation_id == corp_id).first()
+        corp_name = first_char.corporation_name if first_char else f"Corp #{corp_id}"
+
+    # All chars in the active corp
+    if active_corp_id:
+        corp_chars = db.query(Character).filter(Character.corporation_id == active_corp_id).all()
     else:
         corp_chars = []
 
@@ -589,30 +599,106 @@ def corp_view_page(
     account_ids = {c.account_id for c in corp_chars}
 
     corp_colonies: list[dict] = []
-    uncached_count = 0
     for acc_id in account_ids:
         cached = _dashboard_cache.get(acc_id)
         if cached:
             for colony in cached.get("colonies", []):
                 if colony.get("character_name") in corp_char_names:
                     corp_colonies.append(colony)
-        else:
-            uncached_count += 1
 
     corp_colonies.sort(key=lambda x: (x.get("character_name", ""), x.get("planet_name", "")))
     total_isk = sum(c.get("isk_day", 0) for c in corp_colonies if c.get("is_active", True))
 
+    # Accounts list for force-load (owner only)
+    corp_accounts: list[dict] = []
+    if account.is_owner:
+        for acc_id in sorted(account_ids):
+            acc = db.query(Account).filter(Account.id == acc_id).first()
+            if not acc:
+                continue
+            main = db.query(Character).filter(Character.id == acc.main_character_id).first() \
+                   if acc.main_character_id else None
+            corp_accounts.append({
+                "account_id": acc_id,
+                "main_name": main.character_name if main else f"Account #{acc_id}",
+                "is_cached": acc_id in _dashboard_cache,
+            })
+
+    # All corps on this instance (for switcher, owner only)
+    all_corps: list[dict] = []
+    if account.is_owner:
+        seen: dict = {}
+        for row in db.query(Character.corporation_id, Character.corporation_name).distinct().all():
+            if row.corporation_id and row.corporation_id not in seen:
+                seen[row.corporation_id] = row.corporation_name or f"Corp #{row.corporation_id}"
+        all_corps = sorted(
+            [{"id": k, "name": v} for k, v in seen.items()],
+            key=lambda x: x["name"]
+        )
+
+    uncached_count = sum(1 for a in corp_accounts if not a["is_cached"])
+
     return templates.TemplateResponse("corp_view.html", {
         "request": request,
         "account": account,
-        "corp_name": corp_name or "Unbekannte Korporation",
-        "corp_id": corp_id,
+        "corp_name": corp_name or f"Corporation {active_corp_id}",
+        "corp_id": active_corp_id,
         "corp_colonies": corp_colonies,
+        "corp_accounts": corp_accounts,
+        "all_corps": all_corps,
         "uncached_count": uncached_count,
         "total_colonies": len(corp_colonies),
         "total_isk_day": total_isk,
         "is_ceo": is_ceo,
     })
+
+
+@router.get("/corp/accounts")
+def corp_accounts_api(
+    corp_id: int,
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """Returns accounts in a corp with cache status. Owner only."""
+    if not account.is_owner:
+        raise HTTPException(status_code=403)
+    corp_chars = db.query(Character).filter(Character.corporation_id == corp_id).all()
+    account_ids = {c.account_id for c in corp_chars}
+    result = []
+    for acc_id in sorted(account_ids):
+        acc = db.query(Account).filter(Account.id == acc_id).first()
+        if not acc:
+            continue
+        main = db.query(Character).filter(Character.id == acc.main_character_id).first() \
+               if acc.main_character_id else None
+        result.append({
+            "account_id": acc_id,
+            "main_name": main.character_name if main else f"Account #{acc_id}",
+            "is_cached": acc_id in _dashboard_cache,
+        })
+    return JSONResponse({"accounts": result})
+
+
+@router.post("/corp/load-account/{target_account_id}")
+def force_load_account(
+    target_account_id: int,
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """Force-loads dashboard data for a target account. Owner only."""
+    if not account.is_owner:
+        raise HTTPException(status_code=403)
+    target = db.query(Account).filter(Account.id == target_account_id).first()
+    if not target:
+        raise HTTPException(status_code=404)
+    chars = db.query(Character).filter(Character.account_id == target_account_id).all()
+    try:
+        payload = _build_dashboard_payload(target, chars, db)
+        _dashboard_cache[target_account_id] = payload
+        return JSONResponse({"ok": True, "colony_count": payload["colony_count"]})
+    except Exception as e:
+        logger.warning(f"force_load_account {target_account_id}: {e}")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
 @router.get("/characters", response_class=HTMLResponse)

@@ -88,35 +88,34 @@
                         <i class="bi bi-graph-up-arrow me-1"></i>Jita Markt
                     </a>
                 </li>
-                {% if account and (account.is_owner or account.is_admin) %}
+                {% if account and account.is_owner %}
                 <li class="nav-item">
                     <a class="nav-link {% if request.url.path == '/dashboard/overview' %}active{% endif %}"
-                       href="/dashboard/overview" title="Alle Kolonien aller Accounts">
+                       href="/dashboard/overview">
                         <i class="bi bi-grid-3x3-gap me-1"></i>Übersicht
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link {% if request.url.path == '/dashboard/corp' %}active{% endif %}"
-                       href="/dashboard/corp" title="Kolonien der eigenen Korporation">
-                        <i class="bi bi-building me-1"></i>Korpo
+                       href="/dashboard/corp">
+                        <i class="bi bi-building me-1"></i>Corporation
                     </a>
                 </li>
-                {% endif %}
-                {% if account and account.is_admin %}
+                {% if account.is_admin %}
                 <li class="nav-item">
                     <a class="nav-link eve-admin-link {% if request.url.path.startswith('/admin') %}active{% endif %}"
                        href="/admin">
                         <i class="bi bi-shield-fill me-1"></i>Admin
                     </a>
                 </li>
-                {% endif %}
-                {% if account and account.is_owner and not account.is_admin %}
+                {% else %}
                 <li class="nav-item">
                     <a class="nav-link" href="/auth/become-admin" style="color:#f4a300;"
-                       title="Admin-Rechte wiederherstellen (Besitzer-Notfall)">
+                       title="Admin-Rechte wiederherstellen">
                         <i class="bi bi-star-fill me-1"></i>Admin werden
                     </a>
                 </li>
+                {% endif %}
                 {% endif %}
             </ul>
 
@@ -179,7 +178,7 @@
                     {% if account.is_owner and not account.is_admin %}
                     <li>
                         <a class="dropdown-item" href="/auth/become-admin" style="color:#f4a300;">
-                            <i class="bi bi-star-fill me-2"></i>Zum Admin werden
+                            <i class="bi bi-star-fill me-2"></i>Admin werden
                         </a>
                     </li>
                     {% endif %}

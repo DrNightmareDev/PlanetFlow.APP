@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ corp_name }} – Korporation – EVE PI Manager{% endblock %}
+{% block title %}{{ corp_name }} – Corporation – EVE PI Manager{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
@@ -11,13 +11,34 @@
         <i class="bi bi-star me-1"></i>CEO
     </span>
     {% endif %}
-    {% if account.is_admin %}
+    {% if account.is_owner and account.is_admin %}
     <span class="badge eve-badge-admin">Administrator</span>
     {% endif %}
+
     {% if account.is_owner %}
-    <span class="badge" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;">
-        <i class="bi bi-star-fill me-1"></i>Besitzer
-    </span>
+    <!-- Corp Switcher -->
+    {% if all_corps | length > 1 %}
+    <div class="d-flex align-items-center gap-2 ms-2">
+        <i class="bi bi-arrow-left-right" style="color:var(--eve-text-muted);font-size:.8rem;"></i>
+        <select class="form-select form-select-sm eve-select" style="width:auto;"
+                onchange="if(this.value) window.location='/dashboard/corp?corp_id='+this.value">
+            {% for c in all_corps %}
+            <option value="{{ c.id }}" {% if c.id == corp_id %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
+
+    <!-- Force-load button -->
+    {% if corp_accounts %}
+    <button class="btn btn-sm eve-btn-outline ms-auto" onclick="openForceLoad()"
+            title="Alle Corporation-Accounts neu laden">
+        <i class="bi bi-arrow-repeat me-1"></i>Alle laden
+        {% if uncached_count > 0 %}
+        <span class="badge ms-1" style="background:rgba(0,180,216,.2);color:var(--eve-accent);font-size:.65rem;">{{ uncached_count }}</span>
+        {% endif %}
+    </button>
+    {% endif %}
     {% endif %}
 </div>
 
@@ -28,7 +49,7 @@
             <div class="card-body text-center p-3">
                 <div class="eve-stat-icon mb-2"><i class="bi bi-globe2 fs-3"></i></div>
                 <div class="eve-stat-value">{{ total_colonies }}</div>
-                <div class="eve-stat-label">Kolonien</div>
+                <div class="eve-stat-label">Colonies</div>
             </div>
         </div>
     </div>
@@ -37,70 +58,52 @@
             <div class="card-body text-center p-3">
                 <div class="eve-stat-icon mb-2"><i class="bi bi-currency-exchange fs-3"></i></div>
                 <div class="eve-stat-value">{{ total_isk_day | format_isk }}</div>
-                <div class="eve-stat-label">ISK / Tag</div>
+                <div class="eve-stat-label">ISK / Day</div>
             </div>
         </div>
     </div>
-    {% if uncached_count > 0 %}
+    {% if uncached_count > 0 and not account.is_owner %}
     <div class="col-12 col-lg-6">
         <div class="eve-stat-card card border-0 h-100">
             <div class="card-body p-3 d-flex align-items-center gap-2">
                 <i class="bi bi-hourglass-split text-muted"></i>
-                <span class="small text-muted">{{ uncached_count }} Account(s) noch nicht geladen – Dashboard einmal besuchen um Daten zu sehen.</span>
+                <span class="small text-muted">{{ uncached_count }} Account(s) not yet loaded – visit the Dashboard once to load their data.</span>
             </div>
         </div>
     </div>
     {% endif %}
 </div>
 
-<!-- Filter -->
-<div class="eve-card card border-0 mb-3">
-    <div class="card-body p-3">
-        <div class="row g-2 align-items-center">
-            <div class="col-sm-6">
-                <div class="input-group input-group-sm">
-                    <span class="input-group-text" style="background:#0a1520;border-color:#1a2d3d;color:#586e75;"><i class="bi bi-person"></i></span>
-                    <input type="text" id="filterChar" class="form-control eve-input" placeholder="Charakter..." oninput="applyCorpFilters()">
-                </div>
-            </div>
-            <div class="col-sm-6">
-                <div class="input-group input-group-sm">
-                    <span class="input-group-text" style="background:#0a1520;border-color:#1a2d3d;color:#586e75;"><i class="bi bi-geo-alt"></i></span>
-                    <input type="text" id="filterSystem" class="form-control eve-input" placeholder="System / Region..." oninput="applyCorpFilters()">
-                </div>
-            </div>
-        </div>
-        <div class="row g-2 mt-1 align-items-center">
-            <div class="col-auto">
-                <span class="small text-muted"><i class="bi bi-globe2 me-1"></i>Typ:</span>
-            </div>
-            <div class="col">
-                <div class="d-flex flex-wrap gap-1" id="typeToggles">
-                    {% for ptype in ['Barren','Gas','Ice','Lava','Oceanic','Plasma','Storm','Temperate'] %}
-                    <button class="btn btn-sm eve-filter-toggle" data-val="{{ ptype | lower }}" onclick="toggleFilter(this,'typeToggles','applyCorpFilters')">{{ ptype }}</button>
-                    {% endfor %}
-                </div>
-            </div>
-            <div class="col-auto ms-2">
-                <span class="small text-muted"><i class="bi bi-layers me-1"></i>Tier:</span>
-            </div>
-            <div class="col-auto">
-                <div class="d-flex flex-wrap gap-1" id="tierToggles">
-                    {% for tier in ['P1','P2','P3','P4'] %}
-                    <button class="btn btn-sm eve-filter-toggle" data-val="{{ tier | lower }}" onclick="toggleFilter(this,'tierToggles','applyCorpFilters')">{{ tier }}</button>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Kolonien-Tabelle -->
+<!-- Colonies Card with inline filter header -->
 <div class="eve-card card border-0">
-    <div class="card-header eve-card-header d-flex align-items-center gap-2">
+    <div class="card-header eve-card-header d-flex align-items-center gap-3 flex-wrap py-2 px-3"
+         style="background:rgba(30,45,61,0.3);border-color:var(--eve-card-border);">
         <i class="bi bi-globe2 eve-accent"></i>
-        <span class="fw-medium">Kolonien der Korporation</span>
+        <span class="fw-medium">Corporation Colonies</span>
         <span class="badge eve-badge-count" id="tableBadge">{{ total_colonies }}</span>
+
+        <div class="d-flex align-items-center gap-2 ms-3">
+            <i class="bi bi-person-fill" style="color:var(--eve-text-muted);font-size:.8rem;"></i>
+            <input type="text" id="filterChar" class="form-control form-control-sm eve-select"
+                   style="width:140px;" placeholder="Charakter…" oninput="applyCorpFilters()">
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-geo-alt" style="color:var(--eve-text-muted);font-size:.8rem;"></i>
+            <input type="text" id="filterSystem" class="form-control form-control-sm eve-select"
+                   style="width:140px;" placeholder="System / Region…" oninput="applyCorpFilters()">
+        </div>
+        <div class="d-flex flex-wrap gap-1" id="typeToggles">
+            {% for ptype in ['Barren','Gas','Ice','Lava','Oceanic','Plasma','Storm','Temperate'] %}
+            <button class="btn btn-sm eve-filter-toggle" data-val="{{ ptype | lower }}"
+                    onclick="toggleFilter(this,'typeToggles')">{{ ptype }}</button>
+            {% endfor %}
+        </div>
+        <div class="d-flex flex-wrap gap-1" id="tierToggles">
+            {% for tier in ['P1','P2','P3','P4'] %}
+            <button class="btn btn-sm eve-filter-toggle" data-val="{{ tier | lower }}"
+                    onclick="toggleFilter(this,'tierToggles')">{{ tier }}</button>
+            {% endfor %}
+        </div>
     </div>
     <div class="card-body p-0">
         {% if corp_colonies %}
@@ -108,42 +111,45 @@
             <table class="table eve-table mb-0" id="corpTable">
                 <thead>
                     <tr>
-                        <th>Charakter</th>
-                        <th>Ort</th>
-                        <th>Typ</th>
-                        <th>Stufe</th>
-                        <th>Tier</th>
-                        <th>Ablauf</th>
-                        <th>ISK/Tag</th>
+                        <th class="eve-sortable" data-col="char">Charakter <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                        <th class="eve-sortable" data-col="planet">Ort <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                        <th class="eve-sortable" data-col="type">Typ <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                        <th class="eve-sortable" data-col="level">Stufe <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                        <th class="eve-sortable" data-col="tier">Tier <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                        <th class="eve-sortable" data-col="expiry">Ablauf <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                        <th class="eve-sortable" data-col="isk">ISK/Tag <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
                         <th>Lager</th>
-                        <th>Fehlende Inputs</th>
                     </tr>
                 </thead>
                 <tbody>
                 {% for colony in corp_colonies %}
-                <tr
-                    data-char="{{ colony.character_name | lower }}"
+                <tr data-char="{{ colony.character_name | lower }}"
                     data-system="{{ colony.solar_system_name | lower }} {{ colony.region_name | lower }}"
                     data-type="{{ colony.planet_type | lower }}"
-                    data-tier="{{ colony.highest_tier | lower if colony.highest_tier else 'none' }}">
+                    data-tier="{{ colony.highest_tier | lower if colony.highest_tier else 'none' }}"
+                    data-sort-char="{{ colony.character_name }}"
+                    data-sort-planet="{{ colony.planet_name }}"
+                    data-sort-type="{{ colony.planet_type }}"
+                    data-sort-level="{{ colony.upgrade_level }}"
+                    data-sort-tier="{{ colony.highest_tier or 'P0' }}"
+                    data-sort-expiry="{{ colony.expiry_hours if colony.expiry_hours is not none else 9999999 }}"
+                    data-sort-isk="{{ colony.isk_day }}">
                     <td>
                         <div class="d-flex align-items-center gap-2">
-                            <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle" onerror="this.src='/static/img/default_char.svg'">
+                            <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle"
+                                 onerror="this.src='/static/img/default_char.svg'">
                             <span class="small">{{ colony.character_name }}</span>
                         </div>
                     </td>
                     <td class="small">
                         <div>{{ colony.planet_name }}</div>
-                        {% if colony.solar_system_name and colony.solar_system_name != '—' %}
-                        <div style="color:#4a6a8a;font-size:.7rem;">{{ colony.solar_system_name }}</div>
-                        {% endif %}
                         {% if colony.region_name and colony.region_name != '—' %}
                         <div style="color:#3a5a7a;font-size:.65rem;">{{ colony.region_name }}</div>
                         {% endif %}
                     </td>
                     <td>
                         <span class="badge eve-planet-badge"
-                              style="background-color: {{ colony.color }}20; color: {{ colony.color }}; border: 1px solid {{ colony.color }}40;">
+                              style="background-color:{{ colony.color }}20;color:{{ colony.color }};border:1px solid {{ colony.color }}40;">
                             {{ colony.planet_type }}
                         </span>
                     </td>
@@ -152,7 +158,29 @@
                     </td>
                     <td>
                         {% if colony.highest_tier %}
-                        <span class="badge eve-tier-badge eve-tier-{{ colony.highest_tier | lower }}">{{ colony.highest_tier }}</span>
+                        {% set tier_products = colony.factories | selectattr('tier', 'equalto', colony.highest_tier) | unique(attribute='name') | list %}
+                        <div class="eve-hover-wrap">
+                            <span class="badge eve-tier-badge eve-tier-{{ colony.highest_tier | lower }}" style="cursor:default;">{{ colony.highest_tier }}</span>
+                            {% if tier_products or colony.missing_inputs %}
+                            <div class="eve-hover-card">
+                                {% if tier_products %}
+                                <div style="color:#586e75;font-size:.65rem;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">Produkte</div>
+                                {% for f in tier_products %}
+                                <div style="color:#7ec8e3;">{{ f.name }}</div>
+                                {% endfor %}
+                                {% endif %}
+                                {% if colony.missing_inputs %}
+                                <div style="color:#586e75;font-size:.65rem;margin-top:6px;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">Fehlende Inputs</div>
+                                {% for m in colony.missing_inputs[:5] %}
+                                <div class="d-flex justify-content-between gap-3">
+                                    <span style="color:#f4a300;">{{ m.name }}</span>
+                                    <span style="color:#7a8a9a;font-size:.7rem;">{{ m.qty_per_day | int }}/Tag</span>
+                                </div>
+                                {% endfor %}
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
                         {% else %}
                         <span class="text-muted small">—</span>
                         {% endif %}
@@ -174,7 +202,7 @@
                     </td>
                     <td class="small">
                         {% if not colony.is_active %}
-                            <span class="text-muted" title="Kolonie läuft nicht — theoretischer Wert">~{{ colony.isk_day | format_isk }}</span>
+                            <span class="text-muted" title="Colony not running — theoretical value">~{{ colony.isk_day | format_isk }}</span>
                         {% else %}
                             {{ colony.isk_day | format_isk }}
                         {% endif %}
@@ -182,37 +210,39 @@
                     <td>
                         {% if colony.storage %}
                             {% set max_pct = colony.storage | map(attribute='fill_pct') | max %}
-                            {% if max_pct > 85 %}{% set bar_color = '#e74c3c' %}
-                            {% elif max_pct > 60 %}{% set bar_color = '#f4a300' %}
-                            {% else %}{% set bar_color = '#2dc653' %}{% endif %}
-                            <div style="min-width:60px;">
-                                <div class="d-flex justify-content-between" style="font-size:.7rem;color:#7a8a9a;margin-bottom:2px;">
-                                    <span>{{ colony.storage | length }}×</span>
-                                    <span>{% if max_pct == 0 %}<span style="color:#3a5a7a;">Leer</span>{% else %}{{ max_pct }}%{% endif %}</span>
-                                </div>
-                                <div style="height:5px;background:#1a2d3d;border-radius:3px;overflow:hidden;">
-                                    <div style="height:100%;width:{{ [max_pct, 2] | max }}%;background:{{ bar_color }};border-radius:3px;"></div>
+                            {% if max_pct > 85 %}{% set clr = '#e74c3c' %}
+                            {% elif max_pct > 60 %}{% set clr = '#f4a300' %}
+                            {% else %}{% set clr = '#2dc653' %}{% endif %}
+                            <div class="eve-hover-wrap">
+                                <span class="eve-storage-badge" style="color:{{ clr }};">
+                                    {{ colony.storage | length }}× {% if max_pct == 0 %}leer{% else %}{{ max_pct }}%{% endif %}
+                                </span>
+                                <div class="eve-hover-card eve-hover-card-right">
+                                    {% for s in colony.storage %}
+                                    {% if not loop.first %}<div style="border-top:1px solid #1a3a5a;margin:5px 0;"></div>{% endif %}
+                                    {% set pct = s.fill_pct %}
+                                    {% if pct > 85 %}{% set pct_clr = '#e74c3c' %}
+                                    {% elif pct > 60 %}{% set pct_clr = '#f4a300' %}
+                                    {% else %}{% set pct_clr = '#2dc653' %}{% endif %}
+                                    <div style="display:flex;justify-content:space-between;gap:16px;margin-bottom:3px;">
+                                        <span style="color:#b0c4d4;font-weight:600;">{{ s.label }}</span>
+                                        <span style="color:{{ pct_clr }};font-weight:600;">{{ pct }}%</span>
+                                    </div>
+                                    {% if s['items'] %}
+                                        {% for it in s['items'] %}
+                                        <div style="display:flex;justify-content:space-between;gap:16px;color:#7a8a9a;">
+                                            <span>{{ it.name }}</span>
+                                            <span>{{ "{:,}".format(it.amount) }}</span>
+                                        </div>
+                                        {% endfor %}
+                                    {% else %}
+                                        <div style="color:#3a5a7a;font-style:italic;">leer</div>
+                                    {% endif %}
+                                    {% endfor %}
                                 </div>
                             </div>
                         {% else %}
                             <span class="text-muted small">—</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if colony.missing_inputs %}
-                        <div class="d-flex flex-wrap gap-1">
-                            {% for m in colony.missing_inputs[:3] %}
-                            <span class="badge" style="background:#2a1a0a;color:#f4a300;border:1px solid #5a3a0a;font-size:.65em;"
-                                  title="{{ m.qty_per_day | int }}/Tag">
-                                {{ m.name }}
-                            </span>
-                            {% endfor %}
-                            {% if colony.missing_inputs | length > 3 %}
-                            <span class="badge" style="background:#1a2d3d;color:#7a8a9a;font-size:.65em;">+{{ (colony.missing_inputs | length) - 3 }}</span>
-                            {% endif %}
-                        </div>
-                        {% else %}
-                        <span class="text-muted small">—</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -222,33 +252,61 @@
         </div>
         <div id="corpTablePagination"></div>
         <div id="noResultsMsg" style="display:none;" class="text-center py-4 text-muted small">
-            <i class="bi bi-search me-1"></i>Keine Kolonien gefunden.
+            <i class="bi bi-search me-1"></i>No colonies found.
         </div>
         {% else %}
         <div class="text-center py-5">
             <i class="bi bi-globe fs-1 text-muted d-block mb-3"></i>
-            <p class="text-muted mb-2">Keine Kolonie-Daten vorhanden.</p>
-            <small class="text-muted">Alle Korporationsmitglieder müssen ihr Dashboard mindestens einmal aufrufen um Daten zu laden.</small>
+            <p class="text-muted mb-2">No colony data available.</p>
+            <small class="text-muted">All corporation members must visit their Dashboard at least once to load data.</small>
         </div>
         {% endif %}
     </div>
 </div>
+
+{% if account.is_owner %}
+<!-- Force-Load Modal -->
+<div class="modal fade" id="forceLoadModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background:var(--eve-bg-2);border:1px solid var(--eve-card-border);">
+            <div class="modal-header" style="border-color:var(--eve-card-border);">
+                <h5 class="modal-title" style="font-size:.95rem;">
+                    <i class="bi bi-arrow-repeat me-2 eve-accent"></i>Corporation — Alle Accounts laden
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <div id="forceLoadSpinner" class="spinner-border spinner-border-sm" style="color:var(--eve-accent);width:1rem;height:1rem;" role="status"></div>
+                    <span class="small text-muted">Verbleibend: <strong id="forceLoadRemaining">—</strong></span>
+                </div>
+                <div id="forceLoadList" style="font-size:.82rem;max-height:320px;overflow-y:auto;"></div>
+            </div>
+            <div class="modal-footer" style="border-color:var(--eve-card-border);">
+                <button id="forceLoadDoneBtn" class="btn eve-btn-primary btn-sm d-none"
+                        onclick="window.location.reload()">
+                    <i class="bi bi-check-lg me-1"></i>Fertig – Seite neu laden
+                </button>
+                <button class="btn eve-btn-outline btn-sm" data-bs-dismiss="modal">Schließen</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
+// ── Filter ────────────────────────────────────────────────────────────────────
 function getActive(groupId) {
-    return [...document.querySelectorAll(`#${groupId} .eve-filter-toggle.active`)]
-        .map(b => b.dataset.val);
+    return [...document.querySelectorAll(`#${groupId} .eve-filter-toggle.active`)].map(b => b.dataset.val);
 }
-
-function toggleFilter(btn, groupId, applyFn) {
+function toggleFilter(btn, groupId) {
     btn.classList.toggle('active');
-    window[applyFn]();
+    applyCorpFilters();
 }
 
 const corpPager = EvePaginate('corpTable', {
-    pageSize:   6,
+    pageSize: 12,
     controlsId: 'corpTablePagination',
     onCount: n => {
         document.getElementById('tableBadge').textContent = n;
@@ -261,7 +319,6 @@ function applyCorpFilters() {
     const system = document.getElementById('filterSystem').value.toLowerCase().trim();
     const types  = getActive('typeToggles');
     const tiers  = getActive('tierToggles');
-
     const rows   = [...document.querySelectorAll('#corpTable tbody tr')];
     const matched = rows.filter(row =>
         (!char         || row.dataset.char.includes(char)) &&
@@ -271,17 +328,120 @@ function applyCorpFilters() {
     );
     corpPager.applyFilter(matched);
 }
+
+// ── Sort ─────────────────────────────────────────────────────────────────────
+let _sortCol = null, _sortAsc = true;
+const tbody = document.querySelector('#corpTable tbody');
+const allRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+
+document.querySelectorAll('#corpTable th.eve-sortable').forEach(th => {
+    th.addEventListener('click', () => {
+        const col = th.dataset.col;
+        _sortAsc = (_sortCol === col) ? !_sortAsc : true;
+        _sortCol = col;
+        document.querySelectorAll('#corpTable th.eve-sortable').forEach(h => {
+            h.classList.remove('sort-asc','sort-desc');
+            h.querySelector('.eve-sort-icon').className = 'bi bi-chevron-expand eve-sort-icon';
+        });
+        th.classList.add(_sortAsc ? 'sort-asc' : 'sort-desc');
+        th.querySelector('.eve-sort-icon').className = _sortAsc
+            ? 'bi bi-chevron-up eve-sort-icon' : 'bi bi-chevron-down eve-sort-icon';
+        sortCorpTable(col, _sortAsc);
+    });
+});
+
+function sortCorpTable(col, asc) {
+    const attrMap = { char:'sortChar', planet:'sortPlanet', type:'sortType',
+                      level:'sortLevel', tier:'sortTier', expiry:'sortExpiry', isk:'sortIsk' };
+    const attr = attrMap[col];
+    if (!attr) return;
+    const sorted = [...allRows].sort((a, b) => {
+        let av = a.dataset[attr] || '', bv = b.dataset[attr] || '';
+        if (['expiry','isk','level'].includes(col)) {
+            av = parseFloat(av) || 0; bv = parseFloat(bv) || 0;
+            return asc ? av - bv : bv - av;
+        }
+        if (col === 'tier') {
+            av = parseInt(av.replace('P','')) || 0;
+            bv = parseInt(bv.replace('P','')) || 0;
+            return asc ? av - bv : bv - av;
+        }
+        return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+    sorted.forEach(r => tbody.appendChild(r));
+    applyCorpFilters();
+}
+
+{% if account.is_owner %}
+// ── Force Load ────────────────────────────────────────────────────────────────
+const _corpId = {{ corp_id or 'null' }};
+const _modal  = new bootstrap.Modal(document.getElementById('forceLoadModal'));
+
+async function openForceLoad() {
+    if (!_corpId) return;
+    const res = await fetch(`/dashboard/corp/accounts?corp_id=${_corpId}`);
+    const { accounts } = await res.json();
+
+    const list = document.getElementById('forceLoadList');
+    list.innerHTML = '';
+    accounts.forEach(acc => {
+        list.insertAdjacentHTML('beforeend', `
+        <div class="d-flex align-items-center gap-2 py-1 border-bottom" style="border-color:var(--eve-card-border)!important;">
+            <span id="spin_${acc.account_id}" class="d-inline-flex" style="width:1rem;text-align:center;">
+                ${acc.is_cached
+                    ? '<i class="bi bi-check-circle-fill" style="color:#2dc653;"></i>'
+                    : '<i class="bi bi-hourglass" style="color:var(--eve-text-muted);"></i>'}
+            </span>
+            <span class="flex-grow-1">${acc.main_name}</span>
+            <span id="status_${acc.account_id}" class="small text-muted ms-auto">
+                ${acc.is_cached ? 'gecacht' : 'ausstehend'}
+            </span>
+        </div>`);
+    });
+
+    const uncached = accounts.filter(a => !a.is_cached);
+    document.getElementById('forceLoadRemaining').textContent = uncached.length;
+    document.getElementById('forceLoadDoneBtn').classList.add('d-none');
+    document.getElementById('forceLoadSpinner').style.display = uncached.length ? '' : 'none';
+    _modal.show();
+
+    let remaining = uncached.length;
+    for (const acc of uncached) {
+        document.getElementById('spin_' + acc.account_id).innerHTML =
+            '<span class="spinner-border spinner-border-sm" style="width:.75rem;height:.75rem;border-width:2px;color:var(--eve-accent);"></span>';
+        document.getElementById('status_' + acc.account_id).textContent = 'lädt…';
+        try {
+            const r = await fetch(`/dashboard/corp/load-account/${acc.account_id}`, { method: 'POST' });
+            const d = await r.json();
+            document.getElementById('spin_' + acc.account_id).innerHTML =
+                d.ok ? '<i class="bi bi-check-circle-fill" style="color:#2dc653;"></i>'
+                     : '<i class="bi bi-x-circle-fill" style="color:#e63946;"></i>';
+            document.getElementById('status_' + acc.account_id).textContent =
+                d.ok ? `${d.colony_count} Kolonien` : 'Fehler';
+        } catch {
+            document.getElementById('spin_' + acc.account_id).innerHTML =
+                '<i class="bi bi-x-circle-fill" style="color:#e63946;"></i>';
+            document.getElementById('status_' + acc.account_id).textContent = 'Fehler';
+        }
+        remaining--;
+        document.getElementById('forceLoadRemaining').textContent = remaining;
+    }
+    document.getElementById('forceLoadSpinner').style.display = 'none';
+    document.getElementById('forceLoadRemaining').textContent = '0';
+    document.getElementById('forceLoadDoneBtn').classList.remove('d-none');
+}
+{% endif %}
 </script>
 <style>
 .eve-filter-toggle {
-    background: #0a1520;
-    border: 1px solid #1a2d3d;
-    color: #586e75;
+    background: var(--eve-bg-2);
+    border: 1px solid var(--eve-card-border);
+    color: var(--eve-text-muted);
     font-size: .72rem;
     padding: 2px 8px;
     transition: all .15s;
 }
-.eve-filter-toggle:hover { border-color: #2a4a6b; color: #7ec8e3; }
-.eve-filter-toggle.active { background: #1a3a5a; border-color: #4a8abf; color: #7ec8e3; }
+.eve-filter-toggle:hover { border-color: var(--eve-accent); color: var(--eve-accent); }
+.eve-filter-toggle.active { background: rgba(0,180,216,.12); border-color: var(--eve-accent); color: var(--eve-accent); }
 </style>
 {% endblock %}

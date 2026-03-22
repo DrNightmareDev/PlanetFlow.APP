@@ -161,6 +161,11 @@
                         </select>
                     </div>
                     {% endif %}
+                    <!-- Push-Benachrichtigungen -->
+                    <button id="notifyBtn" class="btn btn-sm eve-btn-ghost"
+                            onclick="toggleNotifications()" title="Extractor-Benachrichtigungen">
+                        <i class="bi bi-bell" id="notifyIcon"></i>
+                    </button>
                     <!-- Cache-Alter + Refresh-Button -->
                     <div class="d-flex align-items-center gap-2">
                         <span class="text-muted small" id="cacheAgeText">
@@ -521,6 +526,66 @@ const iskHistoryData = {{ isk_history | tojson }};
     });
 })();
 {% endif %}
+
+// ── Push-Benachrichtigungen (Service Worker) ──────────────────────────────────
+const COLONY_EXPIRIES = [
+{% for colony in colonies %}{% if colony.expiry_hours is not none and colony.expiry_hours > 0 and colony.expiry_hours < 72 %}
+  {name: {{ colony.planet_name | tojson }}, char: {{ colony.character_name | tojson }}, expiry_ts: Date.now() + {{ (colony.expiry_hours * 3600000) | int }}},
+{% endif %}{% endfor %}
+];
+
+let swReg = null;
+const NOTIFY_KEY = 'eve_pi_notify';
+
+async function initServiceWorker() {
+    if (!('serviceWorker' in navigator) || !('Notification' in window)) return;
+    try {
+        swReg = await navigator.serviceWorker.register('/static/sw.js');
+        updateNotifyBtn();
+        if (localStorage.getItem(NOTIFY_KEY) === '1' && COLONY_EXPIRIES.length > 0) {
+            sendExpiriesToSW();
+        }
+    } catch(e) {}
+}
+
+function sendExpiriesToSW() {
+    if (!swReg) return;
+    const target = swReg.active || swReg.installing || swReg.waiting;
+    if (target) target.postMessage({type: 'SET_EXPIRIES', expiries: COLONY_EXPIRIES});
+}
+
+async function toggleNotifications() {
+    if (!('Notification' in window)) {
+        alert('Dein Browser unterstützt keine Benachrichtigungen.');
+        return;
+    }
+    if (localStorage.getItem(NOTIFY_KEY) === '1') {
+        localStorage.removeItem(NOTIFY_KEY);
+        sendExpiriesToSW(); // leere Liste senden
+        updateNotifyBtn();
+        return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') {
+        localStorage.setItem(NOTIFY_KEY, '1');
+        sendExpiriesToSW();
+        updateNotifyBtn();
+    }
+}
+
+function updateNotifyBtn() {
+    const btn  = document.getElementById('notifyBtn');
+    const icon = document.getElementById('notifyIcon');
+    if (!btn) return;
+    const active = localStorage.getItem(NOTIFY_KEY) === '1'
+                   && Notification.permission === 'granted';
+    icon.className = active ? 'bi bi-bell-fill' : 'bi bi-bell';
+    icon.style.color = active ? 'var(--eve-accent)' : '';
+    btn.title = active ? 'Benachrichtigungen aktiv – klicken zum Deaktivieren'
+                       : 'Extractor-Benachrichtigungen aktivieren';
+}
+
+initServiceWorker();
 </script>
 <style>
 @keyframes spin { to { transform: rotate(360deg); } }

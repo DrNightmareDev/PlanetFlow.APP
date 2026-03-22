@@ -2,7 +2,11 @@
 
 Planetary Industry Dashboard für EVE Online — selbst gehostet, kein Cloud-Abo.
 
-![Tech Stack](https://img.shields.io/badge/Python-3.11+-blue) ![FastAPI](https://img.shields.io/badge/FastAPI-0.111-green) ![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-purple) ![License](https://img.shields.io/badge/License-MIT-yellow)
+![Python](https://img.shields.io/badge/Python-3.11+-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.111-green)
+![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-purple)
+![License](https://img.shields.io/badge/License-MIT-yellow)
+![Self-Hosted](https://img.shields.io/badge/Self--Hosted-✓-brightgreen)
 
 ---
 
@@ -16,12 +20,16 @@ Planetary Industry Dashboard für EVE Online — selbst gehostet, kein Cloud-Abo
 | **Kolonie-Detail** | Fabrik-Übersicht pro Kolonie (Tier, Stück/Tag, ISK/Tag) |
 | **ISK/Tag Verlauf** | Tägliche Snapshots mit Chart.js Verlaufsgraph |
 | **Ablauf-Timer** | Nächster Extractor-Ablauf mit Farb-Warnsystem |
-| **PI Chain Planner** | Vollständige P2–P4 Produktionsketten mit Planeten- und P0-Bedarf |
+| **Push-Benachrichtigungen** | Browser-Notifications wenn Extractoren ablaufen (120/60/30/10 Min.) |
+| **PI Chain Planner** | Vollständige P2–P4 Produktionsketten mit interaktivem SVG-Graph |
+| **Planeten-Filter** | Im Graphen Planeten anklicken → nicht produzierbare Knoten ausgegraut |
 | **System Analyzer** | PI-Potential eines Systems analysieren (P0→P4 Ketten) |
 | **System Vergleich** | Bis zu 4 Systeme nebeneinander vergleichen (localStorage) |
+| **Favoriten** | PI-Produkte als Favorit speichern, Schnellauswahl im Planner |
 | **Multi-Charakter** | Main + beliebig viele Alts unter einem Account |
 | **EVE SSO** | Login via EVE Online OAuth2, kein eigenes Passwort |
 | **Admin Panel** | Account-Verwaltung, Charakter-Suche, Admin-Filter |
+| **Zugangspolitik** | Besitzer kann System offen, per Allowlist oder Blocklist betreiben |
 | **Owner-System** | Erster Account = Besitzer, geschützt vor Löschung/Entfernung |
 | **Jita Marktpreise** | Live-Preise P1–P4, Tier-Filter, Sortierung, 24h/7T Trends |
 | **EveRef SDE** | Statische Spieldaten lokal (Schematics, Types) – kein ESI-Overhead |
@@ -98,18 +106,20 @@ git pull && docker compose up -d --build
 ### 3. LXC Setup-Skript ausführen
 
 ```bash
-# Repository klonen
-git clone https://github.com/DrNightmareDev/PI_Manager.git /opt/eve-pi-manager
-cd /opt/eve-pi-manager
+# .env vorbereiten (Credentials vor dem Setup eintragen!)
+git clone https://github.com/DrNightmareDev/PI_Manager.git
+cd PI_Manager
+cp .env.example .env
+nano .env   # EVE_CLIENT_ID, EVE_CLIENT_SECRET, EVE_CALLBACK_URL, DB_PASSWORD, SECRET_KEY eintragen
 
-# Setup starten (als root im LXC)
+# Setup als root im LXC ausführen
 chmod +x scripts/setup_lxc.sh
 bash scripts/setup_lxc.sh
 ```
 
 Das Skript installiert und konfiguriert automatisch:
 - Python 3, pip, venv
-- PostgreSQL (mit zufälligem Passwort)
+- PostgreSQL (Passwort aus `.env` oder zufällig generiert)
 - Nginx (Reverse Proxy)
 - systemd Service
 - Alembic Datenbank-Migrationen
@@ -129,6 +139,7 @@ EVE_CLIENT_SECRET=dein_client_secret
 EVE_CALLBACK_URL=http://DEINE-IP/auth/callback
 SECRET_KEY=min_32_zeichen_zufaelliger_schluessel
 DATABASE_URL=postgresql://evepi:PASSWORT@localhost/evepi
+DB_PASSWORD=PASSWORT
 ```
 
 ---
@@ -142,6 +153,16 @@ systemctl enable --now eve-pi-manager
 Browser öffnen: `http://DEINE-IP`
 
 Der **erste Account** erhält automatisch Admin- und Besitzer-Rechte.
+
+---
+
+## Update (LXC)
+
+```bash
+bash ~/PI_Manager/scripts/update_lxc.sh
+```
+
+Das Script holt automatisch die neueste Version, bewahrt `.env` und alle Credentials, aktualisiert Abhängigkeiten und Migrationen und startet den Service neu.
 
 ---
 
@@ -199,7 +220,7 @@ eve-pi-manager/
 │   ├── main.py             # FastAPI App, Startup-Logik, APScheduler
 │   ├── config.py           # Pydantic-Settings, .env
 │   ├── database.py         # SQLAlchemy Engine + Session
-│   ├── models.py           # Account, Character, SSOState, MarketCache, IskSnapshot
+│   ├── models.py           # ORM-Modelle (Account, Character, PI, Policy …)
 │   ├── session.py          # Signed Cookie Sessions (itsdangerous)
 │   ├── esi.py              # EVE ESI + SSO API
 │   ├── sde.py              # Static Data Engine (EveRef – Schematics, Types)
@@ -211,22 +232,23 @@ eve-pi-manager/
 │   ├── routers/
 │   │   ├── auth.py         # SSO Login / Callback / Logout / Owner-System
 │   │   ├── dashboard.py    # PI Kolonien Dashboard (Cache, ISK-Snapshots)
-│   │   ├── admin.py        # Admin Panel (Account-Verwaltung, Colony-Count)
+│   │   ├── admin.py        # Admin Panel (Account-Verwaltung, Zugangspolitik)
 │   │   ├── market.py       # Marktpreise + Trends + Admin-Refresh
 │   │   ├── system.py       # System Analyzer + System-Vergleich
-│   │   └── planner.py      # PI Chain Planner
+│   │   └── planner.py      # PI Chain Planner + Favoriten
 │   ├── templates/          # Jinja2 HTML Templates
-│   └── static/             # CSS (EVE Dark Theme), JS, SVG
+│   └── static/             # CSS (EVE Dark Theme), JS, SVG, Service Worker
 ├── alembic/                # Datenbank-Migrationen
 ├── docker/
 │   ├── entrypoint.sh       # Docker Entrypoint (DB-Wait → Migrations → Start)
 │   └── nginx.conf          # Nginx Konfiguration für Docker
 ├── scripts/
 │   ├── setup_lxc.sh        # Vollautomatisches LXC-Setup
-│   ├── start.sh            # Entwicklungsserver
+│   ├── update_lxc.sh       # Update ohne .env-Überschreibung
 │   ├── eve-pi-manager.service   # systemd Unit
 │   └── nginx-eve-pi.conf        # Nginx Konfiguration für LXC
 ├── data/                   # SDE-Daten (auto-generiert beim Start, nicht committet)
+├── LICENSE
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
@@ -278,9 +300,10 @@ Die ESI API wird weiterhin für **Echtzeit-Daten** genutzt (Charakter-Kolonien, 
 | Frontend | Jinja2, Bootstrap 5.3 Dark Theme |
 | Auth | EVE Online SSO (OAuth2) |
 | Sessions | itsdangerous (signed cookies) |
-| Marktdaten | Fuzzwork / Janice API |
+| Marktdaten | Fuzzwork API |
 | Spieldaten | EveRef Static Data Export |
 | Scheduler | APScheduler (Marktpreise alle 15 min) |
+| Notifications | Web Notifications API + Service Worker |
 | Deployment | Docker Compose **oder** systemd + Nginx auf Proxmox LXC |
 
 ---
@@ -295,10 +318,34 @@ Die ESI API wird weiterhin für **Echtzeit-Daten** genutzt (Charakter-Kolonien, 
 
 ---
 
+## Ideen & Roadmap
+
+Mögliche zukünftige Features — Pull Requests willkommen:
+
+| Idee | Beschreibung |
+|---|---|
+| **Discord / Telegram Webhook** | Extractor-Ablauf-Notifications via Webhook statt Browser |
+| **Corp PI Übersicht** | Aggregierte Ansicht für mehrere Accounts / Corp-weites PI |
+| **Hauling Kalkulator** | Transportkosten Planet → Jita in ISK/Tag einrechnen |
+| **PI Setup Vorlagen** | Kolonien-Konfigurationen speichern und teilen |
+| **Preisalarm** | Notification wenn PI-Produkt Preis-Schwellenwert über-/unterschreitet |
+| **Reprocess-Rechner** | Wie viele P0 brauche ich für X Einheiten P4? |
+| **PWA / Mobile** | Als App installierbar (Service Worker bereits vorhanden) |
+| **Mehrsprachigkeit** | English / Deutsch Umschaltung |
+
+---
+
 ## Support / ISK-Spende
 
 Falls dir der PI Manager nützlich ist und du die Entwicklung unterstützen möchtest:
-Schick einfach eine ISK-Spende in EVE Online an **DrNightmare**. Jeder Betrag ist willkommen — danke!
+
+> **Schick eine ISK-Spende in EVE Online an `DrNightmare`** — jeder Betrag ist willkommen, danke!
+
+---
+
+## Lizenz
+
+Dieses Projekt steht unter der **MIT-Lizenz** — siehe [LICENSE](LICENSE).
 
 ---
 

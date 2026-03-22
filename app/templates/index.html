@@ -75,10 +75,12 @@
             </a>
 
             <!-- Info-Text für ersten Account -->
+            {% if not has_owner %}
             <div class="alert eve-info-alert border-0 py-2 px-3">
                 <i class="bi bi-info-circle me-2"></i>
                 <small>Der erste Account erhält automatisch Admin-Rechte.</small>
             </div>
+            {% endif %}
 
             {% if error == 'access_denied' %}
             <div class="alert alert-danger border-0 py-2 px-3 mt-2">

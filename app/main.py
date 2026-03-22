@@ -106,7 +106,13 @@ def index(request: Request):
             db.close()
 
     error = request.query_params.get("error")
-    return templates.TemplateResponse("index.html", {"request": request, "error": error})
+    db = SessionLocal()
+    try:
+        from app.models import Account
+        has_owner = db.query(Account).filter(Account.is_owner == True).first() is not None
+    finally:
+        db.close()
+    return templates.TemplateResponse("index.html", {"request": request, "error": error, "has_owner": has_owner})
 
 
 @app.get("/health")

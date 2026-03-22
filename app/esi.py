@@ -214,7 +214,14 @@ def get_planet_info(planet_id: int) -> dict:
 
 _planet_info_cache: dict[int, dict] = {}  # planet_id -> data (permanent)
 _planet_detail_cache = {}  # (char_id, planet_id) -> (data, timestamp)
-PLANET_DETAIL_TTL = 1800  # 30 Minuten
+PLANET_DETAIL_TTL = 900  # 15 Minuten (synchron mit Dashboard-Cache)
+
+
+def invalidate_planet_detail_cache(character_id: int) -> None:
+    """Löscht alle gecachten Planet-Details eines Charakters."""
+    keys = [k for k in _planet_detail_cache if k[0] == character_id]
+    for k in keys:
+        del _planet_detail_cache[k]
 
 _schematic_cache = {}  # schematic_id -> data
 

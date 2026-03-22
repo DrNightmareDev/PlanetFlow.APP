@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import require_account
-from app.esi import ensure_valid_token, get_character_planets, get_planet_detail, get_planet_info, get_schematic
+from app.esi import ensure_valid_token, get_character_planets, get_planet_detail, get_planet_info, get_schematic, invalidate_planet_detail_cache
 from app.market import get_sell_prices_by_names
 from app.models import Character, IskSnapshot
 from app.pi_data import PLANET_TYPE_COLORS
@@ -421,6 +421,16 @@ def force_refresh(account=Depends(require_account)):
     if wait > 0 and (now - last) < REFRESH_COOLDOWN_SEC:
         return JSONResponse({"ok": False, "wait": wait})
     _dashboard_cache.pop(account.id, None)
+    # Auch Planet-Detail-Cache für alle Chars dieses Accounts leeren
+    from app.database import get_db as _get_db
+    from app.models import Character as _Char
+    db = next(_get_db())
+    try:
+        chars = db.query(_Char).filter(_Char.account_id == account.id).all()
+        for char in chars:
+            invalidate_planet_detail_cache(char.eve_character_id)
+    finally:
+        db.close()
     _refresh_cooldown[account.id] = now
     return JSONResponse({"ok": True})
 

@@ -152,6 +152,13 @@ def callback(
         existing_char.alliance_name = alliance_name
         db.commit()
 
+        # Zugangspolitik auch für bestehende Charaktere prüfen (corp/allianz kann sich geändert haben)
+        # Ausnahmen: Owner immer erlaubt, add_character-Flow (bereits eingeloggt)
+        if flow == "login":
+            acc = db.get(Account, existing_char.account_id)
+            if not (acc and acc.is_owner) and not _check_access_policy(db, corporation_id, alliance_id):
+                return RedirectResponse(url="/?error=access_denied", status_code=302)
+
         if flow == "add_character" and existing_account_id:
             # Charakter zu einem anderen Account verknüpfen (falls nötig)
             pass

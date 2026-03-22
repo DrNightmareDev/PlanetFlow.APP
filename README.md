@@ -21,6 +21,7 @@ Planetary Industry Dashboard für EVE Online — selbst gehostet, kein Cloud-Abo
 | **ISK/Tag Verlauf** | Tägliche Snapshots mit Chart.js Verlaufsgraph |
 | **Ablauf-Timer** | Nächster Extractor-Ablauf mit Farb-Warnsystem, Filter für inaktive Kolonien |
 | **Push-Benachrichtigungen** | Browser-Notifications wenn Extractoren ablaufen (120/60/30/10 Min.) |
+| **Skyhook Inventar** | Skyhook-Bestand pro Planet direkt im Browser erfassen und bearbeiten; Füllstand-Anzeige (35.000 m³), ISK-Wert live mit Hover-Aufschlüsselung, Verlauf der letzten 3 Einträge, Undo-Button, Edit-Lock (immer nur ein Skyhook gleichzeitig bearbeitbar), Filter + sortierbare Tabelle |
 | **Pagination** | Alle Tabellen mit konfigurierbarer Seitengröße (6/15/25/100/Alle) |
 | **PI Chain Planner** | Vollständige P0–P4 Produktionsketten mit interaktivem SVG-Graph (PLANETS → RAW → P1 → … → P4) |
 | **Planeten-Filter** | Im Graphen Planeten anklicken → nicht produzierbare Knoten ausgegraut |
@@ -29,13 +30,15 @@ Planetary Industry Dashboard für EVE Online — selbst gehostet, kein Cloud-Abo
 | **System Vergleich** | Bis zu 4 Systeme nebeneinander vergleichen (localStorage) |
 | **System-Favoriten** | Systeme im Analyzer als Favorit speichern, Schnellzugriff per Pill (localStorage) |
 | **Produkt-Favoriten** | PI-Produkte als Favorit speichern, Schnellauswahl im Planner |
-| **Korporation-Übersicht** | Alle Kolonien der eigenen Korporation auf einen Blick (CEO/Admin) |
+| **Corporation-Übersicht** | Alle Kolonien der Corporation auf einen Blick (CEO/Admin); sortierbare Tabelle, Tier- und Lager-Hover-Cards, ISK/Tag |
+| **Corporation Force-Load** | Owner kann alle Accounts einer Corporation per Modal neu laden (nur noch nicht gecachte werden angezeigt und geladen, mit Live-Fortschritt) |
+| **Corporation Switcher** | Owner kann zwischen allen Corps auf der Instanz wechseln |
 | **Gesamt-Übersicht** | Alle Kolonien aller Accounts aggregiert (Owner/Admin), filterbar |
 | **Multi-Charakter** | Main + beliebig viele Alts unter einem Account |
 | **EVE SSO** | Login via EVE Online OAuth2, kein eigenes Passwort |
 | **Admin Panel** | Account-Verwaltung, Charakter-Suche, Admin-Filter |
-| **Zugangspolitik** | Besitzer kann System offen, per Allowlist oder Blocklist betreiben |
-| **Owner-System** | Erster Account = Besitzer, geschützt vor Löschung/Entfernung |
+| **Zugangspolitik** | Besitzer kann System offen, per Allowlist oder Blocklist betreiben; wird bei jedem Login geprüft (auch für bestehende Accounts) |
+| **Owner-System** | Erster Account = Besitzer, stealth (nur für den Besitzer selbst sichtbar), geschützt vor Löschung/Entfernung |
 | **Jita Marktpreise** | Live-Preise P1–P4, Tier-Filter, Sortierung, 24h/7T/30T Trends |
 | **Light / Dark Mode** | Theme-Toggle in der Navbar, Einstellung per localStorage gespeichert |
 | **EveRef SDE** | Statische Spieldaten lokal (Schematics, Types) – kein ESI-Overhead |
@@ -236,9 +239,10 @@ eve-pi-manager/
 │   ├── market.py           # Jita Marktdaten (Fuzzwork) mit Cache + Trends
 │   ├── templates_env.py    # Jinja2 Templates + Custom Filter
 │   ├── routers/
-│   │   ├── auth.py         # SSO Login / Callback / Logout / Owner-System
-│   │   ├── dashboard.py    # PI Kolonien Dashboard (Cache, ISK-Snapshots)
+│   │   ├── auth.py         # SSO Login / Callback / Logout / Owner-System / Zugangspolitik
+│   │   ├── dashboard.py    # PI Kolonien Dashboard (Cache, ISK-Snapshots, Corp-Übersicht)
 │   │   ├── admin.py        # Admin Panel (Account-Verwaltung, Zugangspolitik)
+│   │   ├── skyhook.py      # Skyhook Inventar (Bestand, Verlauf, ISK-Wert)
 │   │   ├── market.py       # Marktpreise + Trends + Admin-Refresh
 │   │   ├── system.py       # System Analyzer + System-Vergleich
 │   │   └── planner.py      # PI Chain Planner + Favoriten

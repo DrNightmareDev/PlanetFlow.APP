@@ -76,17 +76,16 @@ P2_TO_P3: dict[str, list[str]] = {
 }
 
 # P3 → P4 Hochentwickelte Produkte (nur auf Barren oder Temperate)
-# Hinweis: Nano-Factory, Organic Mortar Applicators und Sterile Conduits
-# benötigen in-game zusätzlich je 40 Einheiten eines P1-Produkts
-# (Reactive Metals / Bacteria / Water), hier nicht modelliert.
+# Nano-Factory, Organic Mortar Applicators und Sterile Conduits benötigen
+# zusätzlich ein P1-Produkt als dritten Input (Reactive Metals / Bacteria / Water).
 P3_TO_P4: dict[str, list[str]] = {
     "Broadcast Node":              ["Neocoms",             "Data Chips",                "High-Tech Transmitters"],
     "Integrity Response Drones":   ["Gel-Matrix Biopaste", "Hazmat Detection Systems",  "Planetary Vehicles"],
-    "Nano-Factory":                ["Industrial Explosives","Ukomi Super Conductors"],
-    "Organic Mortar Applicators":  ["Condensates",          "Robotics"],
+    "Nano-Factory":                ["Industrial Explosives","Ukomi Super Conductors",    "Reactive Metals"],
+    "Organic Mortar Applicators":  ["Condensates",          "Robotics",                  "Bacteria"],
     "Recursive Computing Module":  ["Synthetic Synapses",   "Guidance Systems",          "Transcranial Microcontrollers"],
     "Self-Harmonizing Power Core": ["Camera Drones",        "Nuclear Reactors",          "Hermetic Membranes"],
-    "Sterile Conduits":            ["Smartfab Units",       "Vaccines"],
+    "Sterile Conduits":            ["Smartfab Units",       "Vaccines",                  "Water"],
     "Wetware Mainframe":           ["Supercomputers",       "Biotech Research Reports",  "Cryoprotectant Solution"],
 }
 

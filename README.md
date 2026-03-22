@@ -12,8 +12,13 @@ Planetary Industry Dashboard für EVE Online — selbst gehostet, kein Cloud-Abo
 |---|---|
 | **PI Kolonien** | Übersicht aller Planeten-Kolonien für Main + Alts |
 | **ISK/Tag Berechnung** | Echtzeit-Preise via Fuzzwork Jita 4-4 |
+| **Dashboard Cache** | Daten 15 min gecacht, Force-Refresh max. 1×/60 s (API-Schutz) |
+| **Kolonie-Detail** | Fabrik-Übersicht pro Kolonie (Tier, Stück/Tag, ISK/Tag) |
+| **ISK/Tag Verlauf** | Tägliche Snapshots mit Chart.js Verlaufsgraph |
 | **Ablauf-Timer** | Nächster Extractor-Ablauf mit Farb-Warnsystem |
+| **PI Chain Planner** | Vollständige P2–P4 Produktionsketten mit Planeten- und P0-Bedarf |
 | **System Analyzer** | PI-Potential eines Systems analysieren (P0→P4 Ketten) |
+| **System Vergleich** | Bis zu 4 Systeme nebeneinander vergleichen (localStorage) |
 | **Jita Marktpreise** | Live-Preise für alle PI-Produkte P1–P4 |
 | **Multi-Charakter** | Main + beliebig viele Alts unter einem Account |
 | **EVE SSO** | Login via EVE Online OAuth2, kein eigenes Passwort |
@@ -155,7 +160,7 @@ eve-pi-manager/
 │   ├── main.py             # FastAPI App, Startup-Logik, APScheduler
 │   ├── config.py           # Pydantic-Settings, .env
 │   ├── database.py         # SQLAlchemy Engine + Session
-│   ├── models.py           # Account, Character, SSOState, MarketCache
+│   ├── models.py           # Account, Character, SSOState, MarketCache, IskSnapshot
 │   ├── session.py          # Signed Cookie Sessions (itsdangerous)
 │   ├── esi.py              # EVE ESI + SSO API
 │   ├── sde.py              # Static Data Engine (EveRef – Schematics, Types)
@@ -166,10 +171,11 @@ eve-pi-manager/
 │   ├── templates_env.py    # Jinja2 Templates + Custom Filter
 │   ├── routers/
 │   │   ├── auth.py         # SSO Login / Callback / Logout
-│   │   ├── dashboard.py    # PI Kolonien Dashboard
+│   │   ├── dashboard.py    # PI Kolonien Dashboard (Cache, ISK-Snapshots)
 │   │   ├── admin.py        # Admin Panel
 │   │   ├── market.py       # Marktpreise
-│   │   └── system.py       # System Analyzer
+│   │   ├── system.py       # System Analyzer + System-Vergleich
+│   │   └── planner.py      # PI Chain Planner
 │   ├── templates/          # Jinja2 HTML Templates
 │   └── static/             # CSS (EVE Dark Theme), JS, SVG
 ├── alembic/                # Datenbank-Migrationen

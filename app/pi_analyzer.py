@@ -84,10 +84,11 @@ def analyze_system(planet_types: list[str]) -> list[dict]:
         })
 
     # Schritt 5: P4-Produkte (nur auf Barren oder Temperate)
+    # Drei P4-Produkte haben einen P1-Input (Reactive Metals, Bacteria, Water)
     has_advanced_planet = any(pt in ("Barren", "Temperate") for pt in planet_types)
     if has_advanced_planet:
         for p4, inputs in P3_TO_P4.items():
-            if all(inp in available_p3 for inp in inputs):
+            if all(inp in available_p3 or inp in available_p1 for inp in inputs):
                 needed_planets = set()
                 for p3_inp in inputs:
                     for p2 in P2_TO_P3.get(p3_inp, []):

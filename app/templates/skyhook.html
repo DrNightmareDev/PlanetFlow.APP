@@ -117,6 +117,30 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
     </div>
 </div>
 {% else %}
+
+<!-- Filter Bar -->
+<div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+    <select id="filterChar" class="sh-select" style="width:auto;" onchange="applyFilters()">
+        <option value="">Alle Charaktere</option>
+        {% for name in colonies | map(attribute='character_name') | unique | sort %}
+        <option>{{ name }}</option>
+        {% endfor %}
+    </select>
+    <select id="filterSystem" class="sh-select" style="width:auto;" onchange="applyFilters()">
+        <option value="">Alle Systeme</option>
+        {% for sys in colonies | map(attribute='solar_system_name') | unique | sort %}
+        {% if sys and sys != '—' %}<option>{{ sys }}</option>{% endif %}
+        {% endfor %}
+    </select>
+    <select id="filterType" class="sh-select" style="width:auto;" onchange="applyFilters()">
+        <option value="">Alle Typen</option>
+        {% for pt in colonies | map(attribute='planet_type') | unique | sort %}
+        <option>{{ pt }}</option>
+        {% endfor %}
+    </select>
+    <span id="filterCount" class="text-muted" style="font-size:.75rem;"></span>
+</div>
+
 <div class="eve-card card border-0">
     <div class="card-body p-0">
         <div style="overflow-x:auto;">
@@ -132,14 +156,17 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                         <th style="width:80px;"></th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="sh-tbody">
                 {% for colony in colonies %}
                 {% set cur_items = latest.get(colony.planet_id, []) %}
                 {% set hist = history.get(colony.planet_id, []) %}
                 {% set tier_products = colony.factories | selectattr('tier', 'equalto', colony.highest_tier) | unique(attribute='name') | list if colony.highest_tier else [] %}
                 {% set tc_map = {'p1':'#586e75','p2':'#00b4d8','p3':'#f4a300','p4':'#e63946'} %}
                 {% set tc_color = tc_map.get(colony.highest_tier | lower, '#586e75') if colony.highest_tier else '#586e75' %}
-                <tr>
+                <tr data-planet="{{ colony.planet_id }}"
+                    data-char="{{ colony.character_name | e }}"
+                    data-system="{{ colony.solar_system_name | e }}"
+                    data-type="{{ colony.planet_type | e }}">
                     <td>
                         <div class="d-flex align-items-center gap-2">
                             <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle"
@@ -189,12 +216,14 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                     </td>
 
                     <!-- Verlauf -->
-                    <td style="position:relative;">
-                        {% if hist %}
-                        <button class="sh-hist-btn" onclick="toggleHist({{ colony.planet_id }})" title="Letzte Einträge">
+                    <td style="position:relative;" id="hist_cell_{{ colony.planet_id }}">
+                        <button class="sh-hist-btn{{ '' if hist else ' d-none' }}"
+                                id="hist_btn_{{ colony.planet_id }}"
+                                onclick="toggleHist({{ colony.planet_id }})" title="Letzte Einträge">
                             <i class="bi bi-clock-history"></i>
-                            <span style="font-size:.65rem;vertical-align:middle;margin-left:2px;">{{ hist | length }}</span>
+                            <span id="hist_count_{{ colony.planet_id }}" style="font-size:.65rem;vertical-align:middle;margin-left:2px;">{{ hist | length }}</span>
                         </button>
+                        <span id="hist_empty_{{ colony.planet_id }}" class="text-muted" style="font-size:.7rem;{{ 'display:none;' if hist else '' }}">—</span>
                         <div class="sh-hist-popup" id="hist_{{ colony.planet_id }}">
                             <div style="color:var(--eve-text-muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.6rem;">Letzte Einträge</div>
                             {% for h in hist %}
@@ -210,9 +239,6 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                             </div>
                             {% endfor %}
                         </div>
-                        {% else %}
-                        <span class="text-muted" style="font-size:.7rem;">—</span>
-                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -248,7 +274,6 @@ function makeRow(planetId, prodName = '', qty = '') {
         <input type="number" class="sh-qty" min="0" value="${qty}" placeholder="0">
         <button class="sh-remove-btn" onclick="removeRow(this)" title="Entfernen">×</button>
     `;
-    // Enter-Taste auf qty → saveEntry
     div.querySelector('.sh-qty').addEventListener('keydown', e => {
         if (e.key === 'Enter') { e.preventDefault(); saveEntry(planetId); }
     });
@@ -281,8 +306,78 @@ document.addEventListener('DOMContentLoaded', () => {
             container.appendChild(makeRow(planetId));
         }
     });
+
+    // URL param: highlight specific planet
+    const urlPlanet = new URLSearchParams(location.search).get('planet');
+    if (urlPlanet) {
+        const tr = document.querySelector(`#sh-tbody tr[data-planet="${urlPlanet}"]`);
+        if (tr) {
+            tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            tr.style.transition = 'background-color .4s';
+            tr.style.backgroundColor = 'rgba(0,180,216,.1)';
+            setTimeout(() => tr.style.backgroundColor = '', 2500);
+        }
+    }
 });
 
+// ── Filters ────────────────────────────────────────────────────────────────────
+function applyFilters() {
+    const char   = document.getElementById('filterChar')?.value   || '';
+    const sys    = document.getElementById('filterSystem')?.value || '';
+    const type   = document.getElementById('filterType')?.value   || '';
+    const rows   = document.querySelectorAll('#sh-tbody tr');
+    let visible  = 0;
+    rows.forEach(tr => {
+        const match = (!char || tr.dataset.char   === char) &&
+                      (!sys  || tr.dataset.system === sys)  &&
+                      (!type || tr.dataset.type   === type);
+        tr.style.display = match ? '' : 'none';
+        if (match) visible++;
+    });
+    const countEl = document.getElementById('filterCount');
+    if (countEl) countEl.textContent = (char || sys || type) ? visible + ' von ' + rows.length : '';
+}
+
+// ── History popup ──────────────────────────────────────────────────────────────
+async function _refreshHistPopup(planetId) {
+    try {
+        const res = await fetch('/skyhook/history/' + planetId);
+        if (!res.ok) return;
+        const { entries } = await res.json();
+        if (!entries.length) return;
+
+        const btn   = document.getElementById('hist_btn_'   + planetId);
+        const count = document.getElementById('hist_count_' + planetId);
+        const empty = document.getElementById('hist_empty_' + planetId);
+        const popup = document.getElementById('hist_' + planetId);
+
+        if (btn)   btn.classList.remove('d-none');
+        if (empty) empty.style.display = 'none';
+        if (count) count.textContent = entries.length;
+
+        if (popup) {
+            popup.innerHTML = '<div style="color:var(--eve-text-muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.6rem;">Letzte Einträge</div>';
+            entries.forEach((h, idx) => {
+                const div = document.createElement('div');
+                if (idx < entries.length - 1) {
+                    div.className = 'mb-3 pb-2';
+                    div.style.borderBottom = '1px solid var(--eve-card-border)';
+                }
+                let html = `<div style="color:var(--eve-text-muted);font-size:.65rem;margin-bottom:3px;">${h.recorded_at}</div>`;
+                h.items.forEach(it => {
+                    html += `<div class="d-flex justify-content-between gap-3">
+                        <span style="color:var(--eve-text);font-size:.78rem;">${it.product_name}</span>
+                        <span style="color:#7a9a6a;font-size:.78rem;font-weight:600;white-space:nowrap;">${it.quantity.toLocaleString('de-DE')}</span>
+                    </div>`;
+                });
+                div.innerHTML = html;
+                popup.appendChild(div);
+            });
+        }
+    } catch {}
+}
+
+// ── Save ───────────────────────────────────────────────────────────────────────
 async function saveEntry(planetId) {
     const container = document.getElementById('items_' + planetId);
     const btn = document.getElementById('btn_' + planetId);
@@ -311,6 +406,7 @@ async function saveEntry(planetId) {
         btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Gespeichert';
         btn.classList.add('saved');
         showToast('Gespeichert.', 'success');
+        _refreshHistPopup(planetId);
         setTimeout(() => {
             btn.innerHTML = orig;
             btn.classList.remove('saved');

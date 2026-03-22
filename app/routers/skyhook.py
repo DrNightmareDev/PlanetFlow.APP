@@ -104,6 +104,16 @@ class EntryIn(BaseModel):
     items: list[ItemIn]
 
 
+@router.get("/history/{planet_id}")
+def get_history(
+    planet_id: int,
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    hist = _load_history(account.id, [planet_id], db, limit=3)
+    return JSONResponse({"entries": hist.get(planet_id, [])})
+
+
 @router.post("/entry")
 def save_entry(
     body: EntryIn,

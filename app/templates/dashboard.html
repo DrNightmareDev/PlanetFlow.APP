@@ -346,6 +346,7 @@
                                     {% endif %}
                                 </td>
                                 <td>
+                                    <div class="d-flex align-items-center gap-1">
                                     {% set sh_items = skyhook_data.get(colony.planet_id) %}
                                     {% if sh_items %}
                                     <div class="eve-hover-wrap">
@@ -363,8 +364,15 @@
                                         </div>
                                     </div>
                                     {% else %}
-                                    <span class="text-muted small">—</span>
+                                    <span class="text-muted small" style="font-size:.7rem;">—</span>
                                     {% endif %}
+                                    <a href="/skyhook?planet={{ colony.planet_id }}"
+                                       title="Skyhook bearbeiten"
+                                       style="color:var(--eve-text-muted);font-size:.8rem;line-height:1;text-decoration:none;padding:1px 3px;border-radius:3px;transition:color .15s;"
+                                       onmouseover="this.style.color='var(--eve-accent)'" onmouseout="this.style.color='var(--eve-text-muted)'">
+                                        <i class="bi bi-box-seam"></i>
+                                    </a>
+                                    </div>
                                 </td>
                                 <td>
                                     <button class="btn btn-sm eve-btn-outline"

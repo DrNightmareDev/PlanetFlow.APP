@@ -153,7 +153,16 @@
 
 {% block extra_scripts %}
 <script>
-const PLANET_COLORS = {{ planet_type_colors | tojson }};
+const PLANET_COLORS   = {{ planet_type_colors | tojson }};
+const P0_TO_P1        = {{ p0_to_p1 | tojson }};
+const PLANET_RESOURCES = {{ planet_resources | tojson }};
+
+// Lookup: P1-Name → P0-Name (Umkehrung von P0_TO_P1)
+const P1_TO_P0 = Object.fromEntries(Object.entries(P0_TO_P1).map(([p0, p1]) => [p1, p0]));
+// Lookup: P0-Name → [Planetentypen die ihn produzieren]
+const P0_TO_PLANETS = {};
+for (const [pt, res] of Object.entries(PLANET_RESOURCES))
+    for (const r of res) { if (!P0_TO_PLANETS[r]) P0_TO_PLANETS[r] = []; P0_TO_PLANETS[r].push(pt); }
 
 // Input-Farben: Farbe basiert auf dem Tier des INPUTS (eine Stufe unterhalb des Produkts)
 const INPUT_COLORS = {
@@ -555,13 +564,43 @@ function renderRecs() {
     let filtered = currentTier ? allRecs.filter(r => r.tier === currentTier) : [...allRecs];
 
     if (activeFilters.size > 0) {
-        // AND-Filter: jeder aktive Filter muss in inputs ODER planets_needed enthalten sein
+        // Filter aufteilen nach Typ:
+        // 1. Planetentypen (z.B. "Storm") → Abdeckungsfilter: alle P1-Inputs müssen durch ausgewählte Planeten produzierbar sein
+        // 2. P0-Ressourcen (z.B. "Aqueous Liquids") → Produkt muss diese Ressource verwenden
+        // 3. Input-Namen (P1/P2/P3) → Produkt muss diesen Input direkt enthalten
+        const planetTypeFilters = new Set([...activeFilters].filter(f => PLANET_COLORS[f]));
+        const p0Filters         = new Set([...activeFilters].filter(f => P0_TO_P1[f]));
+        const inputFilters      = new Set([...activeFilters].filter(f => !PLANET_COLORS[f] && !P0_TO_P1[f]));
+
         filtered = filtered.filter(r => {
-            const planets = r.planets_needed || [];
-            const inputs  = r.inputs || [];
-            return [...activeFilters].every(f =>
-                planets.includes(f) || inputs.includes(f)
-            );
+            const allP1  = r.all_p1_inputs || [];
+            const inputs = r.inputs || [];
+
+            // Planetentyp-Filter: jeder P1-Input muss durch mind. einen ausgewählten Planetentyp abgedeckt sein
+            if (planetTypeFilters.size > 0) {
+                const ok = allP1.every(p1 => {
+                    const p0 = P1_TO_P0[p1];
+                    if (!p0) return true;
+                    return (P0_TO_PLANETS[p0] || []).some(pt => planetTypeFilters.has(pt));
+                });
+                if (!ok) return false;
+            }
+
+            // P0-Ressource-Filter: abgeleitetes P1 muss in all_p1_inputs enthalten sein
+            if (p0Filters.size > 0) {
+                const ok = [...p0Filters].every(p0 => {
+                    const p1 = P0_TO_P1[p0];
+                    return p1 && allP1.includes(p1);
+                });
+                if (!ok) return false;
+            }
+
+            // Input-Filter (P1/P2/P3 Badges): muss in direkten Inputs enthalten sein
+            if (inputFilters.size > 0) {
+                if (!([...inputFilters].every(f => inputs.includes(f)))) return false;
+            }
+
+            return true;
         });
     }
 

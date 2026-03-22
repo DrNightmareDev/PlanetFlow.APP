@@ -11,7 +11,7 @@
  *   onCount    {function} called with (visibleTotal) after every update
  */
 function EvePaginate(tableId, opts) {
-    const o = Object.assign({ pageSize: 25, controlsId: null, onCount: null }, opts || {});
+    const o = Object.assign({ pageSize: 6, controlsId: null, onCount: null }, opts || {});
     let ps   = o.pageSize;
     let page = 1;
 
@@ -44,8 +44,8 @@ function EvePaginate(tableId, opts) {
         if (!c) return;
         if (total === 0) { c.innerHTML = ''; return; }
 
-        const sizes  = [15, 25, 100, 0];
-        const labels = ['15', '25', '100', 'Alle'];
+        const sizes  = [6, 15, 25, 100, 0];
+        const labels = ['6', '15', '25', '100', 'Alle'];
 
         let h = `<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 px-3 py-2" style="border-top:1px solid #1a2d3d;">`;
 

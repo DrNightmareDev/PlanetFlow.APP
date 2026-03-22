@@ -242,7 +242,7 @@ function toggleFilter(btn, groupId, applyFn) {
 }
 
 const corpPager = EvePaginate('corpTable', {
-    pageSize:   25,
+    pageSize:   6,
     controlsId: 'corpTablePagination',
     onCount: n => {
         document.getElementById('tableBadge').textContent = n;

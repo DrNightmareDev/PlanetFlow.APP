@@ -234,7 +234,7 @@
                                 data-sort-tier="{{ colony.highest_tier or 'P0' }}"
                                 data-sort-expiry="{{ colony.expiry_hours if colony.expiry_hours is not none else 9999999 }}"
                                 data-sort-isk="{{ colony.isk_day }}"
-                                data-expired="{{ '1' if colony.extractor_status.expired > 0 else '0' }}">
+                                data-expired="{{ '1' if colony.expiry_hours is none or colony.expiry_hours < 0 else '0' }}">
                                 <td>
                                     <div class="d-flex align-items-center gap-2">
                                         <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle" onerror="this.src='/static/img/default_char.svg'">
@@ -261,10 +261,18 @@
                                 </td>
                                 <td>
                                     {% if colony.highest_tier %}
-                                    <span class="badge eve-tier-badge eve-tier-{{ colony.highest_tier | lower }}">{{ colony.highest_tier }}</span>
-                                    {% for f in colony.factories | selectattr('tier', 'equalto', colony.highest_tier) | unique(attribute='name') %}
-                                    <div style="font-size:.65rem;color:#7ec8e3;margin-top:2px;white-space:nowrap;">{{ f.name }}</div>
-                                    {% endfor %}
+                                    {% set tier_products = colony.factories | selectattr('tier', 'equalto', colony.highest_tier) | unique(attribute='name') | list %}
+                                    <div class="eve-hover-wrap">
+                                        <span class="badge eve-tier-badge eve-tier-{{ colony.highest_tier | lower }}" style="cursor:default;">{{ colony.highest_tier }}</span>
+                                        {% if tier_products %}
+                                        <div class="eve-hover-card">
+                                            <div style="color:#586e75;font-size:.65rem;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">Produkte</div>
+                                            {% for f in tier_products %}
+                                            <div style="color:#7ec8e3;">{{ f.name }}</div>
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
                                     {% else %}
                                     <span class="text-muted small">—</span>
                                     {% endif %}
@@ -299,22 +307,34 @@
                                         {% if max_pct > 85 %}{% set clr = '#e74c3c' %}
                                         {% elif max_pct > 60 %}{% set clr = '#f4a300' %}
                                         {% else %}{% set clr = '#2dc653' %}{% endif %}
-                                        {% set ns = namespace(tip='') %}
-                                        {% for s in colony.storage %}
-                                            {% set ns.tip = ns.tip ~ s.label ~ ': ' ~ s.fill_pct ~ '%' %}
-                                            {% if s['items'] %}
-                                                {% for it in s['items'] %}{% set ns.tip = ns.tip ~ ' · ' ~ it.name ~ ' ' ~ it.amount %}{% endfor %}
-                                            {% else %}
-                                                {% set ns.tip = ns.tip ~ ' · leer' %}
-                                            {% endif %}
-                                            {% if not loop.last %}{% set ns.tip = ns.tip ~ '&#10;' %}{% endif %}
-                                        {% endfor %}
-                                        <span class="eve-storage-badge"
-                                              style="color:{{ clr }};"
-                                              data-bs-toggle="tooltip" data-bs-html="false"
-                                              title="{{ ns.tip }}">
-                                            {{ colony.storage | length }}× {% if max_pct == 0 %}leer{% else %}{{ max_pct }}%{% endif %}
-                                        </span>
+                                        <div class="eve-hover-wrap">
+                                            <span class="eve-storage-badge" style="color:{{ clr }};">
+                                                {{ colony.storage | length }}× {% if max_pct == 0 %}leer{% else %}{{ max_pct }}%{% endif %}
+                                            </span>
+                                            <div class="eve-hover-card eve-hover-card-right">
+                                                {% for s in colony.storage %}
+                                                {% if not loop.first %}<div style="border-top:1px solid #1a3a5a;margin:5px 0;"></div>{% endif %}
+                                                {% set pct = s.fill_pct %}
+                                                {% if pct > 85 %}{% set pct_clr = '#e74c3c' %}
+                                                {% elif pct > 60 %}{% set pct_clr = '#f4a300' %}
+                                                {% else %}{% set pct_clr = '#2dc653' %}{% endif %}
+                                                <div style="display:flex;justify-content:space-between;gap:16px;margin-bottom:3px;">
+                                                    <span style="color:#b0c4d4;font-weight:600;">{{ s.label }}</span>
+                                                    <span style="color:{{ pct_clr }};font-weight:600;">{{ pct }}%</span>
+                                                </div>
+                                                {% if s['items'] %}
+                                                    {% for it in s['items'] %}
+                                                    <div style="display:flex;justify-content:space-between;gap:16px;color:#7a8a9a;">
+                                                        <span>{{ it.name }}</span>
+                                                        <span>{{ "{:,}".format(it.amount) }}</span>
+                                                    </div>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <div style="color:#3a5a7a;font-style:italic;">leer</div>
+                                                {% endif %}
+                                                {% endfor %}
+                                            </div>
+                                        </div>
                                     {% else %}
                                         <span class="text-muted small">—</span>
                                     {% endif %}
@@ -836,14 +856,42 @@ initServiceWorker();
     font-size: .75rem;
     font-weight: 500;
     cursor: default;
-    border-bottom: 1px dashed currentColor;
-    opacity: .85;
     white-space: nowrap;
+}
+.eve-hover-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+.eve-hover-card {
+    display: none;
+    position: absolute;
+    top: calc(100% + 5px);
+    left: 0;
+    z-index: 9999;
+    background: #0a1825;
+    border: 1px solid #1a3a5a;
+    border-radius: 6px;
+    padding: 8px 10px;
+    min-width: 160px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.7);
+    font-size: .72rem;
+    white-space: nowrap;
+    pointer-events: none;
+    font-weight: 400;
+    font-family: inherit;
+    line-height: 1.5;
+    text-align: left;
+}
+.eve-hover-card-right {
+    left: auto;
+    right: 0;
+}
+.eve-hover-wrap:hover .eve-hover-card {
+    display: block;
 }
 </style>
 <script>
-document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
-    new bootstrap.Tooltip(el, {trigger: 'hover', placement: 'left'});
-});
+// tooltips via CSS .eve-hover-wrap – no JS init needed
 </script>
 {% endblock %}

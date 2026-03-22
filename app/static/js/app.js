@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Paginator ---
     const pager = EvePaginate('coloniesTable', {
-        pageSize:   25,
+        pageSize:   6,
         controlsId: 'coloniesTablePagination',
         onCount:    n => { if (badge) badge.textContent = n; }
     });

@@ -257,7 +257,7 @@ function toggleFilter(btn, groupId, applyFn) {
 }
 
 const overviewPager = EvePaginate('overviewTable', {
-    pageSize:   25,
+    pageSize:   6,
     controlsId: 'overviewTablePagination',
     onCount: n => {
         document.getElementById('visibleCount').textContent = n;

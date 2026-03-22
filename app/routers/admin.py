@@ -6,6 +6,7 @@ from sqlalchemy import func
 from app.database import get_db
 from app.dependencies import require_admin, require_account
 from app.models import Account, Character, IskSnapshot, AccessPolicy, AccessPolicyEntry
+from app.session import create_session, create_impersonate_session, read_session
 from app.templates_env import templates
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -152,6 +153,39 @@ def admin_delete_character(
         target_account.main_character_id = None
     db.commit()
     return RedirectResponse(url="/admin", status_code=302)
+
+
+@router.get("/impersonate/{target_account_id}")
+def impersonate(
+    target_account_id: int,
+    request: Request,
+    account=Depends(require_account),
+    db: Session = Depends(get_db)
+):
+    if not account.is_owner:
+        raise HTTPException(status_code=403, detail="Nur der Besitzer kann Accounts imitieren")
+    if target_account_id == account.id:
+        raise HTTPException(status_code=400, detail="Du kannst dich nicht selbst imitieren")
+    target = db.query(Account).filter(Account.id == target_account_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Account nicht gefunden")
+    response = RedirectResponse(url="/dashboard", status_code=302)
+    create_impersonate_session(response, target_id=target_account_id, real_owner_id=account.id)
+    return response
+
+
+@router.get("/impersonate-exit")
+def impersonate_exit(request: Request, db: Session = Depends(get_db)):
+    session = read_session(request)
+    real_owner_id = session.get("real_owner_id") if session else None
+    if not real_owner_id:
+        return RedirectResponse(url="/dashboard", status_code=302)
+    owner = db.query(Account).filter(Account.id == real_owner_id).first()
+    if not owner or not owner.is_owner:
+        return RedirectResponse(url="/dashboard", status_code=302)
+    response = RedirectResponse(url="/admin", status_code=302)
+    create_session(response, account_id=real_owner_id)
+    return response
 
 
 @router.get("/set-main/{account_id}/{character_id}")

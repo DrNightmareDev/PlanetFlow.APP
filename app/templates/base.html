@@ -12,6 +12,18 @@
 </head>
 <body class="eve-body">
 
+{% if request.state.is_impersonating %}
+<div style="background:#7c2d12;border-bottom:2px solid #f97316;padding:6px 16px;display:flex;align-items:center;justify-content:space-between;font-size:.85rem;position:sticky;top:0;z-index:2000;">
+    <span style="color:#fed7aa;">
+        <i class="bi bi-person-fill-exclamation me-2" style="color:#f97316;"></i>
+        Du siehst das Dashboard als <strong style="color:#fff;">{{ account.characters[0].character_name if account.characters else 'Account #' ~ account.id }}</strong>
+    </span>
+    <a href="/admin/impersonate-exit" class="btn btn-sm" style="background:#f97316;color:#fff;border:none;padding:2px 12px;">
+        <i class="bi bi-box-arrow-left me-1"></i>Zurück zu meinem Account
+    </a>
+</div>
+{% endif %}
+
 <!-- Navbar -->
 <nav class="navbar navbar-expand-lg eve-navbar sticky-top">
     <div class="container-fluid px-3">

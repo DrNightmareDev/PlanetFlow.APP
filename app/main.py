@@ -77,6 +77,15 @@ app = FastAPI(
 # Statische Dateien
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+
+@app.middleware("http")
+async def impersonate_middleware(request: Request, call_next):
+    from app.session import read_session
+    session = read_session(request)
+    request.state.is_impersonating = bool(session and session.get("real_owner_id"))
+    request.state.real_owner_id = session.get("real_owner_id") if session else None
+    return await call_next(request)
+
 # Router einbinden
 app.include_router(auth.router)
 app.include_router(dashboard.router)

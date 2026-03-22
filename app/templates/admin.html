@@ -175,6 +175,15 @@
                         {{ 'Admin entfernen' if acc.is_admin else 'Admin machen' }}
                     </a>
                     {% endif %}
+                    {% if acc.id != account.id and account.is_owner %}
+                    <a href="/admin/impersonate/{{ acc.id }}"
+                       class="btn btn-sm"
+                       style="background:#7c2d1220;color:#f97316;border:1px solid #f9731640;"
+                       onclick="return confirm('Dashboard als {{ main.character_name if main else 'Account #' ~ acc.id }} anzeigen?')"
+                       title="Als dieser User einloggen (Impersonate)">
+                        <i class="bi bi-person-fill-exclamation me-1"></i>Ansehen
+                    </a>
+                    {% endif %}
                     {% if acc.id != account.id and not acc.is_owner %}
                     <a href="/admin/delete-account/{{ acc.id }}"
                        class="btn btn-sm eve-btn-danger"

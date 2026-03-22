@@ -316,11 +316,15 @@ function clearFilters() {
 }
 
 function updatePlanetTiles() {
+    // Planetentypen im Filter (nicht P0-Ressourcen)
+    const hasPlanetTypeFilter = [...activeFilters].some(f => PLANET_COLORS[f]);
     document.querySelectorAll('.eve-planet-tile').forEach(el => {
         const pt = el.dataset.planetType;
-        const active = activeFilters.has(pt);
-        el.style.opacity = activeFilters.size === 0 || active ? '1' : '0.35';
-        el.style.boxShadow = active ? `0 0 0 2px ${PLANET_COLORS[pt] || '#ccc'}` : 'none';
+        const tileResources = (el.dataset.resources || '').split(',').filter(Boolean);
+        const tileActive = activeFilters.has(pt) || tileResources.some(r => activeFilters.has(r));
+        // Dimmen nur wenn ein Planetentyp-Filter gesetzt ist (nicht bei reinen Ressourcen-Filtern)
+        el.style.opacity = activeFilters.size === 0 || !hasPlanetTypeFilter || tileActive ? '1' : '0.35';
+        el.style.boxShadow = tileActive ? `0 0 0 2px ${PLANET_COLORS[pt] || '#ccc'}` : 'none';
     });
 }
 
@@ -468,6 +472,7 @@ function renderAnalysis(data) {
         col.innerHTML = `
             <div class="p-2 rounded h-100 eve-planet-tile"
                  data-planet-type="${pt.type}"
+                 data-resources="${(pt.resources || []).join(',')}"
                  style="border:1px solid ${pt.color}28;background:${pt.color}06;cursor:pointer;transition:all 0.15s;">
                 <div class="d-flex align-items-center gap-2 mb-2">
                     <span class="badge fw-semibold" style="background:${pt.color}22;color:${pt.color};border:1px solid ${pt.color}3a;">${pt.type}</span>
@@ -506,12 +511,9 @@ function renderRecs() {
         filtered = filtered.filter(r => {
             const planets = r.planets_needed || [];
             const inputs  = r.inputs || [];
-            return [...activeFilters].some(f => {
-                // Direkter Treffer: Planetentyp oder Input-Name
-                if (planets.includes(f) || inputs.includes(f)) return true;
-                // P0-Ressource → zugehörige Planetentypen prüfen
-                return (resourceToPlanet[f] || []).some(pt => planets.includes(pt));
-            });
+            return [...activeFilters].some(f =>
+                planets.includes(f) || inputs.includes(f)
+            );
         });
     }
 

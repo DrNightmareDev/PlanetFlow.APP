@@ -220,6 +220,10 @@ def callback(
         db.add(new_char)
         db.commit()
 
+        # Dashboard-Cache invalidieren damit neue Kolonien sofort erscheinen
+        from app.routers.dashboard import invalidate_dashboard_cache
+        invalidate_dashboard_cache(existing_account_id)
+
         create_session(response, existing_account_id)
     else:
         raise HTTPException(status_code=400, detail="Unbekannter Flow")

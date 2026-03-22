@@ -224,7 +224,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                             <div class="{% if not loop.last %}mb-3 pb-2{% endif %}"
                                  {% if not loop.last %}style="border-bottom:1px solid var(--eve-card-border);"{% endif %}>
                                 <div style="color:var(--eve-text-muted);font-size:.65rem;margin-bottom:3px;">{{ h.recorded_at }}</div>
-                                {% for it in h.items %}
+                                {% for it in h['items'] %}
                                 <div class="d-flex justify-content-between gap-3">
                                     <span style="color:var(--eve-text);font-size:.78rem;">{{ it.product_name }}</span>
                                     <span style="color:#7a9a6a;font-size:.78rem;font-weight:600;white-space:nowrap;">{{ "{:,}".format(it.quantity) }}</span>

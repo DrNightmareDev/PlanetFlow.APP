@@ -118,40 +118,51 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
 </div>
 {% else %}
 
-<!-- Filter Bar -->
-<div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
-    <select id="filterChar" class="sh-select" style="width:auto;" onchange="applyFilters()">
-        <option value="">Alle Charaktere</option>
-        {% for name in colonies | map(attribute='character_name') | unique | sort %}
-        <option>{{ name }}</option>
-        {% endfor %}
-    </select>
-    <select id="filterSystem" class="sh-select" style="width:auto;" onchange="applyFilters()">
-        <option value="">Alle Systeme</option>
-        {% for sys in colonies | map(attribute='solar_system_name') | unique | sort %}
-        {% if sys and sys != '—' %}<option>{{ sys }}</option>{% endif %}
-        {% endfor %}
-    </select>
-    <select id="filterType" class="sh-select" style="width:auto;" onchange="applyFilters()">
-        <option value="">Alle Typen</option>
-        {% for pt in colonies | map(attribute='planet_type') | unique | sort %}
-        <option>{{ pt }}</option>
-        {% endfor %}
-    </select>
-    <span id="filterCount" class="text-muted" style="font-size:.75rem;"></span>
-</div>
-
 <div class="eve-card card border-0">
+    <div class="card-header d-flex align-items-center gap-3 flex-wrap py-2 px-3"
+         style="background:rgba(30,45,61,0.3);border-color:var(--eve-card-border);">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-person-fill" style="color:var(--eve-text-muted);font-size:.8rem;"></i>
+            <select id="filterChar" class="form-select form-select-sm eve-select" onchange="applyFilters()">
+                <option value="">Alle Charaktere</option>
+                {% for name in colonies | map(attribute='character_name') | unique | sort %}
+                <option>{{ name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-globe2" style="color:var(--eve-text-muted);font-size:.8rem;"></i>
+            <select id="filterSystem" class="form-select form-select-sm eve-select" onchange="applyFilters()">
+                <option value="">Alle Systeme</option>
+                {% for sys in colonies | map(attribute='solar_system_name') | unique | sort %}
+                {% if sys and sys != '—' %}<option>{{ sys }}</option>{% endif %}
+                {% endfor %}
+            </select>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-hexagon" style="color:var(--eve-text-muted);font-size:.8rem;"></i>
+            <select id="filterType" class="form-select form-select-sm eve-select" onchange="applyFilters()">
+                <option value="">Alle Typen</option>
+                {% for pt in colonies | map(attribute='planet_type') | unique | sort %}
+                <option>{{ pt }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button id="filterResetBtn" class="btn btn-sm eve-btn-ghost d-none" onclick="resetFilters()">
+            <i class="bi bi-x-circle me-1"></i>Reset
+        </button>
+        <span id="filterCount" class="text-muted ms-auto" style="font-size:.75rem;"></span>
+    </div>
     <div class="card-body p-0">
         <div style="overflow-x:auto;">
-            <table class="table sh-table mb-0">
+            <table class="table sh-table mb-0" id="sh-table">
                 <thead>
                     <tr>
-                        <th>Charakter</th>
+                        <th class="eve-sortable" data-col="char">Charakter <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
                         <th>Planet</th>
-                        <th>Typ</th>
-                        <th>System</th>
-                        <th>Max. Produkt</th>
+                        <th class="eve-sortable" data-col="type">Typ <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                        <th class="eve-sortable" data-col="system">System <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                        <th class="eve-sortable" data-col="product">Max. Produkt <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
                         <th>Skyhook Bestand</th>
                         <th style="width:80px;"></th>
                     </tr>
@@ -166,7 +177,11 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                 <tr data-planet="{{ colony.planet_id }}"
                     data-char="{{ colony.character_name | e }}"
                     data-system="{{ colony.solar_system_name | e }}"
-                    data-type="{{ colony.planet_type | e }}">
+                    data-type="{{ colony.planet_type | e }}"
+                    data-sort-char="{{ colony.character_name | e }}"
+                    data-sort-type="{{ colony.planet_type | e }}"
+                    data-sort-system="{{ colony.solar_system_name | e }}"
+                    data-sort-product="{{ colony.highest_tier[1:] if colony.highest_tier else '0' }}">
                     <td>
                         <div class="d-flex align-items-center gap-2">
                             <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle"
@@ -254,6 +269,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
     </div>
 </div>
 {% endif %}
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -352,6 +368,23 @@ document.addEventListener('DOMContentLoaded', () => {
         updateFillBar(planetId);
     });
 
+    // Sort headers
+    document.querySelectorAll('#sh-table th.eve-sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            const col = th.dataset.col;
+            _shSortAsc = (_shSortCol === col) ? !_shSortAsc : true;
+            _shSortCol = col;
+            document.querySelectorAll('#sh-table th.eve-sortable').forEach(h => {
+                h.classList.remove('sort-asc', 'sort-desc');
+                h.querySelector('.eve-sort-icon').className = 'bi bi-chevron-expand eve-sort-icon';
+            });
+            th.classList.add(_shSortAsc ? 'sort-asc' : 'sort-desc');
+            th.querySelector('.eve-sort-icon').className =
+                _shSortAsc ? 'bi bi-chevron-up eve-sort-icon' : 'bi bi-chevron-down eve-sort-icon';
+            _shSort(col, _shSortAsc);
+        });
+    });
+
     // URL param: highlight specific planet
     const urlPlanet = new URLSearchParams(location.search).get('planet');
     if (urlPlanet) {
@@ -370,6 +403,7 @@ function applyFilters() {
     const char   = document.getElementById('filterChar')?.value   || '';
     const sys    = document.getElementById('filterSystem')?.value || '';
     const type   = document.getElementById('filterType')?.value   || '';
+    const active = char || sys || type;
     const rows   = document.querySelectorAll('#sh-tbody tr');
     let visible  = 0;
     rows.forEach(tr => {
@@ -379,8 +413,37 @@ function applyFilters() {
         tr.style.display = match ? '' : 'none';
         if (match) visible++;
     });
-    const countEl = document.getElementById('filterCount');
-    if (countEl) countEl.textContent = (char || sys || type) ? visible + ' von ' + rows.length : '';
+    const countEl    = document.getElementById('filterCount');
+    const resetBtn   = document.getElementById('filterResetBtn');
+    if (countEl)  countEl.textContent  = active ? visible + ' von ' + rows.length : '';
+    if (resetBtn) resetBtn.classList.toggle('d-none', !active);
+}
+
+function resetFilters() {
+    ['filterChar','filterSystem','filterType'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    applyFilters();
+}
+
+// ── Sort ────────────────────────────────────────────────────────────────────────
+let _shSortCol = null, _shSortAsc = true;
+
+function _shSort(col, asc) {
+    const tbody = document.getElementById('sh-tbody');
+    const rows  = Array.from(tbody.querySelectorAll('tr'));
+    rows.sort((a, b) => {
+        if (col === 'product') {
+            const av = parseInt(a.dataset.sortProduct) || 0;
+            const bv = parseInt(b.dataset.sortProduct) || 0;
+            return asc ? av - bv : bv - av;
+        }
+        const map = { char: 'sortChar', type: 'sortType', system: 'sortSystem' };
+        const av = a.dataset[map[col]] || '', bv = b.dataset[map[col]] || '';
+        return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+    rows.forEach(r => tbody.appendChild(r));
 }
 
 // ── History popup ──────────────────────────────────────────────────────────────

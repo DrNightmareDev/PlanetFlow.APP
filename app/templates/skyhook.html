@@ -175,12 +175,14 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                 </thead>
                 <tbody id="sh-tbody">
                 {% for colony in colonies %}
+                {% set ri = loop.index0 %}
                 {% set cur_items = latest.get(colony.planet_id, []) %}
                 {% set hist = history.get(colony.planet_id, []) %}
                 {% set tier_products = colony.factories | selectattr('tier', 'equalto', colony.highest_tier) | unique(attribute='name') | list if colony.highest_tier else [] %}
                 {% set tc_map = {'p1':'#586e75','p2':'#00b4d8','p3':'#f4a300','p4':'#e63946'} %}
                 {% set tc_color = tc_map.get(colony.highest_tier | lower, '#586e75') if colony.highest_tier else '#586e75' %}
                 <tr data-planet="{{ colony.planet_id }}"
+                    data-row="{{ ri }}"
                     data-char="{{ colony.character_name | e }}"
                     data-system="{{ colony.solar_system_name | e }}"
                     data-type="{{ colony.planet_type | e }}"
@@ -222,40 +224,41 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
 
                     <!-- Direkt editierbarer Bestand -->
                     <td style="min-width:320px;">
-                        <div id="items_{{ colony.planet_id }}"
+                        <div id="items_{{ ri }}"
+                             data-row="{{ ri }}"
                              data-planet="{{ colony.planet_id }}"
                              data-init='{{ cur_items | tojson }}'
                              data-char="{{ colony.character_name | e }}">
                         </div>
                         <div class="d-flex gap-2 mt-1 flex-wrap">
-                            <button class="sh-add-btn" onclick="addRow({{ colony.planet_id }})">+ Zeile</button>
-                            <button class="sh-save-btn" id="btn_{{ colony.planet_id }}"
-                                    onclick="saveEntry({{ colony.planet_id }})">
+                            <button class="sh-add-btn" onclick="addRow({{ ri }})">+ Zeile</button>
+                            <button class="sh-save-btn" id="btn_{{ ri }}"
+                                    onclick="saveEntry({{ ri }})">
                                 <i class="bi bi-floppy me-1"></i>Speichern
                             </button>
-                            <button class="sh-save-btn d-none" id="undo_{{ colony.planet_id }}"
-                                    onclick="undoEntry({{ colony.planet_id }})" title="Änderungen rückgängig">
+                            <button class="sh-save-btn d-none" id="undo_{{ ri }}"
+                                    onclick="undoEntry({{ ri }})" title="Änderungen rückgängig">
                                 <i class="bi bi-arrow-counterclockwise me-1"></i>Undo
                             </button>
                         </div>
                         <div style="margin-top:5px;">
                             <div style="height:3px;background:var(--eve-card-border);border-radius:2px;overflow:hidden;">
-                                <div id="fill_bar_{{ colony.planet_id }}" style="height:100%;width:0%;background:#7a9a6a;transition:width .15s;border-radius:2px;"></div>
+                                <div id="fill_bar_{{ ri }}" style="height:100%;width:0%;background:#7a9a6a;transition:width .15s;border-radius:2px;"></div>
                             </div>
-                            <div id="fill_text_{{ colony.planet_id }}" style="font-size:.63rem;color:var(--eve-text-muted);margin-top:2px;"></div>
+                            <div id="fill_text_{{ ri }}" style="font-size:.63rem;color:var(--eve-text-muted);margin-top:2px;"></div>
                         </div>
                     </td>
 
                     <!-- ISK Wert -->
                     {% set planet_value = values.get(colony.planet_id, 0) %}
-                    <td style="white-space:nowrap;" id="val_{{ colony.planet_id }}">
+                    <td style="white-space:nowrap;" id="val_{{ ri }}">
                         <div class="eve-hover-wrap" style="display:inline-block;">
-                            <span id="val_tot_{{ colony.planet_id }}">
+                            <span id="val_tot_{{ ri }}">
                                 {% if planet_value > 0 %}
                                 <span style="color:#7a9a6a;font-weight:600;font-size:.82rem;cursor:default;">{{ planet_value | format_isk }}</span>
                                 {% else %}<span class="text-muted">—</span>{% endif %}
                             </span>
-                            <div class="eve-hover-card" id="val_det_{{ colony.planet_id }}" style="min-width:220px;right:0;top:calc(100% + 4px);">
+                            <div class="eve-hover-card" id="val_det_{{ ri }}" style="min-width:220px;right:0;top:calc(100% + 4px);">
                                 {% for it in cur_items %}{% set ip = prices.get(it.product_name, 0) %}{% if ip > 0 and it.quantity > 0 %}
                                 <div class="d-flex justify-content-between gap-3" style="font-size:.75rem;margin-bottom:2px;">
                                     <span style="color:var(--eve-text);">{{ it.product_name }}</span>
@@ -267,15 +270,15 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                     </td>
 
                     <!-- Verlauf -->
-                    <td style="position:relative;" id="hist_cell_{{ colony.planet_id }}">
+                    <td style="position:relative;" id="hist_cell_{{ ri }}">
                         <button class="sh-hist-btn{{ '' if hist else ' d-none' }}"
-                                id="hist_btn_{{ colony.planet_id }}"
-                                onclick="toggleHist({{ colony.planet_id }})" title="Letzte Einträge">
+                                id="hist_btn_{{ ri }}"
+                                onclick="toggleHist({{ ri }})" title="Letzte Einträge">
                             <i class="bi bi-clock-history"></i>
-                            <span id="hist_count_{{ colony.planet_id }}" style="font-size:.65rem;vertical-align:middle;margin-left:2px;">{{ hist | length }}</span>
+                            <span id="hist_count_{{ ri }}" style="font-size:.65rem;vertical-align:middle;margin-left:2px;">{{ hist | length }}</span>
                         </button>
-                        <span id="hist_empty_{{ colony.planet_id }}" class="text-muted" style="font-size:.7rem;{{ 'display:none;' if hist else '' }}">—</span>
-                        <div class="sh-hist-popup" id="hist_{{ colony.planet_id }}">
+                        <span id="hist_empty_{{ ri }}" class="text-muted" style="font-size:.7rem;{{ 'display:none;' if hist else '' }}">—</span>
+                        <div class="sh-hist-popup" id="hist_{{ ri }}">
                             <div style="color:var(--eve-text-muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.6rem;">Letzte Einträge</div>
                             {% for h in hist %}
                             <div class="{% if not loop.last %}mb-3 pb-2{% endif %}"
@@ -304,6 +307,8 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
 
 {% block extra_scripts %}
 <script>
+// ri = row index (loop.index0) — unique per row even if same planet_id
+// planetId = EVE planet ID — used only for API calls
 const SH_PRODUCTS = {{ pi_products | tojson }};
 const SH_PRICES   = {{ prices | tojson }};
 
@@ -316,10 +321,10 @@ for (const [tier, prods] of Object.entries(SH_PRODUCTS)) {
     if (v !== undefined) prods.forEach(p => SH_VOL[p] = v);
 }
 
-function updateFillBar(planetId) {
-    const container = document.getElementById('items_' + planetId);
-    const bar  = document.getElementById('fill_bar_'  + planetId);
-    const text = document.getElementById('fill_text_' + planetId);
+function updateFillBar(ri) {
+    const container = document.getElementById('items_' + ri);
+    const bar  = document.getElementById('fill_bar_'  + ri);
+    const text = document.getElementById('fill_text_' + ri);
     if (!bar || !text || !container) return;
     let used = 0;
     container.querySelectorAll('.sh-item-row').forEach(row => {
@@ -348,12 +353,12 @@ function _fmtIsk(v) {
     return v.toFixed(0) + ' ISK';
 }
 
-const _planetValues = {}; // planetId → current ISK value
+const _rowValues = {}; // ri → current ISK value
 
-function updateValueCell(planetId) {
-    const container = document.getElementById('items_' + planetId);
-    const totEl = document.getElementById('val_tot_' + planetId);
-    const detEl = document.getElementById('val_det_' + planetId);
+function updateValueCell(ri) {
+    const container = document.getElementById('items_' + ri);
+    const totEl = document.getElementById('val_tot_' + ri);
+    const detEl = document.getElementById('val_det_' + ri);
     if (!container || !totEl) return;
 
     let total = 0;
@@ -369,7 +374,7 @@ function updateValueCell(planetId) {
         }
     });
 
-    _planetValues[planetId] = total;
+    _rowValues[ri] = total;
 
     totEl.innerHTML = total > 0
         ? `<span style="color:#7a9a6a;font-weight:600;font-size:.82rem;cursor:default;">${_fmtIsk(total)}</span>`
@@ -388,7 +393,7 @@ function updateValueCell(planetId) {
 }
 
 function _updateTotalValue() {
-    const grand = Object.values(_planetValues).reduce((s, v) => s + v, 0);
+    const grand = Object.values(_rowValues).reduce((s, v) => s + v, 0);
     const el  = document.getElementById('sh-total-val');
     const txt = document.getElementById('sh-total-val-text');
     if (!el || !txt) return;
@@ -397,12 +402,12 @@ function _updateTotalValue() {
 }
 
 // ── Dirty / Lock / Undo ────────────────────────────────────────────────────────
-const _shUndo  = {}; // planetId → snapshot [{product_name, quantity}]
-const _shDirty = {}; // planetId → bool
+const _shUndo  = {}; // ri → snapshot [{product_name, quantity}]
+const _shDirty = {}; // ri → bool
 
-function _getItems(planetId) {
+function _getItems(ri) {
     const items = [];
-    document.getElementById('items_' + planetId)?.querySelectorAll('.sh-item-row').forEach(row => {
+    document.getElementById('items_' + ri)?.querySelectorAll('.sh-item-row').forEach(row => {
         items.push({
             product_name: row.querySelector('.sh-prod')?.value || '',
             quantity: parseInt(row.querySelector('.sh-qty')?.value || '0') || 0,
@@ -411,24 +416,24 @@ function _getItems(planetId) {
     return items;
 }
 
-function _markDirty(planetId) {
-    if (_shDirty[planetId]) return;
-    // snapshot already captured at load time (or after last save)
-    _shDirty[planetId] = true;
-    document.getElementById('undo_' + planetId)?.classList.remove('d-none');
-    _lockOthers(planetId);
+function _markDirty(ri) {
+    if (_shDirty[ri]) return;
+    _shDirty[ri] = true;
+    document.getElementById('undo_' + ri)?.classList.remove('d-none');
+    const activeTr = document.querySelector(`#sh-tbody tr[data-row="${ri}"]`);
+    _lockOthers(activeTr);
 }
 
-function _markClean(planetId) {
-    _shUndo[planetId]  = _getItems(planetId); // refresh snapshot to current (saved) state
-    _shDirty[planetId] = false;
-    document.getElementById('undo_' + planetId)?.classList.add('d-none');
+function _markClean(ri) {
+    _shUndo[ri]  = _getItems(ri);
+    _shDirty[ri] = false;
+    document.getElementById('undo_' + ri)?.classList.add('d-none');
     _unlockAll();
 }
 
-function _lockOthers(activePlanetId) {
+function _lockOthers(activeTr) {
     document.querySelectorAll('#sh-tbody tr').forEach(tr => {
-        if (parseInt(tr.dataset.planet) === activePlanetId) return;
+        if (tr === activeTr) return;
         tr.querySelectorAll('select, input, button').forEach(el => { el.disabled = true; });
         tr.style.opacity = '0.38';
         tr.style.pointerEvents = 'none';
@@ -443,16 +448,16 @@ function _unlockAll() {
     });
 }
 
-function undoEntry(planetId) {
-    const snap = _shUndo[planetId];
+function undoEntry(ri) {
+    const snap = _shUndo[ri];
     if (!snap) return;
-    const container = document.getElementById('items_' + planetId);
+    const container = document.getElementById('items_' + ri);
     container.innerHTML = '';
     (snap.length ? snap : [{ product_name: '', quantity: 0 }])
-        .forEach(it => container.appendChild(makeRow(planetId, it.product_name, it.quantity)));
-    updateFillBar(planetId);
-    updateValueCell(planetId);
-    _markClean(planetId);
+        .forEach(it => container.appendChild(makeRow(ri, it.product_name, it.quantity)));
+    updateFillBar(ri);
+    updateValueCell(ri);
+    _markClean(ri);
 }
 
 function buildOptions(selected) {
@@ -467,7 +472,7 @@ function buildOptions(selected) {
     return html;
 }
 
-function makeRow(planetId, prodName = '', qty = '') {
+function makeRow(ri, prodName = '', qty = '') {
     const div = document.createElement('div');
     div.className = 'sh-item-row';
     div.innerHTML = `
@@ -476,48 +481,48 @@ function makeRow(planetId, prodName = '', qty = '') {
         <button class="sh-remove-btn" onclick="removeRow(this)" title="Entfernen">×</button>
     `;
     div.querySelector('.sh-qty').addEventListener('keydown', e => {
-        if (e.key === 'Enter') { e.preventDefault(); saveEntry(planetId); }
+        if (e.key === 'Enter') { e.preventDefault(); saveEntry(ri); }
     });
-    div.querySelector('.sh-qty').addEventListener('input',  () => { _markDirty(planetId); updateFillBar(planetId); updateValueCell(planetId); });
-    div.querySelector('.sh-prod').addEventListener('change', () => { _markDirty(planetId); updateFillBar(planetId); updateValueCell(planetId); });
+    div.querySelector('.sh-qty').addEventListener('input',  () => { _markDirty(ri); updateFillBar(ri); updateValueCell(ri); });
+    div.querySelector('.sh-prod').addEventListener('change', () => { _markDirty(ri); updateFillBar(ri); updateValueCell(ri); });
     return div;
 }
 
-function addRow(planetId, prodName = '', qty = '') {
-    _markDirty(planetId);
-    document.getElementById('items_' + planetId).appendChild(makeRow(planetId, prodName, qty));
-    updateFillBar(planetId);
-    updateValueCell(planetId);
+function addRow(ri, prodName = '', qty = '') {
+    _markDirty(ri);
+    document.getElementById('items_' + ri).appendChild(makeRow(ri, prodName, qty));
+    updateFillBar(ri);
+    updateValueCell(ri);
 }
 
 function removeRow(btn) {
     const row = btn.closest('.sh-item-row');
     const container = row.parentElement;
-    const planetId = parseInt(container.dataset.planet);
+    const ri = parseInt(container.dataset.row);
     if (container.querySelectorAll('.sh-item-row').length > 1) {
         row.remove();
     } else {
         row.querySelector('select').value = '';
         row.querySelector('input').value = '';
     }
-    _markDirty(planetId);
-    updateFillBar(planetId);
-    updateValueCell(planetId);
+    _markDirty(ri);
+    updateFillBar(ri);
+    updateValueCell(ri);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-init]').forEach(container => {
-        const planetId = parseInt(container.dataset.planet);
+        const ri = parseInt(container.dataset.row);
         let items = [];
         try { items = JSON.parse(container.dataset.init); } catch {}
         if (items.length) {
-            items.forEach(it => container.appendChild(makeRow(planetId, it.product_name, it.quantity)));
+            items.forEach(it => container.appendChild(makeRow(ri, it.product_name, it.quantity)));
         } else {
-            container.appendChild(makeRow(planetId));
+            container.appendChild(makeRow(ri));
         }
-        updateFillBar(planetId);
-        updateValueCell(planetId);
-        _shUndo[planetId] = _getItems(planetId); // capture clean baseline for undo
+        updateFillBar(ri);
+        updateValueCell(ri);
+        _shUndo[ri] = _getItems(ri); // capture clean baseline for undo
     });
 
     // Sort headers
@@ -599,17 +604,17 @@ function _shSort(col, asc) {
 }
 
 // ── History popup ──────────────────────────────────────────────────────────────
-async function _refreshHistPopup(planetId) {
+async function _refreshHistPopup(ri, planetId) {
     try {
         const res = await fetch('/skyhook/history/' + planetId);
         if (!res.ok) return;
         const { entries } = await res.json();
         if (!entries.length) return;
 
-        const btn   = document.getElementById('hist_btn_'   + planetId);
-        const count = document.getElementById('hist_count_' + planetId);
-        const empty = document.getElementById('hist_empty_' + planetId);
-        const popup = document.getElementById('hist_' + planetId);
+        const btn   = document.getElementById('hist_btn_'   + ri);
+        const count = document.getElementById('hist_count_' + ri);
+        const empty = document.getElementById('hist_empty_' + ri);
+        const popup = document.getElementById('hist_' + ri);
 
         if (btn)   btn.classList.remove('d-none');
         if (empty) empty.style.display = 'none';
@@ -638,9 +643,10 @@ async function _refreshHistPopup(planetId) {
 }
 
 // ── Save ───────────────────────────────────────────────────────────────────────
-async function saveEntry(planetId) {
-    const container = document.getElementById('items_' + planetId);
-    const btn = document.getElementById('btn_' + planetId);
+async function saveEntry(ri) {
+    const container = document.getElementById('items_' + ri);
+    const btn = document.getElementById('btn_' + ri);
+    const planetId = parseInt(container.dataset.planet);
     const charName = container.dataset.char || '';
 
     const items = [];
@@ -666,8 +672,8 @@ async function saveEntry(planetId) {
         btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Gespeichert';
         btn.classList.add('saved');
         showToast('Gespeichert.', 'success');
-        _markClean(planetId);
-        _refreshHistPopup(planetId);
+        _markClean(ri);
+        _refreshHistPopup(ri, planetId);
         setTimeout(() => {
             btn.innerHTML = orig;
             btn.classList.remove('saved');
@@ -680,8 +686,6 @@ async function saveEntry(planetId) {
     }
 }
 
-function toggleHist(planetId) {
-    const popup = document.getElementById('hist_' + planetId);
     if (!popup) return;
     const isOpen = popup.classList.contains('open');
     document.querySelectorAll('.sh-hist-popup.open').forEach(p => p.classList.remove('open'));

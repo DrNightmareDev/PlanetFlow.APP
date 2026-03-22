@@ -99,6 +99,20 @@
         </div>
 
     </div>
+
+    <!-- Weiterverarbeitung -->
+    <div class="eve-card card border-0 mt-4">
+        <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-arrow-up-right-circle-fill eve-accent"></i>
+                <span class="fw-medium">Weiterverarbeitung</span>
+                <span class="text-muted small">— welche Produkte können daraus hergestellt werden?</span>
+            </div>
+            <span id="usedInSummary" class="badge eve-badge-count"></span>
+        </div>
+        <div class="card-body p-3" id="usedInBody"></div>
+    </div>
+
 </div>
 {% endblock %}
 
@@ -254,6 +268,9 @@ function renderChain(product) {
         return `<span class="badge me-1 mb-1" style="background:${c}18;color:${c};border:1px solid ${c}30;font-size:0.8rem;padding:0.4rem 0.7rem;">${pt}</span>`;
     }).join('') || '<span class="text-muted small">—</span>';
 
+    // Weiterverarbeitung rendern
+    renderUsedIn(product);
+
     // P0 rendern
     const p0El = document.getElementById('chainP0');
     p0El.innerHTML = [...p0Set].map(p0 => {
@@ -334,5 +351,132 @@ function renderP0Node(p0name, depth) {
 searchInput.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') dropdown.classList.add('d-none');
 });
+
+// ── Weiterverarbeitung ────────────────────────────────────────────────────────
+
+// Reverse-Lookup Maps aufbauen
+const P1_USED_IN_P2 = {};
+const P2_USED_IN_P3 = {};
+const P3_USED_IN_P4 = {};
+
+for (const [p2, p1s] of Object.entries(P1_TO_P2))
+    for (const p1 of p1s) { (P1_USED_IN_P2[p1] = P1_USED_IN_P2[p1] || []).push(p2); }
+
+for (const [p3, p2s] of Object.entries(P2_TO_P3))
+    for (const p2 of p2s) { (P2_USED_IN_P3[p2] = P2_USED_IN_P3[p2] || []).push(p3); }
+
+for (const [p4, inputs] of Object.entries(P3_TO_P4))
+    for (const inp of inputs) {
+        const t = getTier(inp);
+        if (t === 'P3') { (P3_USED_IN_P4[inp] = P3_USED_IN_P4[inp] || []).push(p4); }
+        // P4 can also directly consume P1 (e.g. Reactive Metals) — skip for upstream paths
+    }
+
+function getDirectUsers(name, tier) {
+    if (tier === 'P1') return (P1_USED_IN_P2[name] || []).map(n => ({name: n, tier: 'P2'}));
+    if (tier === 'P2') return (P2_USED_IN_P3[name] || []).map(n => ({name: n, tier: 'P3'}));
+    if (tier === 'P3') return (P3_USED_IN_P4[name] || []).map(n => ({name: n, tier: 'P4'}));
+    return [];
+}
+
+// Gibt alle vollständigen Pfade von name aufwärts zurück (max 3 Stufen)
+function getUpstreamPaths(name, tier, depth) {
+    if (depth > 3) return [];
+    const users = getDirectUsers(name, tier);
+    if (!users.length) return [];
+    const paths = [];
+    for (const u of users) {
+        const subPaths = getUpstreamPaths(u.name, u.tier, depth + 1);
+        if (subPaths.length === 0) {
+            paths.push([u]);
+        } else {
+            for (const sp of subPaths) paths.push([u, ...sp]);
+        }
+    }
+    return paths;
+}
+
+function renderUsedIn(product) {
+    const paths = getUpstreamPaths(product.name, product.tier, 0);
+    const summaryEl = document.getElementById('usedInSummary');
+
+    if (!paths.length) {
+        summaryEl.textContent = '';
+        document.getElementById('usedInBody').innerHTML =
+            `<div class="text-center py-3 text-muted small">
+                <i class="bi bi-check2-circle me-2 fs-5"></i>
+                Endprodukt — kann nicht weiter verarbeitet werden.
+            </div>`;
+        return;
+    }
+
+    // Einzigartige Endprodukte zählen (letzter Node jedes Pfads)
+    const endProducts = new Set(paths.map(p => p[p.length - 1].name));
+    summaryEl.textContent = endProducts.size + ' Endprodukt' + (endProducts.size !== 1 ? 'e' : '');
+
+    // Pfade gruppieren: nach erstem Schritt (direkte Nutzung)
+    const groups = {};
+    for (const path of paths) {
+        const key = path[0].name;
+        (groups[key] = groups[key] || []).push(path);
+    }
+
+    let html = '<div class="eve-upgrade-paths">';
+    for (const [firstStep, groupPaths] of Object.entries(groups)) {
+        const firstTier = groupPaths[0][0].tier;
+        const firstColor = TIER_COLORS[firstTier];
+
+        html += `<div class="eve-upgrade-group mb-3">`;
+        html += `<div class="d-flex align-items-start gap-2 flex-wrap">`;
+
+        // Aktuelles Produkt (Ausgangspunkt)
+        const srcColor = TIER_COLORS[product.tier];
+        html += `<div class="d-flex align-items-center gap-2 flex-wrap">`;
+        html += `<span class="eve-flow-source badge px-2 py-1"
+                    style="background:${srcColor}22;color:${srcColor};border:1px solid ${srcColor}50;font-size:0.8rem;">
+                    ${product.name}
+                 </span>`;
+
+        // Pfeil + Zwischenschritt
+        html += `<span class="eve-flow-arrow text-muted">→</span>`;
+        html += `<button class="eve-flow-node badge px-2 py-1 border-0"
+                    style="background:${firstColor}18;color:${firstColor};border:1px solid ${firstColor}30 !important;
+                           font-size:0.8rem;cursor:pointer;transition:all .15s;"
+                    onmouseenter="this.style.background='${firstColor}35'"
+                    onmouseleave="this.style.background='${firstColor}18'"
+                    onclick="selectProduct({name:'${firstStep.replace(/'/g,"\\'")}',tier:'${firstTier}'})">
+                    ${firstStep}
+                    <span style="font-size:0.65rem;opacity:0.7;">${firstTier}</span>
+                 </button>`;
+
+        // Weitere Schritte (ab Index 1 in jedem Pfad)
+        const furtherSteps = [...new Map(groupPaths.map(p => p.slice(1)).flat()
+            .map(n => [n.name, n])).values()];
+
+        if (furtherSteps.length > 0) {
+            html += `<span class="eve-flow-arrow text-muted">→</span>`;
+            html += `<div class="d-flex gap-1 flex-wrap">`;
+            for (const step of furtherSteps) {
+                const sc = TIER_COLORS[step.tier];
+                const isP4 = step.tier === 'P4';
+                html += `<button class="eve-flow-node badge px-2 py-1 border-0"
+                            style="background:${sc}18;color:${sc};border:1px solid ${sc}30 !important;
+                                   font-size:0.8rem;cursor:pointer;transition:all .15s;
+                                   ${isP4 ? 'box-shadow:0 0 6px '+sc+'40;' : ''}"
+                            onmouseenter="this.style.background='${sc}35'"
+                            onmouseleave="this.style.background='${sc}18'"
+                            onclick="selectProduct({name:'${step.name.replace(/'/g,"\\'")}',tier:'${step.tier}'})">
+                            ${isP4 ? '★ ' : ''}${step.name}
+                            <span style="font-size:0.65rem;opacity:0.7;">${step.tier}</span>
+                         </button>`;
+            }
+            html += `</div>`;
+        }
+
+        html += `</div></div></div>`;
+    }
+    html += '</div>';
+    document.getElementById('usedInBody').innerHTML = html;
+}
 </script>
 {% endblock %}

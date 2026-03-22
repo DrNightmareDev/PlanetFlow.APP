@@ -13,6 +13,7 @@ from app.esi import ensure_valid_token, get_character_planets, get_planet_detail
 from app.market import get_sell_prices_by_names
 from app.models import Character, IskSnapshot
 from app.pi_data import PLANET_TYPE_COLORS
+from app import sde as _sde
 from app.templates_env import templates
 
 logger = logging.getLogger(__name__)
@@ -238,6 +239,7 @@ def _build_dashboard_payload(account, characters: list, db: Session) -> dict:
             "num_pins": colony.get("num_pins", 0),
             "last_update": colony.get("last_update", "—"),
             "solar_system_id": colony.get("solar_system_id"),
+            "solar_system_name": (_sde.get_system_local(colony.get("solar_system_id")) or {}).get("name", "—"),
             "color": PLANET_TYPE_COLORS.get(planet_type, "#586e75"),
             "character_name": char.character_name,
             "character_portrait": char.portrait_url,

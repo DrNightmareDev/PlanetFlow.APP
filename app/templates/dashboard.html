@@ -348,14 +348,24 @@
             <div class="col-md-4">
                 <div class="eve-dev-card card border-0 h-100">
                     <div class="card-body text-center p-4">
-                        <i class="bi bi-bell fs-2 eve-accent d-block mb-3"></i>
+                        <i class="bi bi-bell fs-2 eve-accent d-block mb-2"></i>
                         <h6 class="fw-semibold">Push-Benachrichtigungen</h6>
                         <p class="text-muted small mb-2">Werde benachrichtigt wenn deine Extraktoren ablaufen</p>
-                        <span class="badge" style="background:#2dc65320;color:#2dc653;border:1px solid #2dc65340;">Verfügbar</span>
+                        <span id="notifyFeatureTxt" class="badge" style="background:#2dc65320;color:#2dc653;border:1px solid #2dc65340;">Verfügbar</span>
                         <div class="mt-2">
-                            <button onclick="toggleNotifications()" class="btn btn-sm eve-btn-ghost">
-                                <i class="bi bi-bell" id="notifyIconFeature"></i> Aktivieren
+                            <button id="notifyFeatureBtn" onclick="toggleNotifications()" class="btn btn-sm eve-btn-ghost">
+                                <i class="bi bi-bell me-1"></i>Aktivieren
                             </button>
+                        </div>
+                        <!-- Threshold-Einstellung (nur sichtbar wenn aktiv) -->
+                        <div id="notifySettingsPanel" style="display:none;" class="mt-3 text-start">
+                            <div class="text-muted small mb-1 text-center">Benachrichtigen vor Ablauf:</div>
+                            <div class="d-flex gap-1 justify-content-center flex-wrap">
+                                <button class="btn btn-sm eve-btn-ghost notify-thresh-btn" data-minutes="1440" onclick="setThreshold(1440)">1T</button>
+                                <button class="btn btn-sm eve-btn-ghost notify-thresh-btn" data-minutes="720"  onclick="setThreshold(720)">12h</button>
+                                <button class="btn btn-sm eve-btn-ghost notify-thresh-btn" data-minutes="60"   onclick="setThreshold(60)">1h</button>
+                                <button class="btn btn-sm eve-btn-ghost notify-thresh-btn" data-minutes="15"   onclick="setThreshold(15)">15min</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -534,19 +544,26 @@ const iskHistoryData = {{ isk_history | tojson }};
 
 // ── Push-Benachrichtigungen (Service Worker) ──────────────────────────────────
 const COLONY_EXPIRIES = [
-{% for colony in colonies %}{% if colony.expiry_hours is not none and colony.expiry_hours > 0 and colony.expiry_hours < 72 %}
-  {name: {{ colony.planet_name | tojson }}, char: {{ colony.character_name | tojson }}, expiry_ts: Date.now() + {{ (colony.expiry_hours * 3600000) | int }}},
+{% for colony in colonies %}{% if colony.expiry_hours is not none and colony.expiry_hours > 0 %}
+  {name: {{ colony.planet_name | tojson }}, char: {{ colony.character_name | tojson }},
+   system: {{ colony.solar_system_name | tojson }}, expiry_ts: Date.now() + {{ (colony.expiry_hours * 3600000) | int }}},
 {% endif %}{% endfor %}
 ];
 
 let swReg = null;
-const NOTIFY_KEY = 'eve_pi_notify';
+const NOTIFY_KEY       = 'eve_pi_notify';
+const NOTIFY_THRESH_KEY = 'eve_pi_notify_threshold'; // Minuten: 1440/720/60/15
+
+function getThreshold() {
+    return parseInt(localStorage.getItem(NOTIFY_THRESH_KEY) || '60', 10);
+}
 
 async function initServiceWorker() {
     if (!('serviceWorker' in navigator) || !('Notification' in window)) return;
     try {
         swReg = await navigator.serviceWorker.register('/static/sw.js');
         updateNotifyBtn();
+        updateThresholdUI();
         if (localStorage.getItem(NOTIFY_KEY) === '1' && COLONY_EXPIRIES.length > 0) {
             sendExpiriesToSW();
         }
@@ -556,7 +573,13 @@ async function initServiceWorker() {
 function sendExpiriesToSW() {
     if (!swReg) return;
     const target = swReg.active || swReg.installing || swReg.waiting;
-    if (target) target.postMessage({type: 'SET_EXPIRIES', expiries: COLONY_EXPIRIES});
+    if (!target) return;
+    const active = localStorage.getItem(NOTIFY_KEY) === '1' && Notification.permission === 'granted';
+    target.postMessage({
+        type: 'SET_EXPIRIES',
+        expiries: active ? COLONY_EXPIRIES : [],
+        threshold: getThreshold()
+    });
 }
 
 async function toggleNotifications() {
@@ -565,9 +588,11 @@ async function toggleNotifications() {
         return;
     }
     if (localStorage.getItem(NOTIFY_KEY) === '1') {
+        // Deaktivieren
         localStorage.removeItem(NOTIFY_KEY);
-        sendExpiriesToSW(); // leere Liste senden
+        sendExpiriesToSW();
         updateNotifyBtn();
+        updateThresholdUI();
         return;
     }
     const perm = await Notification.requestPermission();
@@ -575,7 +600,14 @@ async function toggleNotifications() {
         localStorage.setItem(NOTIFY_KEY, '1');
         sendExpiriesToSW();
         updateNotifyBtn();
+        updateThresholdUI();
     }
+}
+
+function setThreshold(minutes) {
+    localStorage.setItem(NOTIFY_THRESH_KEY, String(minutes));
+    updateThresholdUI();
+    if (localStorage.getItem(NOTIFY_KEY) === '1') sendExpiriesToSW();
 }
 
 function updateNotifyBtn() {
@@ -588,6 +620,30 @@ function updateNotifyBtn() {
     icon.style.color = active ? 'var(--eve-accent)' : '';
     btn.title = active ? 'Benachrichtigungen aktiv – klicken zum Deaktivieren'
                        : 'Extractor-Benachrichtigungen aktivieren';
+}
+
+function updateThresholdUI() {
+    const active = localStorage.getItem(NOTIFY_KEY) === '1'
+                   && Notification.permission === 'granted';
+    const panel = document.getElementById('notifySettingsPanel');
+    const featureBtn = document.getElementById('notifyFeatureBtn');
+    const featureTxt = document.getElementById('notifyFeatureTxt');
+    if (panel) panel.style.display = active ? '' : 'none';
+    if (featureBtn) {
+        featureBtn.innerHTML = active
+            ? '<i class="bi bi-bell-slash me-1"></i>Deaktivieren'
+            : '<i class="bi bi-bell me-1"></i>Aktivieren';
+    }
+    if (featureTxt) featureTxt.textContent = active ? 'Aktiv' : 'Verfügbar';
+
+    // Threshold-Buttons hervorheben
+    const t = getThreshold();
+    document.querySelectorAll('.notify-thresh-btn').forEach(b => {
+        const val = parseInt(b.dataset.minutes, 10);
+        b.classList.toggle('active', val === t);
+        b.style.background = val === t ? '#2a4a6b' : '';
+        b.style.color      = val === t ? 'var(--eve-accent)' : '';
+    });
 }
 
 initServiceWorker();

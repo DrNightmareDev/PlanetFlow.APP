@@ -214,7 +214,7 @@ def get_planet_info(planet_id: int) -> dict:
 
 _planet_info_cache: dict[int, dict] = {}  # planet_id -> data (permanent)
 _planet_detail_cache = {}  # (char_id, planet_id) -> (data, timestamp)
-PLANET_DETAIL_TTL = 900  # 15 Minuten (synchron mit Dashboard-Cache)
+PLANET_DETAIL_TTL = 600  # 10 Minuten (entspricht ESI-Cache von CCP)
 
 
 def invalidate_planet_detail_cache(character_id: int) -> None:

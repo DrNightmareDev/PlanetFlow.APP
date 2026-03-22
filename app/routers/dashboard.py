@@ -40,7 +40,7 @@ def invalidate_dashboard_cache(account_id: int) -> None:
     """Cache für einen Account sofort verwerfen (z.B. nach Char-Hinzufügen)."""
     _dashboard_cache.pop(account_id, None)
 
-DASHBOARD_CACHE_TTL = 900.0   # 15 Minuten
+DASHBOARD_CACHE_TTL = 600.0   # 10 Minuten (entspricht ESI-Cache von CCP)
 REFRESH_COOLDOWN_SEC = 60.0   # 60 Sekunden
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

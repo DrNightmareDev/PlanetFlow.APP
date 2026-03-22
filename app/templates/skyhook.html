@@ -176,7 +176,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                     <td style="min-width:320px;">
                         <div id="items_{{ colony.planet_id }}"
                              data-planet="{{ colony.planet_id }}"
-                             data-init="{{ cur_items | tojson | e }}"
+                             data-init='{{ cur_items | tojson }}'
                              data-char="{{ colony.character_name | e }}">
                         </div>
                         <div class="d-flex gap-2 mt-1">

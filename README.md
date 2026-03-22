@@ -22,7 +22,7 @@ Planetary Industry Dashboard für EVE Online — selbst gehostet, kein Cloud-Abo
 | **Ablauf-Timer** | Nächster Extractor-Ablauf mit Farb-Warnsystem, Filter für inaktive Kolonien |
 | **Push-Benachrichtigungen** | Browser-Notifications wenn Extractoren ablaufen (120/60/30/10 Min.) |
 | **Pagination** | Alle Tabellen mit konfigurierbarer Seitengröße (6/15/25/100/Alle) |
-| **PI Chain Planner** | Vollständige P1–P4 Produktionsketten mit interaktivem SVG-Graph |
+| **PI Chain Planner** | Vollständige P0–P4 Produktionsketten mit interaktivem SVG-Graph (PLANETS → RAW → P1 → … → P4) |
 | **Planeten-Filter** | Im Graphen Planeten anklicken → nicht produzierbare Knoten ausgegraut |
 | **Planner System-Check** | System direkt im Planner prüfen — zeigt ob alle P0-Ressourcen verfügbar sind |
 | **System Analyzer** | PI-Potential eines Systems analysieren (P0→P4 Ketten, Preise, Trends) |

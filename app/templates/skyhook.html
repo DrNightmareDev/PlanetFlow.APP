@@ -153,11 +153,9 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
         </button>
         <div class="ms-auto d-flex align-items-center gap-3">
             <span id="filterCount" class="text-muted" style="font-size:.75rem;"></span>
-            {% if total_value > 0 %}
-            <span style="font-size:.78rem;color:var(--eve-accent);white-space:nowrap;">
-                <i class="bi bi-cash-coin me-1"></i>{{ total_value | format_isk }}
+            <span id="sh-total-val" style="font-size:.78rem;color:var(--eve-accent);white-space:nowrap;{{ '' if total_value > 0 else 'display:none;' }}">
+                <i class="bi bi-cash-coin me-1"></i><span id="sh-total-val-text">{{ total_value | format_isk }}</span>
             </span>
-            {% endif %}
         </div>
     </div>
     <div class="card-body p-0">
@@ -246,7 +244,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
 
                     <!-- ISK Wert -->
                     {% set planet_value = values.get(colony.planet_id, 0) %}
-                    <td style="white-space:nowrap;">
+                    <td id="val_{{ colony.planet_id }}" style="white-space:nowrap;">
                         {% if planet_value > 0 %}
                         <span style="color:#7a9a6a;font-weight:600;font-size:.82rem;">{{ planet_value | format_isk }}</span>
                         {% else %}
@@ -293,6 +291,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
 {% block extra_scripts %}
 <script>
 const SH_PRODUCTS = {{ pi_products | tojson }};
+const SH_PRICES   = {{ prices | tojson }};
 
 // Volume lookup: product name → m³ per unit
 const SKYHOOK_CAP = 35000;
@@ -327,6 +326,50 @@ function updateFillBar(planetId) {
     }
 }
 
+function _fmtIsk(v) {
+    if (!v) return '—';
+    if (v >= 1e9) return (v/1e9).toFixed(2) + ' B ISK';
+    if (v >= 1e6) return (v/1e6).toFixed(2) + ' M ISK';
+    if (v >= 1e3) return (v/1e3).toFixed(1) + ' K ISK';
+    return v.toFixed(0) + ' ISK';
+}
+
+function updateValueCell(planetId) {
+    const container = document.getElementById('items_' + planetId);
+    const cell = document.getElementById('val_' + planetId);
+    if (!container || !cell) return;
+    let total = 0;
+    container.querySelectorAll('.sh-item-row').forEach(row => {
+        const prod = row.querySelector('.sh-prod')?.value;
+        const qty  = parseInt(row.querySelector('.sh-qty')?.value || '0') || 0;
+        if (prod && qty > 0) total += (SH_PRICES[prod] || 0) * qty;
+    });
+    cell.innerHTML = total > 0
+        ? `<span style="color:#7a9a6a;font-weight:600;font-size:.82rem;">${_fmtIsk(total)}</span>`
+        : '<span class="text-muted">—</span>';
+    _updateTotalValue();
+}
+
+function _updateTotalValue() {
+    let grand = 0;
+    document.querySelectorAll('[id^="val_"]').forEach(cell => {
+        const span = cell.querySelector('span[style*="7a9a6a"]');
+        if (!span) return;
+        const txt = span.textContent.trim();
+        // parse back: "1.23 M ISK" etc.
+        const m = txt.match(/([\d.]+)\s*([BKMG]?)\s*ISK/);
+        if (!m) return;
+        const n = parseFloat(m[1]);
+        const mul = {B:1e9, M:1e6, K:1e3}[m[2]] || 1;
+        grand += n * mul;
+    });
+    const el = document.getElementById('sh-total-val');
+    const txt = document.getElementById('sh-total-val-text');
+    if (!el || !txt) return;
+    if (grand > 0) { txt.textContent = _fmtIsk(grand); el.style.display = ''; }
+    else el.style.display = 'none';
+}
+
 function buildOptions(selected) {
     let html = '<option value="">— Produkt —</option>';
     for (const [tier, prods] of Object.entries(SH_PRODUCTS)) {
@@ -350,14 +393,15 @@ function makeRow(planetId, prodName = '', qty = '') {
     div.querySelector('.sh-qty').addEventListener('keydown', e => {
         if (e.key === 'Enter') { e.preventDefault(); saveEntry(planetId); }
     });
-    div.querySelector('.sh-qty').addEventListener('input',  () => updateFillBar(planetId));
-    div.querySelector('.sh-prod').addEventListener('change', () => updateFillBar(planetId));
+    div.querySelector('.sh-qty').addEventListener('input',  () => { updateFillBar(planetId); updateValueCell(planetId); });
+    div.querySelector('.sh-prod').addEventListener('change', () => { updateFillBar(planetId); updateValueCell(planetId); });
     return div;
 }
 
 function addRow(planetId, prodName = '', qty = '') {
     document.getElementById('items_' + planetId).appendChild(makeRow(planetId, prodName, qty));
     updateFillBar(planetId);
+    updateValueCell(planetId);
 }
 
 function removeRow(btn) {
@@ -371,6 +415,7 @@ function removeRow(btn) {
         row.querySelector('input').value = '';
     }
     updateFillBar(planetId);
+    updateValueCell(planetId);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -384,6 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
             container.appendChild(makeRow(planetId));
         }
         updateFillBar(planetId);
+        updateValueCell(planetId);
     });
 
     // Sort headers

@@ -169,7 +169,7 @@ def system_analyzer_direct(
 ):
     """Direktlink: /system/Jita oder /system/30000142"""
     preset_system = sde.find_system(system_query)
-    preset_error = None if preset_system else f"System „{system_query}" nicht gefunden."
+    preset_error = None if preset_system else f'System "{system_query}" nicht gefunden.'
     return templates.TemplateResponse("system.html", {
         "request": request,
         "account": account,

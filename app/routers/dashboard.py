@@ -66,13 +66,26 @@ def _hours_until(dt: datetime | None) -> float | None:
     return (dt - now).total_seconds() / 3600.0
 
 
-# Launchpad type IDs (alle Planetentypen) + Storage Facility
+# Launchpad + Storage Facility type IDs je Planetentyp (aus SDE verifiziert)
 _STORAGE_TYPE_IDS: dict[int, tuple[str, float]] = {
-    2257: ("Storage", 12_000.0),
-    2544: ("Launchpad", 500_000.0), 2547: ("Launchpad", 500_000.0),
-    2550: ("Launchpad", 500_000.0), 2553: ("Launchpad", 500_000.0),
-    2556: ("Launchpad", 500_000.0), 2559: ("Launchpad", 500_000.0),
-    2562: ("Launchpad", 500_000.0), 2565: ("Launchpad", 500_000.0),
+    # Launchpads (500.000 m³ Spielkapazität)
+    2543: ("Launchpad", 500_000.0),  # Gas
+    2544: ("Launchpad", 500_000.0),  # Barren
+    2542: ("Launchpad", 500_000.0),  # Oceanic
+    2552: ("Launchpad", 500_000.0),  # Ice
+    2555: ("Launchpad", 500_000.0),  # Lava
+    2556: ("Launchpad", 500_000.0),  # Plasma
+    2557: ("Launchpad", 500_000.0),  # Storm
+    2256: ("Launchpad", 500_000.0),  # Temperate
+    # Storage Facilities (12.000 m³)
+    2257: ("Storage", 12_000.0),     # Ice
+    2535: ("Storage", 12_000.0),     # Oceanic
+    2536: ("Storage", 12_000.0),     # Gas
+    2541: ("Storage", 12_000.0),     # Barren
+    2558: ("Storage", 12_000.0),     # Lava
+    2560: ("Storage", 12_000.0),     # Plasma
+    2561: ("Storage", 12_000.0),     # Storm
+    2562: ("Storage", 12_000.0),     # Temperate
 }
 
 # PI Produktvolumen m³ nach Tier

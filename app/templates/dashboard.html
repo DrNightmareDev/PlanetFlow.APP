@@ -262,6 +262,9 @@
                                 <td>
                                     {% if colony.highest_tier %}
                                     <span class="badge eve-tier-badge eve-tier-{{ colony.highest_tier | lower }}">{{ colony.highest_tier }}</span>
+                                    {% for f in colony.factories | selectattr('tier', 'equalto', colony.highest_tier) | list %}
+                                    <div style="font-size:.65rem;color:#7ec8e3;margin-top:2px;white-space:nowrap;">{{ f.name }}</div>
+                                    {% endfor %}
                                     {% else %}
                                     <span class="text-muted small">—</span>
                                     {% endif %}
@@ -293,27 +296,25 @@
                                 <td>
                                     {% if colony.storage %}
                                         {% set max_pct = colony.storage | map(attribute='fill_pct') | max %}
-                                        {% set total_used = colony.storage | map(attribute='used_m3') | sum %}
-                                        {% if max_pct > 85 %}
-                                            {% set bar_color = '#e74c3c' %}
-                                        {% elif max_pct > 60 %}
-                                            {% set bar_color = '#f4a300' %}
-                                        {% else %}
-                                            {% set bar_color = '#2dc653' %}
-                                        {% endif %}
-                                        <div style="min-width:70px;" title="{% for s in colony.storage %}{{ s.label }}: {{ s.fill_pct }}%{% if not loop.last %}, {% endif %}{% endfor %}">
-                                            <div class="d-flex justify-content-between" style="font-size:.7rem;color:#7a8a9a;margin-bottom:2px;">
-                                                <span>{{ colony.storage | length }}×</span>
-                                                {% if max_pct == 0 %}
-                                                <span style="color:#3a5a7a;">Leer</span>
-                                                {% else %}
-                                                <span>{{ max_pct }}%</span>
-                                                {% endif %}
-                                            </div>
-                                            <div style="height:5px;background:#1a2d3d;border-radius:3px;overflow:hidden;">
-                                                <div style="height:100%;width:{{ [max_pct, 2] | max }}%;background:{{ bar_color }};border-radius:3px;transition:width .3s;opacity:{{ '0.3' if max_pct == 0 else '1' }};"></div>
-                                            </div>
-                                        </div>
+                                        {% if max_pct > 85 %}{% set clr = '#e74c3c' %}
+                                        {% elif max_pct > 60 %}{% set clr = '#f4a300' %}
+                                        {% else %}{% set clr = '#2dc653' %}{% endif %}
+                                        {% set ns = namespace(tip='') %}
+                                        {% for s in colony.storage %}
+                                            {% set ns.tip = ns.tip ~ s.label ~ ': ' ~ s.fill_pct ~ '%' %}
+                                            {% if s.items %}
+                                                {% for it in s.items %}{% set ns.tip = ns.tip ~ ' · ' ~ it.name ~ ' ' ~ it.amount %}{% endfor %}
+                                            {% else %}
+                                                {% set ns.tip = ns.tip ~ ' · leer' %}
+                                            {% endif %}
+                                            {% if not loop.last %}{% set ns.tip = ns.tip ~ '&#10;' %}{% endif %}
+                                        {% endfor %}
+                                        <span class="eve-storage-badge"
+                                              style="color:{{ clr }};"
+                                              data-bs-toggle="tooltip" data-bs-html="false"
+                                              title="{{ ns.tip }}">
+                                            {{ colony.storage | length }}× {% if max_pct == 0 %}leer{% else %}{{ max_pct }}%{% endif %}
+                                        </span>
                                     {% else %}
                                         <span class="text-muted small">—</span>
                                     {% endif %}
@@ -830,5 +831,18 @@ initServiceWorker();
 <style>
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { display: inline-block; animation: spin 0.8s linear infinite; }
+.eve-storage-badge {
+    font-size: .75rem;
+    font-weight: 500;
+    cursor: default;
+    border-bottom: 1px dashed currentColor;
+    opacity: .85;
+    white-space: nowrap;
+}
 </style>
+<script>
+document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+    new bootstrap.Tooltip(el, {trigger: 'hover', placement: 'left'});
+});
+</script>
 {% endblock %}

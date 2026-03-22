@@ -58,10 +58,13 @@ def _load_history(account_id: int, planet_ids: list[int], db: Session, limit: in
         .all()
     )
     result: dict = {}
+    planet_seen: dict = {}
     for e in entries:
         pid = e.planet_id
-        if pid not in result:
-            result[pid] = []
+        planet_seen[pid] = planet_seen.get(pid, 0) + 1
+        if planet_seen[pid] == 1:
+            continue  # skip most recent — already visible in the form
+        result.setdefault(pid, [])
         if len(result[pid]) < limit:
             result[pid].append({
                 "recorded_at": e.recorded_at.strftime("%d.%m.%Y %H:%M") if e.recorded_at else "—",

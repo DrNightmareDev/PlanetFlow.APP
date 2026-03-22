@@ -213,6 +213,12 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                                 <i class="bi bi-floppy me-1"></i>Speichern
                             </button>
                         </div>
+                        <div style="margin-top:5px;">
+                            <div style="height:3px;background:var(--eve-card-border);border-radius:2px;overflow:hidden;">
+                                <div id="fill_bar_{{ colony.planet_id }}" style="height:100%;width:0%;background:#7a9a6a;transition:width .15s;border-radius:2px;"></div>
+                            </div>
+                            <div id="fill_text_{{ colony.planet_id }}" style="font-size:.63rem;color:var(--eve-text-muted);margin-top:2px;"></div>
+                        </div>
                     </td>
 
                     <!-- Verlauf -->
@@ -254,6 +260,39 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
 <script>
 const SH_PRODUCTS = {{ pi_products | tojson }};
 
+// Volume lookup: product name → m³ per unit
+const SKYHOOK_CAP = 35000;
+const _TIER_VOLS = { P1: 0.19, P2: 0.75, P3: 3.0, P4: 50.0 };
+const SH_VOL = {};
+for (const [tier, prods] of Object.entries(SH_PRODUCTS)) {
+    const v = _TIER_VOLS[tier];
+    if (v !== undefined) prods.forEach(p => SH_VOL[p] = v);
+}
+
+function updateFillBar(planetId) {
+    const container = document.getElementById('items_' + planetId);
+    const bar  = document.getElementById('fill_bar_'  + planetId);
+    const text = document.getElementById('fill_text_' + planetId);
+    if (!bar || !text || !container) return;
+    let used = 0;
+    container.querySelectorAll('.sh-item-row').forEach(row => {
+        const prod = row.querySelector('.sh-prod')?.value;
+        const qty  = parseInt(row.querySelector('.sh-qty')?.value || '0') || 0;
+        if (prod && qty > 0) used += (SH_VOL[prod] || 0) * qty;
+    });
+    const pct   = Math.min(used / SKYHOOK_CAP * 100, 100);
+    const color = pct > 90 ? '#e63946' : pct > 70 ? '#f4a300' : '#7a9a6a';
+    bar.style.width      = pct.toFixed(1) + '%';
+    bar.style.background = color;
+    if (used > 0) {
+        const usedStr = used >= 1000 ? (used / 1000).toFixed(1) + 'k' : used.toFixed(0);
+        text.textContent  = `${usedStr} / 35k m³  (${pct.toFixed(0)}%)`;
+        text.style.color  = pct > 90 ? color : 'var(--eve-text-muted)';
+    } else {
+        text.textContent = '';
+    }
+}
+
 function buildOptions(selected) {
     let html = '<option value="">— Produkt —</option>';
     for (const [tier, prods] of Object.entries(SH_PRODUCTS)) {
@@ -277,22 +316,27 @@ function makeRow(planetId, prodName = '', qty = '') {
     div.querySelector('.sh-qty').addEventListener('keydown', e => {
         if (e.key === 'Enter') { e.preventDefault(); saveEntry(planetId); }
     });
+    div.querySelector('.sh-qty').addEventListener('input',  () => updateFillBar(planetId));
+    div.querySelector('.sh-prod').addEventListener('change', () => updateFillBar(planetId));
     return div;
 }
 
 function addRow(planetId, prodName = '', qty = '') {
     document.getElementById('items_' + planetId).appendChild(makeRow(planetId, prodName, qty));
+    updateFillBar(planetId);
 }
 
 function removeRow(btn) {
     const row = btn.closest('.sh-item-row');
     const container = row.parentElement;
+    const planetId = parseInt(container.dataset.planet);
     if (container.querySelectorAll('.sh-item-row').length > 1) {
         row.remove();
     } else {
         row.querySelector('select').value = '';
         row.querySelector('input').value = '';
     }
+    updateFillBar(planetId);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -305,6 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             container.appendChild(makeRow(planetId));
         }
+        updateFillBar(planetId);
     });
 
     // URL param: highlight specific planet

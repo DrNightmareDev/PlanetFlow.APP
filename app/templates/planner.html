@@ -415,6 +415,7 @@ function selectProduct(p) {
     dropdown.classList.add('d-none');
     selectedPlanets.clear();
     updatePlanetFilterUI();
+    history.replaceState(null, '', '/planner?product=' + encodeURIComponent(p.name));
     renderChain(p);
     updateFavBtn();
     renderFavoritesBlock();
@@ -424,6 +425,7 @@ function clearSelection() {
     selectedProduct = null;
     searchInput.value = '';
     dropdown.classList.add('d-none');
+    history.replaceState(null, '', '/planner');
     document.getElementById('emptyState').classList.remove('d-none');
     document.getElementById('chainResult').classList.add('d-none');
 }

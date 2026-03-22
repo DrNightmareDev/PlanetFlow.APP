@@ -24,4 +24,4 @@ echo "Datenbank erreichbar. Starte Migrationen..."
 alembic upgrade head
 
 echo "Starte Anwendung..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1

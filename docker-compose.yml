@@ -26,6 +26,7 @@ services:
       DATABASE_URL: postgresql://evepi:${DB_PASSWORD:-evepi_secret}@db/evepi
     volumes:
       - ./app/static:/app/app/static:ro
+      - sde_data:/app/data
     expose:
       - "8000"
 
@@ -42,3 +43,4 @@ services:
 
 volumes:
   postgres_data:
+  sde_data:

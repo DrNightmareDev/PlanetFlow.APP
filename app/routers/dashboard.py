@@ -373,6 +373,8 @@ def _build_dashboard_payload(account, characters: list, db: Session) -> dict:
             "character_name": char.character_name,
             "character_portrait": char.portrait_url,
             "corporation_id": char.corporation_id,
+            "corporation_name": char.corporation_name or "",
+            "alliance_name": char.alliance_name or "",
             "expiry_hours": expiry_hours,
             "isk_day": isk_day,
             "highest_tier": highest_tier,

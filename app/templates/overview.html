@@ -19,7 +19,7 @@
         <div class="eve-stat-card card border-0 h-100">
             <div class="card-body text-center p-3">
                 <div class="eve-stat-icon mb-2"><i class="bi bi-globe2 fs-3"></i></div>
-                <div class="eve-stat-value">{{ total_colonies }}</div>
+                <div class="eve-stat-value" id="visibleCount">{{ total_colonies }}</div>
                 <div class="eve-stat-label">Kolonien gesamt</div>
             </div>
         </div>
@@ -28,7 +28,7 @@
         <div class="eve-stat-card card border-0 h-100">
             <div class="card-body text-center p-3">
                 <div class="eve-stat-icon mb-2"><i class="bi bi-currency-exchange fs-3"></i></div>
-                <div class="eve-stat-value">{{ total_isk_day | format_isk }}</div>
+                <div class="eve-stat-value" id="visibleIsk">{{ total_isk_day | format_isk }}</div>
                 <div class="eve-stat-label">ISK / Tag gesamt</div>
             </div>
         </div>
@@ -37,7 +37,7 @@
     <div class="col-12 col-lg-6">
         <div class="eve-stat-card card border-0 h-100">
             <div class="card-body p-3">
-                <div class="small text-muted mb-1"><i class="bi bi-hourglass-split me-1"></i>Noch nicht geladen (Dashboard einmal besuchen):</div>
+                <div class="small text-muted mb-1"><i class="bi bi-hourglass-split me-1"></i>Noch nicht geladen:</div>
                 <div class="d-flex flex-wrap gap-1">
                 {% for u in uncached %}
                     <span class="badge" style="background:#1a2d3d;color:#7a8a9a;border:1px solid #2a4a6b;">{{ u.main_name }}</span>
@@ -49,12 +49,44 @@
     {% endif %}
 </div>
 
+<!-- Filter -->
+<div class="eve-card card border-0 mb-3">
+    <div class="card-body p-3">
+        <div class="row g-2 align-items-center">
+            <div class="col-sm-6 col-lg-3">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text" style="background:#0a1520;border-color:#1a2d3d;color:#586e75;"><i class="bi bi-person"></i></span>
+                    <input type="text" id="filterChar" class="form-control eve-input" placeholder="Charakter..." oninput="applyOverviewFilters()">
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text" style="background:#0a1520;border-color:#1a2d3d;color:#586e75;"><i class="bi bi-building"></i></span>
+                    <input type="text" id="filterCorp" class="form-control eve-input" placeholder="Korporation..." oninput="applyOverviewFilters()">
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text" style="background:#0a1520;border-color:#1a2d3d;color:#586e75;"><i class="bi bi-diagram-2"></i></span>
+                    <input type="text" id="filterAlli" class="form-control eve-input" placeholder="Allianz..." oninput="applyOverviewFilters()">
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text" style="background:#0a1520;border-color:#1a2d3d;color:#586e75;"><i class="bi bi-geo-alt"></i></span>
+                    <input type="text" id="filterSystem" class="form-control eve-input" placeholder="System / Region..." oninput="applyOverviewFilters()">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Kolonien-Tabelle -->
 <div class="eve-card card border-0">
     <div class="card-header eve-card-header d-flex align-items-center gap-2">
         <i class="bi bi-globe2 eve-accent"></i>
         <span class="fw-medium">Alle Kolonien</span>
-        <span class="badge eve-badge-count">{{ total_colonies }}</span>
+        <span class="badge eve-badge-count" id="tableBadge">{{ total_colonies }}</span>
     </div>
     <div class="card-body p-0">
         {% if all_colonies %}
@@ -62,7 +94,8 @@
             <table class="table eve-table mb-0" id="overviewTable">
                 <thead>
                     <tr>
-                        <th>Account / Charakter</th>
+                        <th>Charakter</th>
+                        <th>Korporation / Allianz</th>
                         <th>Ort</th>
                         <th>Typ</th>
                         <th>Stufe</th>
@@ -74,12 +107,30 @@
                 </thead>
                 <tbody>
                 {% for colony in all_colonies %}
-                <tr>
+                <tr
+                    data-char="{{ colony.character_name | lower }}"
+                    data-corp="{{ colony.corporation_name | lower }}"
+                    data-alli="{{ colony.alliance_name | lower }}"
+                    data-system="{{ colony.solar_system_name | lower }} {{ colony.region_name | lower }}"
+                    data-isk="{{ colony.isk_day }}">
                     <td>
                         <div class="d-flex align-items-center gap-2">
                             <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle" onerror="this.src='/static/img/default_char.svg'">
                             <span class="small">{{ colony.character_name }}</span>
                         </div>
+                    </td>
+                    <td class="small">
+                        {% if colony.corporation_name %}
+                        <div>{{ colony.corporation_name }}</div>
+                        {% endif %}
+                        {% if colony.alliance_name %}
+                        <div style="color:#4a6a8a;font-size:.7rem;" title="{{ colony.alliance_name }}">
+                            {% set words = colony.alliance_name.split() %}
+                            {% set tag = '' %}
+                            {% for w in words %}{% set tag = tag ~ w[0] %}{% endfor %}
+                            [{{ tag | upper }}]
+                        </div>
+                        {% endif %}
                     </td>
                     <td class="small">
                         <div>{{ colony.planet_name }}</div>
@@ -146,6 +197,9 @@
                 </tbody>
             </table>
         </div>
+        <div id="noResultsMsg" style="display:none;" class="text-center py-4 text-muted small">
+            <i class="bi bi-search me-1"></i>Keine Kolonien gefunden.
+        </div>
         {% else %}
         <div class="text-center py-5">
             <i class="bi bi-globe fs-1 text-muted d-block mb-3"></i>
@@ -155,4 +209,48 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const TOTAL_ISK_ALL = {{ total_isk_day }};
+
+function formatIsk(val) {
+    if (!val || val === 0) return '—';
+    if (val >= 1e9) return (val / 1e9).toFixed(2) + ' B ISK';
+    if (val >= 1e6) return (val / 1e6).toFixed(2) + ' M ISK';
+    if (val >= 1e3) return (val / 1e3).toFixed(1) + ' K ISK';
+    return Math.round(val) + ' ISK';
+}
+
+function applyOverviewFilters() {
+    const char   = document.getElementById('filterChar').value.toLowerCase().trim();
+    const corp   = document.getElementById('filterCorp').value.toLowerCase().trim();
+    const alli   = document.getElementById('filterAlli').value.toLowerCase().trim();
+    const system = document.getElementById('filterSystem').value.toLowerCase().trim();
+
+    const rows = document.querySelectorAll('#overviewTable tbody tr');
+    let visible = 0;
+    let iskSum = 0;
+
+    rows.forEach(row => {
+        const match =
+            (!char   || row.dataset.char.includes(char)) &&
+            (!corp   || row.dataset.corp.includes(corp)) &&
+            (!alli   || row.dataset.alli.includes(alli)) &&
+            (!system || row.dataset.system.includes(system));
+
+        row.style.display = match ? '' : 'none';
+        if (match) {
+            visible++;
+            iskSum += parseFloat(row.dataset.isk) || 0;
+        }
+    });
+
+    document.getElementById('visibleCount').textContent = visible;
+    document.getElementById('visibleIsk').textContent   = formatIsk(iskSum);
+    document.getElementById('tableBadge').textContent   = visible;
+    document.getElementById('noResultsMsg').style.display = visible === 0 ? '' : 'none';
+}
+</script>
 {% endblock %}

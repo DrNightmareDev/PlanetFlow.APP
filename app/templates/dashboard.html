@@ -219,7 +219,6 @@
                                 </th>
                                 <th>Lager</th>
                                 <th>Skyhook</th>
-                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -241,9 +240,6 @@
                                 </td>
                                 <td class="small">
                                     <div>{{ colony.planet_name }}</div>
-                                    {% if colony.solar_system_name and colony.solar_system_name != '—' %}
-                                    <div style="color:#4a6a8a;font-size:.7rem;">{{ colony.solar_system_name }}</div>
-                                    {% endif %}
                                     {% if colony.region_name and colony.region_name != '—' %}
                                     <div style="color:#3a5a7a;font-size:.65rem;">{{ colony.region_name }}</div>
                                     {% endif %}
@@ -314,7 +310,7 @@
                                         {% elif max_pct > 60 %}{% set clr = '#f4a300' %}
                                         {% else %}{% set clr = '#2dc653' %}{% endif %}
                                         <div class="eve-hover-wrap">
-                                            <span class="eve-storage-badge" style="color:{{ clr }};">
+                                            <span class="eve-storage-badge" style="color:{{ clr }};cursor:pointer;" onclick="openColonyDetail({{ loop.index0 }})">
                                                 {{ colony.storage | length }}× {% if max_pct == 0 %}leer{% else %}{{ max_pct }}%{% endif %}
                                             </span>
                                             <div class="eve-hover-card eve-hover-card-right">
@@ -373,13 +369,6 @@
                                         <i class="bi bi-box-seam"></i>
                                     </a>
                                     </div>
-                                </td>
-                                <td>
-                                    <button class="btn btn-sm eve-btn-outline"
-                                            onclick="openColonyDetail({{ loop.index0 }})"
-                                            title="Details anzeigen">
-                                        <i class="bi bi-eye"></i>
-                                    </button>
                                 </td>
                             </tr>
                             {% endfor %}

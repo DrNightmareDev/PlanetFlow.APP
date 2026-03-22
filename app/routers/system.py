@@ -159,3 +159,21 @@ def analyze(system_id: int, account=Depends(require_account)):
         })
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@router.get("/{system_query}", response_class=HTMLResponse)
+def system_analyzer_direct(
+    request: Request,
+    system_query: str,
+    account=Depends(require_account),
+):
+    """Direktlink: /system/Jita oder /system/30000142"""
+    preset_system = sde.find_system(system_query)
+    preset_error = None if preset_system else f"System „{system_query}" nicht gefunden."
+    return templates.TemplateResponse("system.html", {
+        "request": request,
+        "account": account,
+        "planet_type_colors": PLANET_TYPE_COLORS,
+        "preset_system": preset_system,
+        "preset_error": preset_error,
+    })

@@ -279,6 +279,39 @@ def init():
     _load_regions()
 
 
+def find_system(query: str) -> dict | None:
+    """
+    Sucht ein System per Name (exakt, case-insensitiv) oder System-ID (numerisch).
+    Returns: {id, name, security, region} oder None wenn nicht gefunden.
+    """
+    # Numerische ID?
+    try:
+        system_id = int(query)
+        data = _systems_by_id.get(system_id)
+        if data:
+            return {
+                "id": system_id,
+                "name": data["name"],
+                "security": round(data["security"], 1),
+                "region": _regions.get(data.get("region_id", 0), ""),
+            }
+        return None
+    except ValueError:
+        pass
+    # Exakter Namens-Treffer (case-insensitiv)
+    result = _systems.get(query.lower())
+    if result:
+        sys_id, name, security = result
+        sys_data = _systems_by_id.get(sys_id, {})
+        return {
+            "id": sys_id,
+            "name": name,
+            "security": round(security, 1),
+            "region": _regions.get(sys_data.get("region_id", 0), ""),
+        }
+    return None
+
+
 def get_schematic(schematic_id: int) -> dict | None:
     """Gibt normalisiertes Schematic-Dict zurück oder None wenn unbekannt."""
     return _schematics.get(schematic_id)

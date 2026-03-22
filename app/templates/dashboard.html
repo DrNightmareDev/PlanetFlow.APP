@@ -262,7 +262,7 @@
                                 <td>
                                     {% if colony.highest_tier %}
                                     <span class="badge eve-tier-badge eve-tier-{{ colony.highest_tier | lower }}">{{ colony.highest_tier }}</span>
-                                    {% for f in colony.factories | selectattr('tier', 'equalto', colony.highest_tier) | list %}
+                                    {% for f in colony.factories | selectattr('tier', 'equalto', colony.highest_tier) | unique(attribute='name') %}
                                     <div style="font-size:.65rem;color:#7ec8e3;margin-top:2px;white-space:nowrap;">{{ f.name }}</div>
                                     {% endfor %}
                                     {% else %}

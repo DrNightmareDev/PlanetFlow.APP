@@ -47,27 +47,21 @@
         <div class="collapse navbar-collapse" id="navMain">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0 gap-1">
                 <li class="nav-item">
-                    <a class="nav-link {% if request.url.path.startswith('/dashboard') and not request.url.path.startswith('/dashboard/characters') %}active{% endif %}"
+                    <a class="nav-link {% if request.url.path.startswith('/dashboard') and not request.url.path.startswith('/dashboard/characters') and not request.url.path.startswith('/dashboard/overview') and not request.url.path.startswith('/dashboard/corp') %}active{% endif %}"
                        href="/dashboard">
                         <i class="bi bi-speedometer2 me-1"></i>Dashboard
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.url.path.startswith('/dashboard/characters') %}active{% endif %}"
-                       href="/dashboard/characters">
-                        <i class="bi bi-people me-1"></i>Charaktere
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.url.path.startswith('/planner') %}active{% endif %}"
-                       href="/planner">
-                        <i class="bi bi-diagram-3 me-1"></i>PI Planner
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link {% if request.url.path.startswith('/skyhook') %}active{% endif %}"
                        href="/skyhook">
                         <i class="bi bi-box-seam me-1"></i>Skyhooks
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.url.path.startswith('/planner') %}active{% endif %}"
+                       href="/planner">
+                        <i class="bi bi-diagram-3 me-1"></i>PI Chain Planner
                     </a>
                 </li>
                 <li class="nav-item">
@@ -90,15 +84,15 @@
                 </li>
                 {% if account and account.is_owner %}
                 <li class="nav-item">
-                    <a class="nav-link {% if request.url.path == '/dashboard/overview' %}active{% endif %}"
-                       href="/dashboard/overview">
-                        <i class="bi bi-grid-3x3-gap me-1"></i>Übersicht
-                    </a>
-                </li>
-                <li class="nav-item">
                     <a class="nav-link {% if request.url.path == '/dashboard/corp' %}active{% endif %}"
                        href="/dashboard/corp">
                         <i class="bi bi-building me-1"></i>Corporation
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.url.path == '/dashboard/overview' %}active{% endif %}"
+                       href="/dashboard/overview">
+                        <i class="bi bi-grid-3x3-gap me-1"></i>Übersicht
                     </a>
                 </li>
                 {% if account.is_admin %}
@@ -110,8 +104,7 @@
                 </li>
                 {% else %}
                 <li class="nav-item">
-                    <a class="nav-link" href="/auth/become-admin" style="color:#f4a300;"
-                       title="Admin-Rechte wiederherstellen">
+                    <a class="nav-link" href="/auth/become-admin" style="color:#f4a300;">
                         <i class="bi bi-star-fill me-1"></i>Admin werden
                     </a>
                 </li>
@@ -147,28 +140,11 @@
                     {% endif %}
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end eve-dropdown">
-                    <!-- Andere Charaktere als Main setzen -->
-                    {% for char in account.characters %}
-                    {% if char.id != account.main_character_id %}
                     <li>
-                        <div class="dropdown-item eve-alt-item d-flex align-items-center gap-2">
-                            <img src="{{ char.portrait_url }}"
-                                 alt="{{ char.character_name }}"
-                                 class="eve-portrait-xs rounded-circle"
-                                 onerror="this.src='/static/img/default_char.svg'">
-                            <div class="flex-grow-1">
-                                <div class="small fw-medium">{{ char.character_name }}</div>
-                                <div class="text-muted" style="font-size:0.7rem;">{{ char.corporation_name or '' }}</div>
-                            </div>
-                            <a href="/auth/set-main/{{ char.id }}"
-                               class="btn btn-outline-secondary btn-sm py-0 px-1"
-                               title="Als Main setzen">
-                                <i class="bi bi-star"></i>
-                            </a>
-                        </div>
+                        <a class="dropdown-item" href="/dashboard/characters">
+                            <i class="bi bi-people me-2"></i>Charaktere verwalten
+                        </a>
                     </li>
-                    {% endif %}
-                    {% endfor %}
                     <li><hr class="dropdown-divider eve-divider"></li>
                     <li>
                         <a class="dropdown-item" href="/auth/add-character">

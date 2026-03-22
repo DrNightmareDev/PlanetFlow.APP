@@ -382,24 +382,23 @@ async function openForceLoad() {
     const res = await fetch(`/dashboard/corp/accounts?corp_id=${_corpId}`);
     const { accounts } = await res.json();
 
+    const uncached = accounts.filter(a => !a.is_cached);
+
     const list = document.getElementById('forceLoadList');
     list.innerHTML = '';
-    accounts.forEach(acc => {
+    if (!uncached.length) {
+        list.insertAdjacentHTML('beforeend', '<div class="text-muted small py-2">Alle Accounts sind bereits gecacht.</div>');
+    }
+    uncached.forEach(acc => {
         list.insertAdjacentHTML('beforeend', `
         <div class="d-flex align-items-center gap-2 py-1 border-bottom" style="border-color:var(--eve-card-border)!important;">
             <span id="spin_${acc.account_id}" class="d-inline-flex" style="width:1rem;text-align:center;">
-                ${acc.is_cached
-                    ? '<i class="bi bi-check-circle-fill" style="color:#2dc653;"></i>'
-                    : '<i class="bi bi-hourglass" style="color:var(--eve-text-muted);"></i>'}
+                <i class="bi bi-hourglass" style="color:var(--eve-text-muted);"></i>
             </span>
             <span class="flex-grow-1">${acc.main_name}</span>
-            <span id="status_${acc.account_id}" class="small text-muted ms-auto">
-                ${acc.is_cached ? 'gecacht' : 'ausstehend'}
-            </span>
+            <span id="status_${acc.account_id}" class="small text-muted ms-auto">ausstehend</span>
         </div>`);
     });
-
-    const uncached = accounts.filter(a => !a.is_cached);
     document.getElementById('forceLoadRemaining').textContent = uncached.length;
     document.getElementById('forceLoadDoneBtn').classList.add('d-none');
     document.getElementById('forceLoadSpinner').style.display = uncached.length ? '' : 'none';

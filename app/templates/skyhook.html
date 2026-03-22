@@ -151,7 +151,14 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
         <button id="filterResetBtn" class="btn btn-sm eve-btn-ghost d-none" onclick="resetFilters()">
             <i class="bi bi-x-circle me-1"></i>Reset
         </button>
-        <span id="filterCount" class="text-muted ms-auto" style="font-size:.75rem;"></span>
+        <div class="ms-auto d-flex align-items-center gap-3">
+            <span id="filterCount" class="text-muted" style="font-size:.75rem;"></span>
+            {% if total_value > 0 %}
+            <span style="font-size:.78rem;color:var(--eve-accent);white-space:nowrap;">
+                <i class="bi bi-cash-coin me-1"></i>{{ total_value | format_isk }}
+            </span>
+            {% endif %}
+        </div>
     </div>
     <div class="card-body p-0">
         <div style="overflow-x:auto;">
@@ -164,6 +171,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                         <th class="eve-sortable" data-col="system">System <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
                         <th class="eve-sortable" data-col="product">Max. Produkt <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
                         <th>Skyhook Bestand</th>
+                        <th style="width:110px;white-space:nowrap;">Wert (ISK)</th>
                         <th style="width:80px;"></th>
                     </tr>
                 </thead>
@@ -234,6 +242,16 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                             </div>
                             <div id="fill_text_{{ colony.planet_id }}" style="font-size:.63rem;color:var(--eve-text-muted);margin-top:2px;"></div>
                         </div>
+                    </td>
+
+                    <!-- ISK Wert -->
+                    {% set planet_value = values.get(colony.planet_id, 0) %}
+                    <td style="white-space:nowrap;">
+                        {% if planet_value > 0 %}
+                        <span style="color:#7a9a6a;font-weight:600;font-size:.82rem;">{{ planet_value | format_isk }}</span>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
                     </td>
 
                     <!-- Verlauf -->

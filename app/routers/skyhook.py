@@ -80,12 +80,24 @@ def skyhook_page(
     db: Session = Depends(get_db),
 ):
     from app.routers.dashboard import _dashboard_cache
+    from app.market import get_sell_prices_by_names
     cached = _dashboard_cache.get(account.id)
     colonies = cached["colonies"] if cached else []
 
     planet_ids = [c["planet_id"] for c in colonies if c.get("planet_id")]
     latest  = _load_latest(account.id, planet_ids, db)
     history = _load_history(account.id, planet_ids, db)
+
+    # Prices for all products in current inventory
+    all_products = {it["product_name"] for items in latest.values() for it in items}
+    prices = get_sell_prices_by_names(list(all_products)) if all_products else {}
+
+    # Per-planet ISK value
+    values: dict[int, float] = {
+        pid: sum(it["quantity"] * prices.get(it["product_name"], 0.0) for it in items)
+        for pid, items in latest.items()
+    }
+    total_value = sum(values.values())
 
     return templates.TemplateResponse("skyhook.html", {
         "request": request,
@@ -94,6 +106,9 @@ def skyhook_page(
         "latest": latest,
         "history": history,
         "pi_products": PI_PRODUCTS_BY_TIER,
+        "prices": prices,
+        "values": values,
+        "total_value": total_value,
     })
 
 

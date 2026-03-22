@@ -111,12 +111,14 @@ def _compute_storage(pins: list) -> list[dict]:
     from app.sde import get_type_name
     vols = _get_pi_volumes()
     result = []
+    type_counters: dict[int, int] = {}
     for pin in pins:
         type_id = pin.get("type_id")
         if type_id not in _STORAGE_TYPE_IDS:
             continue
         struct_label, capacity = _STORAGE_TYPE_IDS[type_id]
         struct_name = get_type_name(type_id) or struct_label
+        type_counters[type_id] = type_counters.get(type_id, 0) + 1
         contents_raw = pin.get("contents") or []
         items = []
         used_m3 = 0.0
@@ -128,11 +130,17 @@ def _compute_storage(pins: list) -> list[dict]:
             items.append({"name": name, "amount": amt, "volume": round(vol, 1)})
         result.append({
             "struct": struct_name,
+            "struct_num": type_counters[type_id],
+            "type_id": type_id,
             "capacity": capacity,
             "used_m3": round(used_m3, 1),
             "fill_pct": round(min(used_m3 / capacity * 100, 100), 1) if capacity else 0,
             "items": sorted(items, key=lambda x: x["volume"], reverse=True),
         })
+    # Nummer nur anzeigen wenn mehrere des gleichen Typs
+    type_totals = type_counters
+    for entry in result:
+        entry["label"] = entry["struct"] + (f" {entry['struct_num']}" if type_totals.get(entry["type_id"], 1) > 1 else "")
     return result
 
 

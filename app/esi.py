@@ -24,7 +24,7 @@ def generate_auth_url(state: str) -> str:
         "response_type": "code",
         "redirect_uri": settings.eve_callback_url,
         "client_id": settings.eve_client_id,
-        "scope": settings.eve_scopes,
+        "scope": settings.eve_scopes.replace(",", " "),  # EVE SSO erwartet Leerzeichen
         "state": state,
     }
     return f"{SSO_AUTHORIZE_URL}?{urlencode(params)}"

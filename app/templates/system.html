@@ -625,7 +625,10 @@ function renderRecs() {
         const planetBadges = (rec.planets_needed || []).map(p => planetBadge(p)).join('');
 
         tr.innerHTML = `
-            <td class="fw-medium">${rec.name}</td>
+            <td class="fw-medium">
+                <a href="/planner?product=${encodeURIComponent(rec.name)}"
+                   class="eve-link fw-medium" title="Im PI Planner öffnen">${rec.name}</a>
+            </td>
             <td><span class="badge" style="background:${tc}1a;color:${tc};border:1px solid ${tc}3a;">${rec.tier}</span></td>
             <td class="small">${iskSellDisplay}</td>
             <td class="small">${iskBuyDisplay}</td>

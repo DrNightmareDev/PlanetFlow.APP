@@ -344,7 +344,15 @@ function renderFavoritesBlock() {
     block.classList.remove('d-none');
 }
 
-loadFavorites();
+loadFavorites().then(() => {
+    // URL-Parameter ?product=NAME → Produkt direkt vorauswählen
+    const urlProduct = new URLSearchParams(window.location.search).get('product');
+    if (urlProduct) {
+        const match = ALL_PRODUCTS.find(p => p.name === urlProduct)
+            || {name: urlProduct, tier: getTier(urlProduct) || 'P2'};
+        selectProduct(match);
+    }
+});
 
 // ── Produktsuche ──────────────────────────────────────────────────────────────
 let activeTierFilter = '';

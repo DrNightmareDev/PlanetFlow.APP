@@ -123,6 +123,37 @@ def delete_account(
     return RedirectResponse(url="/admin", status_code=302)
 
 
+@router.get("/delete-character/{character_id}")
+def admin_delete_character(
+    character_id: int,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    char = db.query(Character).filter(Character.id == character_id).first()
+    if not char:
+        raise HTTPException(status_code=404, detail="Charakter nicht gefunden")
+
+    target_account = db.query(Account).filter(Account.id == char.account_id).first()
+    if not target_account:
+        raise HTTPException(status_code=404, detail="Account nicht gefunden")
+
+    # Main-Char eines fremden Accounts darf nicht gelöscht werden wenn es weitere Chars gibt
+    if char.id == target_account.main_character_id:
+        other_chars = db.query(Character).filter(
+            Character.account_id == target_account.id,
+            Character.id != char.id
+        ).count()
+        if other_chars > 0:
+            raise HTTPException(status_code=400, detail="Main-Charakter kann nicht gelöscht werden solange Alts vorhanden sind")
+
+    db.delete(char)
+    # Falls es der letzte Char war, main_character_id zurücksetzen
+    if char.id == target_account.main_character_id:
+        target_account.main_character_id = None
+    db.commit()
+    return RedirectResponse(url="/admin", status_code=302)
+
+
 @router.get("/set-main/{account_id}/{character_id}")
 def admin_set_main(
     account_id: int,

@@ -233,13 +233,23 @@
                                         {% endif %}
                                     </td>
                                     <td>
+                                        <div class="d-flex gap-1">
                                         {% if char.id != acc.main_character_id %}
                                         <a href="/admin/set-main/{{ acc.id }}/{{ char.id }}"
                                            class="btn btn-sm eve-btn-ghost py-0"
                                            title="Als Main setzen">
                                             <i class="bi bi-star"></i>
                                         </a>
+                                        <a href="/admin/delete-character/{{ char.id }}"
+                                           class="btn btn-sm eve-btn-danger py-0"
+                                           title="Charakter löschen"
+                                           onclick="return confirm('Charakter {{ char.character_name }} wirklich löschen?')">
+                                            <i class="bi bi-trash3"></i>
+                                        </a>
+                                        {% else %}
+                                        <span class="text-muted small">—</span>
                                         {% endif %}
+                                        </div>
                                     </td>
                                 </tr>
                                 {% endfor %}

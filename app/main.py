@@ -11,7 +11,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from app.config import get_settings
 from app.database import engine, SessionLocal
 from app.models import SSOState
-from app.routers import auth, dashboard, admin, pi, market, system, planner
+from app.routers import auth, dashboard, admin, pi, market, system, planner, skyhook
 from app.templates_env import templates
 
 logging.basicConfig(level=logging.INFO)
@@ -94,6 +94,7 @@ app.include_router(pi.router)
 app.include_router(market.router)
 app.include_router(system.router)
 app.include_router(planner.router)
+app.include_router(skyhook.router)
 
 
 @app.get("/", response_class=HTMLResponse)

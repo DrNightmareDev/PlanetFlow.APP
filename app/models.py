@@ -110,6 +110,18 @@ class PiFavorite(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class SkyhookEntry(Base):
+    __tablename__ = "skyhook_entries"
+
+    id             = Column(Integer, primary_key=True, index=True)
+    account_id     = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    planet_id      = Column(Integer, nullable=False, index=True)
+    character_name = Column(String(255), nullable=True)
+    product_name   = Column(String(255), nullable=False)
+    quantity       = Column(Integer, nullable=False, default=0)
+    recorded_at    = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class AccessPolicy(Base):
     __tablename__ = "access_policy"
 

@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+{% block title %}Skyhook Inventar – EVE PI Manager{% endblock %}
+
+{% block extra_head %}
+<style>
+.sh-table { font-size: 0.82rem; }
+.sh-table thead th {
+    background: rgba(30,45,61,0.5);
+    color: var(--eve-text-muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    border-color: var(--eve-card-border);
+    padding: .5rem .75rem;
+    white-space: nowrap;
+}
+.sh-table tbody tr { border-color: rgba(30,45,61,0.4); transition: background .1s; }
+.sh-table tbody tr:hover { background: rgba(0,180,216,.03); }
+.sh-table td { border-color: rgba(30,45,61,0.4); padding: .45rem .75rem; vertical-align: middle; }
+
+/* Inline inputs */
+.sh-select {
+    background: var(--eve-bg-2);
+    border: 1px solid var(--eve-card-border);
+    color: var(--eve-text);
+    border-radius: 4px;
+    padding: .2rem .4rem;
+    font-size: .8rem;
+    min-width: 180px;
+    max-width: 220px;
+}
+.sh-select:focus { border-color: var(--eve-accent); outline: none; box-shadow: 0 0 0 2px rgba(0,180,216,.15); }
+.sh-qty {
+    background: var(--eve-bg-2);
+    border: 1px solid var(--eve-card-border);
+    color: var(--eve-text);
+    border-radius: 4px;
+    padding: .2rem .5rem;
+    font-size: .8rem;
+    width: 90px;
+    text-align: right;
+}
+.sh-qty:focus { border-color: var(--eve-accent); outline: none; box-shadow: 0 0 0 2px rgba(0,180,216,.15); }
+.sh-save-btn {
+    background: transparent;
+    border: 1px solid var(--eve-card-border);
+    color: var(--eve-text-muted);
+    border-radius: 4px;
+    padding: .2rem .6rem;
+    font-size: .75rem;
+    transition: all .15s;
+    white-space: nowrap;
+}
+.sh-save-btn:hover { border-color: var(--eve-accent); color: var(--eve-accent); }
+.sh-save-btn.saved { border-color: var(--eve-green); color: var(--eve-green); }
+
+/* Max-Produkt badge */
+.sh-tier-badge {
+    font-size: .68rem; font-weight: 700; padding: .15rem .45rem;
+    border-radius: 3px; white-space: nowrap;
+}
+
+/* History popup */
+.sh-hist-btn {
+    background: transparent; border: none;
+    color: var(--eve-text-muted); font-size: .8rem;
+    padding: .2rem .3rem; border-radius: 3px; transition: color .15s;
+}
+.sh-hist-btn:hover { color: var(--eve-accent); }
+.sh-hist-popup {
+    position: absolute; z-index: 500;
+    background: var(--eve-bg-2);
+    border: 1px solid var(--eve-card-border);
+    border-radius: 6px;
+    padding: .75rem;
+    min-width: 220px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.45);
+    display: none;
+    right: 0; top: calc(100% + 4px);
+}
+.sh-hist-popup.open { display: block; }
+
+/* Current value chip */
+.sh-current {
+    font-size: .75rem; color: #7a9a6a;
+    white-space: nowrap;
+}
+
+html[data-theme="light"] .sh-select,
+html[data-theme="light"] .sh-qty { background: #fff; color: var(--eve-text); }
+html[data-theme="light"] .sh-hist-popup { background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+    <h4 class="mb-0 eve-page-title"><i class="bi bi-box-seam me-2 eve-accent"></i>Skyhook Inventar</h4>
+    <span class="text-muted small">Manuelle Erfassung der Skyhook-Bestände pro Kolonie</span>
+    <a href="/dashboard" class="btn eve-btn-outline btn-sm ms-auto">
+        <i class="bi bi-arrow-left me-1"></i>Zurück
+    </a>
+</div>
+
+{% if not colonies %}
+<div class="eve-card card border-0 text-center py-5">
+    <div class="card-body">
+        <i class="bi bi-box-seam fs-1 text-muted d-block mb-3"></i>
+        <p class="text-muted mb-1">Keine Kolonien geladen.</p>
+        <small class="text-muted">Öffne zuerst das <a href="/dashboard" class="eve-accent">Dashboard</a> um die Daten zu laden.</small>
+    </div>
+</div>
+{% else %}
+
+<div class="eve-card card border-0">
+    <div class="card-body p-0">
+        <div style="overflow-x:auto;">
+            <table class="table sh-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Charakter</th>
+                        <th>Planet</th>
+                        <th>Typ</th>
+                        <th>System</th>
+                        <th>Max. Produkt</th>
+                        <th>Aktueller Bestand</th>
+                        <th>Skyhook Produkt</th>
+                        <th>Menge</th>
+                        <th></th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for colony in colonies %}
+                {% set sh = latest.get(colony.planet_id) %}
+                {% set hist = history.get(colony.planet_id, []) %}
+                {% set tier_products = colony.factories | selectattr('tier', 'equalto', colony.highest_tier) | unique(attribute='name') | list if colony.highest_tier else [] %}
+                <tr data-planet-id="{{ colony.planet_id }}"
+                    data-char-name="{{ colony.character_name }}">
+
+                    <!-- Charakter -->
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle"
+                                 onerror="this.src='/static/img/default_char.svg'">
+                            <span class="text-muted" style="font-size:.78rem;">{{ colony.character_name }}</span>
+                        </div>
+                    </td>
+
+                    <!-- Planet -->
+                    <td>
+                        <div style="font-size:.82rem;">{{ colony.planet_name }}</div>
+                    </td>
+
+                    <!-- Typ -->
+                    <td>
+                        <span class="badge sh-tier-badge"
+                              style="background:{{ colony.color }}18;color:{{ colony.color }};border:1px solid {{ colony.color }}35;">
+                            {{ colony.planet_type }}
+                        </span>
+                    </td>
+
+                    <!-- System -->
+                    <td>
+                        <div style="font-size:.82rem;">{{ colony.solar_system_name }}</div>
+                        {% if colony.region_name and colony.region_name != '—' %}
+                        <div style="color:var(--eve-text-muted);font-size:.68rem;">{{ colony.region_name }}</div>
+                        {% endif %}
+                    </td>
+
+                    <!-- Max. Produkt -->
+                    <td>
+                        {% if colony.highest_tier %}
+                        {% set tc = {'p1':'#586e75','p2':'#00b4d8','p3':'#f4a300','p4':'#e63946'} %}
+                        {% set tc_color = tc.get(colony.highest_tier | lower, '#586e75') %}
+                        <div>
+                            <span class="badge sh-tier-badge"
+                                  style="background:{{ tc_color }}18;color:{{ tc_color }};border:1px solid {{ tc_color }}35;">
+                                {{ colony.highest_tier }}
+                            </span>
+                            {% for f in tier_products %}
+                            <div style="color:var(--eve-text-muted);font-size:.72rem;margin-top:2px;">{{ f.name }}</div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Aktueller Bestand -->
+                    <td>
+                        {% if sh %}
+                        <span class="sh-current">
+                            <i class="bi bi-box-seam me-1" style="font-size:.65rem;"></i>
+                            <strong>{{ "{:,}".format(sh.quantity) }}</strong>
+                            <span class="text-muted ms-1">{{ sh.product_name }}</span>
+                        </span>
+                        {% else %}
+                        <span class="text-muted" style="font-size:.75rem;">kein Eintrag</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Produkt Dropdown -->
+                    <td>
+                        <select class="sh-select" id="prod_{{ colony.planet_id }}">
+                            <option value="">— Produkt wählen —</option>
+                            {% for tier, products in pi_products.items() %}
+                            <optgroup label="{{ tier }}">
+                                {% for p in products %}
+                                <option value="{{ p }}" {% if sh and sh.product_name == p %}selected{% endif %}>{{ p }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endfor %}
+                        </select>
+                    </td>
+
+                    <!-- Menge -->
+                    <td>
+                        <input type="number" class="sh-qty" id="qty_{{ colony.planet_id }}"
+                               min="0" step="1"
+                               value="{{ sh.quantity if sh else '' }}"
+                               placeholder="0">
+                    </td>
+
+                    <!-- Speichern -->
+                    <td>
+                        <button class="sh-save-btn" id="btn_{{ colony.planet_id }}"
+                                onclick="saveEntry({{ colony.planet_id }}, '{{ colony.character_name | replace("'", "\\'") }}')">
+                            <i class="bi bi-floppy me-1"></i>Speichern
+                        </button>
+                    </td>
+
+                    <!-- Verlauf -->
+                    <td style="position:relative;">
+                        {% if hist %}
+                        <button class="sh-hist-btn" onclick="toggleHist({{ colony.planet_id }})"
+                                title="Letzte Einträge">
+                            <i class="bi bi-clock-history"></i>
+                            <span style="font-size:.65rem;vertical-align:middle;">{{ hist | length }}</span>
+                        </button>
+                        <div class="sh-hist-popup" id="hist_{{ colony.planet_id }}">
+                            <div style="color:var(--eve-text-muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.5rem;">
+                                Letzte Einträge
+                            </div>
+                            {% for h in hist %}
+                            <div class="d-flex justify-content-between align-items-start gap-3 {% if not loop.last %}mb-2 pb-2{% endif %}"
+                                 {% if not loop.last %}style="border-bottom:1px solid var(--eve-card-border);"{% endif %}>
+                                <div>
+                                    <div style="color:var(--eve-text);font-size:.78rem;font-weight:600;">{{ h.product_name }}</div>
+                                    <div style="color:var(--eve-text-muted);font-size:.68rem;">{{ h.recorded_at }}</div>
+                                </div>
+                                <div style="color:#7a9a6a;font-size:.78rem;white-space:nowrap;font-weight:600;">
+                                    {{ "{:,}".format(h.quantity) }}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <span class="text-muted" style="font-size:.7rem;">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function saveEntry(planetId, charName) {
+    const prod = document.getElementById('prod_' + planetId)?.value;
+    const qty  = parseInt(document.getElementById('qty_'  + planetId)?.value || '0');
+    const btn  = document.getElementById('btn_' + planetId);
+    if (!prod) { showToast('Bitte ein Produkt wählen.', 'warning'); return; }
+    if (isNaN(qty) || qty < 0) { showToast('Ungültige Menge.', 'warning'); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" style="width:.7rem;height:.7rem;border-width:2px;"></span>';
+
+    try {
+        const res = await fetch('/skyhook/entry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ planet_id: planetId, character_name: charName, product_name: prod, quantity: qty })
+        });
+        if (!res.ok) throw new Error();
+        btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Gespeichert';
+        btn.classList.add('saved');
+        showToast('Skyhook-Eintrag gespeichert.', 'success');
+        setTimeout(() => {
+            btn.innerHTML = '<i class="bi bi-floppy me-1"></i>Speichern';
+            btn.classList.remove('saved');
+            btn.disabled = false;
+        }, 2500);
+    } catch {
+        btn.innerHTML = '<i class="bi bi-floppy me-1"></i>Speichern';
+        btn.disabled = false;
+        showToast('Fehler beim Speichern.', 'error');
+    }
+}
+
+function toggleHist(planetId) {
+    const popup = document.getElementById('hist_' + planetId);
+    if (!popup) return;
+    const isOpen = popup.classList.contains('open');
+    // close all
+    document.querySelectorAll('.sh-hist-popup.open').forEach(p => p.classList.remove('open'));
+    if (!isOpen) popup.classList.add('open');
+}
+
+// close popups on outside click
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.sh-hist-btn') && !e.target.closest('.sh-hist-popup'))
+        document.querySelectorAll('.sh-hist-popup.open').forEach(p => p.classList.remove('open'));
+});
+</script>
+{% endblock %}

@@ -65,6 +65,12 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link {% if request.url.path.startswith('/skyhook') %}active{% endif %}"
+                       href="/skyhook">
+                        <i class="bi bi-box-seam me-1"></i>Skyhooks
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link {% if request.url.path.startswith('/system') and not request.url.path.startswith('/system/compare') %}active{% endif %}"
                        href="/system">
                         <i class="bi bi-globe2 me-1"></i>System Analyzer

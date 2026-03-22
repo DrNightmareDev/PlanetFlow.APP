@@ -1,152 +1,121 @@
 """
 EVE Online Planetary Industry - Vollständige Produktionsdaten
+Quelle: https://alysii.com/eve/pi/
 """
 
-# P0 Rohstoffe pro Planetentyp
-PLANET_RESOURCES: dict[str, list[str]] = {
-    "Barren": [
-        "Base Metals", "Carbon Compounds", "Microorganisms",
-        "Noble Metals", "Chiral Structures"
-    ],
-    "Gas": [
-        "Aqueous Liquids", "Ionic Solutions", "Reactive Gas",
-        "Noble Gas", "Suspended Plasma"
-    ],
-    "Ice": [
-        "Aqueous Liquids", "Heavy Metals", "Suspended Plasma", "Microorganisms"
-    ],
-    "Lava": [
-        "Felsic Magma", "Suspended Plasma", "Heavy Metals",
-        "Non-CS Crystals", "Ionic Solutions"
-    ],
-    "Oceanic": [
-        "Aqueous Liquids", "Complex Organisms", "Carbon Compounds",
-        "Planktic Colonies", "Microorganisms"
-    ],
-    "Plasma": [
-        "Suspended Plasma", "Plasmoids", "Noble Gas",
-        "Felsic Magma", "Non-CS Crystals"
-    ],
-    "Storm": [
-        "Aqueous Liquids", "Ionic Solutions", "Suspended Plasma",
-        "Reactive Gas", "Oxygen"
-    ],
-    "Temperate": [
-        "Aqueous Liquids", "Carbon Compounds", "Autotrophs",
-        "Proteins", "Complex Organisms", "Micro Organisms"
-    ],
-}
-
-# P1 Basisprodukte (3000 P0 → 20 P1 pro Zyklus)
+# P0 Rohstoffe → P1 Basisprodukte
 P0_TO_P1: dict[str, str] = {
-    "Base Metals": "Reactive Metals",
-    "Carbon Compounds": "Biofuels",
-    "Microorganisms": "Bacteria",
-    "Micro Organisms": "Bacteria",
-    "Noble Metals": "Precious Metals",
-    "Chiral Structures": "Chiral Structures",
-    "Aqueous Liquids": "Water",
-    "Ionic Solutions": "Electrolytes",
-    "Reactive Gas": "Oxidizing Compound",
-    "Noble Gas": "Oxygen",
-    "Suspended Plasma": "Plasmoids",
-    "Heavy Metals": "Toxic Metals",
-    "Non-CS Crystals": "Silicon",
-    "Felsic Magma": "Silicates",
+    "Aqueous Liquids":   "Water",
+    "Autotrophs":        "Industrial Fibers",
+    "Base Metals":       "Reactive Metals",
+    "Carbon Compounds":  "Biofuels",
+    "Complex Organisms": "Proteins",
+    "Felsic Magma":      "Silicon",
+    "Heavy Metals":      "Toxic Metals",
+    "Ionic Solutions":   "Electrolytes",
+    "Micro Organisms":   "Bacteria",
+    "Noble Gas":         "Oxygen",
+    "Noble Metals":      "Precious Metals",
+    "Non-CS Crystals":   "Chiral Structures",
     "Planktic Colonies": "Biomass",
-    "Autotrophs": "Biofuels",
-    "Proteins": "Proteins",
-    "Complex Organisms": "Complex Organisms",
-    "Plasmoids": "Plasmoids",
-    "Oxygen": "Oxygen",
+    "Reactive Gas":      "Oxidizing Compound",
+    "Suspended Plasma":  "Plasmoids",
 }
 
-# P2 Raffinierte Produkte (je 40 P1 → 5 P2 pro Zyklus)
+# P1 + P1 → P2 Raffinierte Produkte (je 40 P1 → 5 P2 pro Zyklus)
 P1_TO_P2: dict[str, list[str]] = {
-    "Biocells": ["Biofuels", "Precious Metals"],
-    "Construction Blocks": ["Reactive Metals", "Toxic Metals"],
-    "Consumer Electronics": ["Chiral Structures", "Toxic Metals"],
-    "Coolant": ["Electrolytes", "Water"],
-    "Enriched Uranium": ["Precious Metals", "Toxic Metals"],
-    "Fertilizer": ["Bacteria", "Proteins"],
-    "Genetically Enhanced Livestock": ["Bacteria", "Proteins"],
-    "Guidance Systems": ["Chiral Structures", "Silicon"],
-    "Hazmat Detection Systems": ["Bacteria", "Chiral Structures"],
-    "Hermetic Membranes": ["Biomass", "Silicates"],
-    "High-Tech Transmitters": ["Chiral Structures", "Plasmoids"],
-    "Industrial Explosives": ["Oxidizing Compound", "Silicates"],
-    "Neocoms": ["Biofuels", "Silicon"],
-    "Nuclear Reactors": ["Enriched Uranium", "Toxic Metals"],
-    "Planetary Vehicles": ["Biofuels", "Reactive Metals"],
-    "Polytextiles": ["Biomass", "Biofuels"],
-    "Protective Membrane Systems": ["Silicates", "Biofuels"],
-    "Rocket Fuel": ["Electrolytes", "Plasmoids"],
-    "Silicate Glass": ["Oxygen", "Silicon"],
-    "Smartfab Units": ["Reactive Metals", "Silicon"],
-    "Super Conductors": ["Electrolytes", "Plasmoids"],
-    "Synthetic Oil": ["Electrolytes", "Oxygen"],
-    "Transmitters": ["Chiral Structures", "Silicates"],
-    "Viral Agent": ["Bacteria", "Biomass"],
-    "Water-Cooled CPU": ["Reactive Metals", "Water"],
+    "Biocells":                      ["Biofuels",          "Precious Metals"],
+    "Construction Blocks":           ["Reactive Metals",   "Toxic Metals"],
+    "Consumer Electronics":          ["Toxic Metals",      "Chiral Structures"],
+    "Coolant":                       ["Electrolytes",      "Water"],
+    "Enriched Uranium":              ["Precious Metals",   "Toxic Metals"],
+    "Fertilizer":                    ["Bacteria",          "Proteins"],
+    "Genetically Enhanced Livestock":["Proteins",          "Biomass"],
+    "Livestock":                     ["Proteins",          "Biofuels"],
+    "Mechanical Parts":              ["Reactive Metals",   "Precious Metals"],
+    "Microfiber Shielding":          ["Industrial Fibers", "Silicon"],
+    "Miniature Electronics":         ["Chiral Structures", "Silicon"],
+    "Nanites":                       ["Bacteria",          "Reactive Metals"],
+    "Oxides":                        ["Oxidizing Compound","Oxygen"],
+    "Polyaramids":                   ["Oxidizing Compound","Industrial Fibers"],
+    "Polytextiles":                  ["Biofuels",          "Industrial Fibers"],
+    "Rocket Fuel":                   ["Plasmoids",         "Electrolytes"],
+    "Silicate Glass":                ["Oxidizing Compound","Silicon"],
+    "Superconductors":               ["Plasmoids",         "Water"],
+    "Supertensile Plastics":         ["Oxygen",            "Biomass"],
+    "Synthetic Oil":                 ["Electrolytes",      "Oxygen"],
+    "Test Cultures":                 ["Bacteria",          "Water"],
+    "Transmitter":                   ["Plasmoids",         "Chiral Structures"],
+    "Viral Agent":                   ["Bacteria",          "Biomass"],
+    "Water-Cooled CPU":              ["Reactive Metals",   "Water"],
 }
 
-# P3 Spezialisierte Produkte (je 3× P2 → 1 P3 pro Zyklus)
+# P2 → P3 Spezialisierte Produkte (je 10 P2 → 3 P3 pro Zyklus)
 P2_TO_P3: dict[str, list[str]] = {
-    "Biotech Research Reports": ["Construction Blocks", "Viral Agent", "Water-Cooled CPU"],
-    "Camera Drones": ["Consumer Electronics", "Rocket Fuel", "Silicate Glass"],
-    "Condensates": ["Coolant", "Oxides", "Silicate Glass"],
-    "Cryoprotectant Solution": ["Fertilizer", "Synthetic Oil", "Water-Cooled CPU"],
-    "Data Chips": ["Consumer Electronics", "High-Tech Transmitters", "Microfiber Shielding"],
-    "Gel-Matrix Biopaste": ["Biocells", "Oxides", "Silicate Glass"],
-    "Guidance Systems": ["Guidance Systems", "Transmitters", "Enriched Uranium"],
-    "Hazmat Detection Systems": ["Hazmat Detection Systems", "Silicate Glass", "Viral Agent"],
-    "Hermetic Membranes": ["Hermetic Membranes", "Silicate Glass", "Transmitters"],
-    "High-Tech Small Arms": ["Consumer Electronics", "Enriched Uranium", "Guidance Systems"],
-    "Industrial Explosives": ["Industrial Explosives", "Silicate Glass", "Transmitters"],
-    "Neocoms": ["Neocoms", "Silicon", "Transmitters"],
-    "Nuclear Reactors": ["Enriched Uranium", "Nuclear Reactors", "Transmitters"],
-    "Planetary Vehicles": ["Construction Blocks", "Guidance Systems", "Planetary Vehicles"],
-    "Robotics": ["Consumer Electronics", "Mechanical Parts", "Transmitters"],
-    "Rocket Fuel": ["Electrolytes", "Plasmoids", "Rocket Fuel"],
-    "Silicate Glass": ["Oxygen", "Silicon", "Silicate Glass"],
-    "Smartfab Units": ["Construction Blocks", "Guidance Systems", "Smartfab Units"],
-    "Supercomputers": ["Consumer Electronics", "Coolant", "Water-Cooled CPU"],
-    "Synthetic Synapses": ["Biocells", "Neocoms", "Super Conductors"],
-    "Transcranial Microcontrollers": ["Biocells", "Nanites", "Silicate Glass"],
-    "Ukomi Super Conductors": ["Silicates", "Super Conductors", "Synthetic Oil"],
-    "Vaccines": ["Fertilizer", "Viral Agent", "Water-Cooled CPU"],
-    "Mechanical Parts": ["Construction Blocks", "Planetary Vehicles", "Reactive Metals"],
-    "Oxides": ["Oxidizing Compound", "Silicates", "Toxic Metals"],
-    "Nanites": ["Bacteria", "Reactive Metals", "Water"],
-    "Microfiber Shielding": ["Biofuels", "Silicates", "Silicon"],
+    "Biotech Research Reports":      ["Nanites",              "Livestock",                 "Construction Blocks"],
+    "Camera Drones":                 ["Silicate Glass",        "Rocket Fuel"],
+    "Condensates":                   ["Oxides",                "Coolant"],
+    "Cryoprotectant Solution":       ["Test Cultures",         "Synthetic Oil",             "Fertilizer"],
+    "Data Chips":                    ["Supertensile Plastics", "Microfiber Shielding"],
+    "Gel-Matrix Biopaste":           ["Biocells",              "Oxides",                    "Superconductors"],
+    "Guidance Systems":              ["Water-Cooled CPU",      "Transmitter"],
+    "Hazmat Detection Systems":      ["Polytextiles",          "Viral Agent",               "Transmitter"],
+    "Hermetic Membranes":            ["Polyaramids",           "Genetically Enhanced Livestock"],
+    "High-Tech Transmitters":        ["Polyaramids",           "Transmitter"],
+    "Industrial Explosives":         ["Fertilizer",            "Polytextiles"],
+    "Neocoms":                       ["Biocells",              "Silicate Glass"],
+    "Nuclear Reactors":              ["Microfiber Shielding",  "Enriched Uranium"],
+    "Planetary Vehicles":            ["Supertensile Plastics", "Mechanical Parts",          "Miniature Electronics"],
+    "Robotics":                      ["Mechanical Parts",      "Consumer Electronics"],
+    "Smartfab Units":                ["Construction Blocks",   "Miniature Electronics"],
+    "Supercomputers":                ["Water-Cooled CPU",      "Coolant",                   "Consumer Electronics"],
+    "Synthetic Synapses":            ["Supertensile Plastics", "Test Cultures"],
+    "Transcranial Microcontrollers": ["Biocells",              "Nanites"],
+    "Ukomi Super Conductors":        ["Synthetic Oil",         "Superconductors"],
+    "Vaccines":                      ["Livestock",             "Viral Agent"],
 }
 
-# P4 Hochentwickelte Produkte (nur auf Barren oder Temperate) (3× P3 → 1 P4)
+# P3 → P4 Hochentwickelte Produkte (nur auf Barren oder Temperate)
+# Hinweis: Nano-Factory, Organic Mortar Applicators und Sterile Conduits
+# benötigen in-game zusätzlich je 40 Einheiten eines P1-Produkts
+# (Reactive Metals / Bacteria / Water), hier nicht modelliert.
 P3_TO_P4: dict[str, list[str]] = {
-    "Broadcast Node": ["Neocoms", "Photovolatic Cells", "Recursive Computing Module"],
-    "Integrity Response Drones": ["Gel-Matrix Biopaste", "Hazmat Detection Systems", "Planetary Vehicles"],
-    "Nano-Factory": ["Industrial Explosives", "Reactive Metals", "Ukomi Super Conductors"],
-    "Organic Mortar Applicators": ["Condensates", "Fertilizer", "Planetary Vehicles"],
-    "Recursive Computing Module": ["Guidance Systems", "Photovolatic Cells", "Transmitters"],
-    "Self-Harmonizing Power Core": ["Camera Drones", "Condensates", "Hermetic Membranes"],
-    "Sterile Conduits": ["Condensates", "Robotics", "Vaccines"],
-    "Wetware Mainframe": ["Biotech Research Reports", "Cryoprotectant Solution", "Supercomputers"],
+    "Broadcast Node":              ["Neocoms",             "Data Chips",                "High-Tech Transmitters"],
+    "Integrity Response Drones":   ["Gel-Matrix Biopaste", "Hazmat Detection Systems",  "Planetary Vehicles"],
+    "Nano-Factory":                ["Industrial Explosives","Ukomi Super Conductors"],
+    "Organic Mortar Applicators":  ["Condensates",          "Robotics"],
+    "Recursive Computing Module":  ["Synthetic Synapses",   "Guidance Systems",          "Transcranial Microcontrollers"],
+    "Self-Harmonizing Power Core": ["Camera Drones",        "Nuclear Reactors",          "Hermetic Membranes"],
+    "Sterile Conduits":            ["Smartfab Units",       "Vaccines"],
+    "Wetware Mainframe":           ["Supercomputers",       "Biotech Research Reports",  "Cryoprotectant Solution"],
 }
 
-# Vollständige Produktionsliste für PI-Analyzer
-ALL_P1 = list(set(P0_TO_P1.values()))
-ALL_P2 = list(P1_TO_P2.keys())
-ALL_P3 = list(P2_TO_P3.keys())
-ALL_P4 = list(P3_TO_P4.keys())
+# P0 Rohstoffe pro Planetentyp (je 5 Ressourcen pro Planet)
+PLANET_RESOURCES: dict[str, list[str]] = {
+    "Barren":    ["Aqueous Liquids", "Base Metals",    "Carbon Compounds", "Micro Organisms",   "Noble Metals"],
+    "Gas":       ["Aqueous Liquids", "Base Metals",    "Ionic Solutions",  "Noble Gas",          "Reactive Gas"],
+    "Ice":       ["Aqueous Liquids", "Heavy Metals",   "Micro Organisms",  "Noble Gas",          "Planktic Colonies"],
+    "Lava":      ["Base Metals",     "Felsic Magma",   "Heavy Metals",     "Non-CS Crystals",    "Suspended Plasma"],
+    "Oceanic":   ["Aqueous Liquids", "Carbon Compounds","Complex Organisms","Micro Organisms",   "Planktic Colonies"],
+    "Plasma":    ["Base Metals",     "Heavy Metals",   "Noble Metals",     "Non-CS Crystals",    "Suspended Plasma"],
+    "Storm":     ["Aqueous Liquids", "Base Metals",    "Ionic Solutions",  "Noble Gas",          "Suspended Plasma"],
+    "Temperate": ["Aqueous Liquids", "Autotrophs",     "Carbon Compounds", "Complex Organisms",  "Micro Organisms"],
+}
+
+# Vollständige Produktionslisten
+ALL_P1 = sorted(set(P0_TO_P1.values()))
+ALL_P2 = sorted(P1_TO_P2.keys())
+ALL_P3 = sorted(P2_TO_P3.keys())
+ALL_P4 = sorted(P3_TO_P4.keys())
 
 # Planetentyp-Farben für UI
 PLANET_TYPE_COLORS: dict[str, str] = {
-    "Storm": "#5b8de4",
-    "Barren": "#a67c52",
-    "Gas": "#7fb069",
-    "Lava": "#e63946",
-    "Oceanic": "#2980b9",
-    "Plasma": "#9b59b6",
+    "Storm":     "#5b8de4",
+    "Barren":    "#a67c52",
+    "Gas":       "#7fb069",
+    "Lava":      "#e63946",
+    "Oceanic":   "#2980b9",
+    "Plasma":    "#9b59b6",
     "Temperate": "#27ae60",
-    "Ice": "#74b9ff",
+    "Ice":       "#74b9ff",
 }

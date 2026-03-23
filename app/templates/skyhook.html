@@ -96,6 +96,19 @@
 html[data-theme="light"] .sh-select,
 html[data-theme="light"] .sh-qty { background:#fff; color:var(--eve-text); }
 html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px rgba(0,0,0,.12); }
+
+.sh-price-btn {
+    background: var(--eve-bg-2);
+    border: 1px solid var(--eve-card-border);
+    color: var(--eve-text-muted);
+    font-size: .65rem;
+    padding: 1px 7px;
+    border-radius: 10px;
+    transition: all .15s;
+    cursor: pointer;
+}
+.sh-price-btn:hover { border-color: var(--eve-accent); color: var(--eve-accent); }
+.sh-price-btn.active { background: rgba(0,180,216,.12); border-color: var(--eve-accent); color: var(--eve-accent); }
 </style>
 {% endblock %}
 
@@ -169,7 +182,15 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                         <th class="eve-sortable" data-col="system">System <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
                         <th class="eve-sortable" data-col="product">Max. Produkt <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
                         <th>Skyhook Bestand</th>
-                        <th style="width:110px;white-space:nowrap;">Wert (ISK)</th>
+                        <th style="white-space:nowrap;">
+                            Wert (ISK)
+                            <div class="d-flex gap-1 mt-1" id="shPriceModeButtons" onclick="event.stopPropagation()" style="cursor:default">
+                                {% for lbl, val in [('Sell','sell'),('Buy','buy'),('Split','split')] %}
+                                <button class="sh-price-btn{% if price_mode == val %} active{% endif %}"
+                                        onclick="shSetPriceMode('{{ val }}')">{{ lbl }}</button>
+                                {% endfor %}
+                            </div>
+                        </th>
                         <th style="width:80px;"></th>
                     </tr>
                 </thead>
@@ -697,5 +718,15 @@ document.addEventListener('click', e => {
     if (!e.target.closest('.sh-hist-btn') && !e.target.closest('.sh-hist-popup'))
         document.querySelectorAll('.sh-hist-popup.open').forEach(p => p.classList.remove('open'));
 });
+
+function shSetPriceMode(mode) {
+    fetch('/dashboard/price-mode', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({mode})
+    }).then(r => r.json()).then(d => {
+        if (d.ok) window.location.reload();
+    });
+}
 </script>
 {% endblock %}

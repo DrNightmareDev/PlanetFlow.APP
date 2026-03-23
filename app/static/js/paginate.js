@@ -14,6 +14,8 @@ function EvePaginate(tableId, opts) {
     const o = Object.assign({ pageSize: 6, controlsId: null, onCount: null }, opts || {});
     let ps   = o.pageSize;
     let page = 1;
+    const sizes = o.pageSizes || [6, 15, 25, 100, 0];
+    const labels = o.pageSizeLabels || sizes.map(v => v === 0 ? 'Alle' : String(v));
 
     const tbl       = () => document.getElementById(tableId);
     const tbody     = () => { const t = tbl(); return t ? t.querySelector('tbody') : null; };
@@ -43,9 +45,6 @@ function EvePaginate(tableId, opts) {
         const c = o.controlsId ? document.getElementById(o.controlsId) : null;
         if (!c) return;
         if (total === 0) { c.innerHTML = ''; return; }
-
-        const sizes  = [6, 15, 25, 100, 0];
-        const labels = ['6', '15', '25', '100', 'Alle'];
 
         let h = `<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 px-3 py-2" style="border-top:1px solid #1a2d3d;">`;
 

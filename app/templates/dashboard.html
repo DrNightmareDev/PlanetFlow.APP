@@ -54,6 +54,13 @@
                             <i class="bi bi-diagram-2 me-1"></i>{{ main_char.alliance_name }}
                             {% endif %}
                         </div>
+                        {% if not main_char.scopes or 'esi-characters.read_corporation_roles.v1' not in main_char.scopes.split(' ') %}
+                        <div class="small mt-2" style="color:#d8b36a;">
+                            <i class="bi bi-key me-1"></i>
+                            Fuer Director-Zugriff fehlt der Corp-Role-Scope.
+                            <a href="/auth/refresh-scopes" class="ms-2">Jetzt aktualisieren</a>
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
                         <a href="/dashboard/characters" class="btn btn-sm eve-btn-outline">

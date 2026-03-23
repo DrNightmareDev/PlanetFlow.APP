@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     eve_client_secret: str = Field(default="", alias="EVE_CLIENT_SECRET")
     eve_callback_url: str = Field(default="http://localhost:8000/auth/callback", alias="EVE_CALLBACK_URL")
     eve_scopes: str = Field(
-        default="esi-planets.manage_planets.v1,esi-planets.read_customs_offices.v1,esi-location.read_location.v1",
+        default="esi-planets.manage_planets.v1,esi-planets.read_customs_offices.v1,esi-location.read_location.v1,esi-characters.read_corporation_roles.v1,esi-skills.read_skills.v1",
         alias="EVE_SCOPES"
     )
 

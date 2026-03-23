@@ -64,6 +64,16 @@ def add_character(
     return RedirectResponse(url=redirect_url)
 
 
+@router.get("/refresh-scopes")
+def refresh_scopes(
+    account=Depends(require_account),
+    db: Session = Depends(get_db)
+):
+    state = _generate_state(db, flow="add_character", account_id=account.id)
+    redirect_url = generate_auth_url(state)
+    return RedirectResponse(url=redirect_url)
+
+
 @router.get("/callback")
 def callback(
     request: Request,

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import require_account
-from app.esi import ensure_valid_token, get_character_planets, get_planet_detail, get_planet_info, get_schematic, invalidate_planet_detail_cache
+from app.esi import ensure_valid_token, get_character_planets, get_planet_detail, get_planet_info, get_schematic, invalidate_planet_detail_cache, get_character_roles, get_character_skills, get_corporation_info
 from app.market import get_prices_by_mode, get_market_last_updated
 from app.models import Account, Character, DashboardCache, IskSnapshot, SkyhookEntry, SkyhookItem
 from sqlalchemy import func as sqlfunc
@@ -23,6 +23,14 @@ from app.templates_env import templates
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+PI_SKILL_NAMES = (
+    "Command Center Upgrades",
+    "Interplanetary Consolidation",
+    "Remote Sensing",
+    "Planetology",
+    "Advanced Planetology",
+)
 
 PLANET_TYPE_NAMES = {
     "temperate": "Temperate",
@@ -739,9 +747,7 @@ def dashboard(
 ):
     db.refresh(account)
 
-    main_char = None
-    if account.main_character_id:
-        main_char = db.query(Character).filter(Character.id == account.main_character_id).first()
+    main_char = db.query(Character).filter(Character.id == account.main_character_id).first() if account.main_character_id else None
 
     characters = db.query(Character).filter(Character.account_id == account.id).all()
     now = _time.time()
@@ -963,6 +969,45 @@ def overview_page(
     })
 
 
+def _corp_access_flags(account: Account, main_char: Character | None, db: Session) -> dict:
+    own_corp_id = main_char.corporation_id if main_char else None
+    own_corp_name = main_char.corporation_name if main_char else None
+    is_ceo = False
+    is_director = False
+    roles_scope_missing = False
+
+    if own_corp_id and main_char:
+        try:
+            corp_info = get_corporation_info(own_corp_id)
+            own_corp_name = corp_info.get("name", own_corp_name or f"Corp #{own_corp_id}")
+            is_ceo = corp_info.get("ceo_id") == main_char.eve_character_id
+        except Exception:
+            pass
+
+        scopes = set((main_char.scopes or "").split())
+        if "esi-characters.read_corporation_roles.v1" in scopes:
+            access_token = ensure_valid_token(main_char, db)
+            if access_token:
+                roles_data = get_character_roles(main_char.eve_character_id, access_token)
+                roles = roles_data.get("roles", []) if isinstance(roles_data, dict) else []
+                is_director = "Director" in roles
+        else:
+            roles_scope_missing = True
+
+    has_access = bool(
+        own_corp_id and (account.is_owner or account.is_admin or is_ceo or is_director)
+    )
+    return {
+        "corp_id": own_corp_id,
+        "corp_name": own_corp_name,
+        "is_ceo": is_ceo,
+        "is_director": is_director,
+        "roles_scope_missing": roles_scope_missing,
+        "has_access": has_access,
+        "can_manage": bool(own_corp_id and (account.is_owner or account.is_admin)),
+    }
+
+
 @router.get("/corp", response_class=HTMLResponse)
 def corp_view_page(
     request: Request,
@@ -970,91 +1015,69 @@ def corp_view_page(
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
-    """Corporation overview: CEO, owner and admins."""
-    from app.esi import get_corporation_info
+    """Corporation overview for the current character's corporation."""
 
-    main_char = None
-    if account.main_character_id:
-        main_char = db.query(Character).filter(Character.id == account.main_character_id).first()
+    main_char = db.query(Character).filter(Character.id == account.main_character_id).first() if account.main_character_id else None
+    access = _corp_access_flags(account, main_char, db)
+    active_corp_id = access["corp_id"]
+    if not access["has_access"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Kein Zugriff - nur fuer CEO, Direktoren, Admins und Besitzer der eigenen Corporation",
+        )
 
-    own_corp_id   = main_char.corporation_id   if main_char else None
-    own_corp_name = main_char.corporation_name if main_char else None
-    is_ceo = False
-
-    # Owner can switch to any corp; otherwise use own corp
-    active_corp_id = corp_id if (account.is_owner and corp_id) else own_corp_id
-
-    if own_corp_id:
-        try:
-            corp_info = get_corporation_info(own_corp_id)
-            own_corp_name = corp_info.get("name", own_corp_name or f"Corp #{own_corp_id}")
-            if corp_info.get("ceo_id") == (main_char.eve_character_id if main_char else None):
-                is_ceo = True
-        except Exception:
-            pass
-
-    if not (account.is_owner or account.is_admin or is_ceo):
-        raise HTTPException(status_code=403, detail="Kein Zugriff — nur für CEO, Admins und den Besitzer")
-
-    # Corp name for selected corp
-    corp_name = own_corp_name
-    if account.is_owner and corp_id and corp_id != own_corp_id:
-        first_char = db.query(Character).filter(Character.corporation_id == corp_id).first()
-        corp_name = first_char.corporation_name if first_char else f"Corp #{corp_id}"
-
-    # All chars in the active corp
-    if active_corp_id:
-        corp_chars = db.query(Character).filter(Character.corporation_id == active_corp_id).all()
-    else:
-        corp_chars = []
-
-    corp_char_names = {c.character_name for c in corp_chars}
-    account_ids = {c.account_id for c in corp_chars}
+    corp_name = access["corp_name"] or f"Corporation {active_corp_id}"
+    corp_chars = db.query(Character).filter(Character.corporation_id == active_corp_id).all() if active_corp_id else []
+    chars_by_account: dict[int, list[Character]] = {}
+    for char in corp_chars:
+        if char.account_id is not None:
+            chars_by_account.setdefault(char.account_id, []).append(char)
+    account_ids = sorted(chars_by_account)
     price_mode = getattr(account, "price_mode", "sell")
 
     corp_colonies: list[dict] = []
+    corp_main_rows: list[dict] = []
+    corp_accounts: list[dict] = []
+    uncached_count = 0
     for acc_id in account_ids:
+        acc = db.query(Account).filter(Account.id == acc_id).first()
+        if not acc:
+            continue
+        main = db.query(Character).filter(Character.id == acc.main_character_id).first() if acc.main_character_id else None
+        account_char_names = {c.character_name for c in chars_by_account.get(acc_id, [])}
         cached = _load_colony_cache(acc_id, db)
+        colony_count = 0
         if cached:
             colonies = cached.get("colonies", [])
             meta = cached.get("meta", {})
             _recompute_expiry(colonies)
             colonies, _ = _apply_price_mode(colonies, meta, price_mode)
             for colony in colonies:
-                if colony.get("character_name") in corp_char_names:
-                    corp_colonies.append(colony)
+                if colony.get("character_name") in account_char_names:
+                    colony_count += 1
+                    corp_colony = dict(colony)
+                    corp_colony["main_name"] = main.character_name if main else f"Account #{acc_id}"
+                    corp_colony["main_portrait"] = main.portrait_url if main else "/static/img/default_char.svg"
+                    corp_colonies.append(corp_colony)
+        else:
+            uncached_count += 1
+
+        corp_accounts.append({
+            "account_id": acc_id,
+            "main_name": main.character_name if main else f"Account #{acc_id}",
+            "is_cached": cached is not None,
+        })
+        corp_main_rows.append({
+            "account_id": acc_id,
+            "main_name": main.character_name if main else f"Account #{acc_id}",
+            "main_portrait": main.portrait_url if main else "/static/img/default_char.svg",
+            "colony_count": colony_count,
+            "char_count": len(chars_by_account.get(acc_id, [])),
+        })
 
     corp_colonies.sort(key=lambda x: (x.get("character_name", ""), x.get("planet_name", "")))
+    corp_main_rows.sort(key=lambda x: (-x["colony_count"], x["main_name"].lower()))
     total_isk = sum(c.get("isk_day", 0) for c in corp_colonies if c.get("is_active", True))
-
-    # Accounts list for force-load (owner only)
-    corp_accounts: list[dict] = []
-    if account.is_owner:
-        for acc_id in sorted(a for a in account_ids if a is not None):
-            acc = db.query(Account).filter(Account.id == acc_id).first()
-            if not acc:
-                continue
-            main = db.query(Character).filter(Character.id == acc.main_character_id).first() \
-                   if acc.main_character_id else None
-            corp_accounts.append({
-                "account_id": acc_id,
-                "main_name": main.character_name if main else f"Account #{acc_id}",
-                "is_cached": _load_colony_cache(acc_id, db) is not None,
-            })
-
-    # All corps on this instance (for switcher, owner only)
-    all_corps: list[dict] = []
-    if account.is_owner:
-        seen: dict = {}
-        for row in db.query(Character.corporation_id, Character.corporation_name).distinct().all():
-            if row.corporation_id and row.corporation_id not in seen:
-                seen[row.corporation_id] = row.corporation_name or f"Corp #{row.corporation_id}"
-        all_corps = sorted(
-            [{"id": k, "name": v} for k, v in seen.items()],
-            key=lambda x: x["name"]
-        )
-
-    uncached_count = sum(1 for a in corp_accounts if not a["is_cached"])
     market_last_updated = get_market_last_updated(db)
     market_last_updated_iso = None
     if market_last_updated:
@@ -1064,15 +1087,20 @@ def corp_view_page(
     return templates.TemplateResponse("corp_view.html", {
         "request": request,
         "account": account,
-        "corp_name": corp_name or f"Corporation {active_corp_id}",
+        "corp_name": corp_name,
         "corp_id": active_corp_id,
         "corp_colonies": corp_colonies,
+        "corp_main_rows": corp_main_rows,
         "corp_accounts": corp_accounts,
-        "all_corps": all_corps,
         "uncached_count": uncached_count,
         "total_colonies": len(corp_colonies),
         "total_isk_day": total_isk,
-        "is_ceo": is_ceo,
+        "total_mains": len(corp_main_rows),
+        "total_characters": len(corp_chars),
+        "is_ceo": access["is_ceo"],
+        "is_director": access["is_director"],
+        "roles_scope_missing": access["roles_scope_missing"],
+        "can_manage_cache": access["can_manage"],
         "market_last_updated_iso": market_last_updated_iso,
     })
 
@@ -1083,8 +1111,10 @@ def corp_accounts_api(
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
-    """Returns accounts in a corp with cache status. Owner only."""
-    if not account.is_owner:
+    """Returns accounts in the current corp with cache status."""
+    main_char = db.query(Character).filter(Character.id == account.main_character_id).first() if account.main_character_id else None
+    access = _corp_access_flags(account, main_char, db)
+    if not access["can_manage"] or access["corp_id"] != corp_id:
         raise HTTPException(status_code=403)
     corp_chars = db.query(Character).filter(Character.corporation_id == corp_id).all()
     account_ids = {c.account_id for c in corp_chars if c.account_id is not None}
@@ -1109,13 +1139,17 @@ def force_load_account(
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
-    """Force-loads dashboard data for a target account. Owner only."""
-    if not account.is_owner:
+    """Force-loads dashboard data for a target account in the viewer's corp."""
+    main_char = db.query(Character).filter(Character.id == account.main_character_id).first() if account.main_character_id else None
+    access = _corp_access_flags(account, main_char, db)
+    if not access["can_manage"]:
         raise HTTPException(status_code=403)
     target = db.query(Account).filter(Account.id == target_account_id).first()
     if not target:
         raise HTTPException(status_code=404)
     chars = db.query(Character).filter(Character.account_id == target_account_id).all()
+    if access["corp_id"] is None or not any(c.corporation_id == access["corp_id"] for c in chars):
+        raise HTTPException(status_code=403)
     try:
         payload = _build_dashboard_payload(target, chars, db, price_mode=getattr(target, "price_mode", "sell"))
         _save_colony_cache(target_account_id, payload, db)
@@ -1126,6 +1160,37 @@ def force_load_account(
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
+def _attach_pi_skills(characters: list[Character], db: Session) -> None:
+    for char in characters:
+        scopes = set((char.scopes or "").split())
+        has_skill_scope = "esi-skills.read_skills.v1" in scopes
+        skill_levels = {name: 0 for name in PI_SKILL_NAMES}
+        skill_error = None
+
+        if has_skill_scope:
+            try:
+                access_token = ensure_valid_token(char, db)
+                if access_token:
+                    data = get_character_skills(char.eve_character_id, access_token)
+                    for skill in data.get("skills", []) if isinstance(data, dict) else []:
+                        skill_name = _sde.get_type_name(skill.get("skill_id"))
+                        if skill_name in skill_levels:
+                            skill_levels[skill_name] = skill.get("active_skill_level", 0) or 0
+                else:
+                    skill_error = "token_missing"
+            except Exception as exc:
+                logger.warning(f"PI skill fetch failed for {char.character_name}: {exc}")
+                skill_error = "fetch_failed"
+
+        setattr(char, "pi_skills", [
+            {"name": name, "level": skill_levels[name], "max_level": 5}
+            for name in PI_SKILL_NAMES
+        ])
+        setattr(char, "pi_skill_total", sum(skill_levels.values()))
+        setattr(char, "has_skill_scope", has_skill_scope)
+        setattr(char, "pi_skill_error", skill_error)
+
+
 @router.get("/characters", response_class=HTMLResponse)
 def characters_page(
     request: Request,
@@ -1134,6 +1199,7 @@ def characters_page(
 ):
     db.refresh(account)
     characters = db.query(Character).filter(Character.account_id == account.id).all()
+    _attach_pi_skills(characters, db)
     return templates.TemplateResponse("characters.html", {
         "request": request,
         "account": account,

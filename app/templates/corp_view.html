@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ corp_name }} – Corporation – EVE PI Manager{% endblock %}
+{% block title %}{{ corp_name }} - Corporation - EVE PI Manager{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
@@ -11,26 +11,15 @@
         <i class="bi bi-star me-1"></i>CEO
     </span>
     {% endif %}
-    {% if account.is_owner and account.is_admin %}
-    <span class="badge eve-badge-admin">Administrator</span>
+    {% if is_director %}
+    <span class="badge" style="background:#00b4d822;color:#00b4d8;border:1px solid #00b4d840;">
+        <i class="bi bi-diagram-3 me-1"></i>Director
+    </span>
     {% endif %}
-
-    {% if account.is_owner %}
-    <!-- Corp Switcher -->
-    {% if all_corps | length > 1 %}
-    <div class="d-flex align-items-center gap-2 ms-2">
-        <i class="bi bi-arrow-left-right" style="color:var(--eve-text-muted);font-size:.8rem;"></i>
-        <select class="form-select form-select-sm eve-select" style="width:auto;"
-                onchange="if(this.value) window.location='/dashboard/corp?corp_id='+this.value">
-            {% for c in all_corps %}
-            <option value="{{ c.id }}" {% if c.id == corp_id %}selected{% endif %}>{{ c.name }}</option>
-            {% endfor %}
-        </select>
-    </div>
+    {% if account.is_owner or account.is_admin %}
+    <span class="badge eve-badge-admin">Admin / Owner</span>
     {% endif %}
-
-    <!-- Force-load button -->
-    {% if corp_id %}
+    {% if can_manage_cache %}
     <button class="btn btn-sm eve-btn-outline ms-auto" onclick="openForceLoad()"
             title="Alle Corporation-Accounts neu laden">
         <i class="bi bi-arrow-repeat me-1"></i>Alle laden
@@ -39,42 +28,116 @@
         {% endif %}
     </button>
     {% endif %}
-    {% endif %}
 </div>
 
-<!-- Stats -->
-<div class="row g-3 mb-4">
-    <div class="col-6 col-lg-3">
-        <div class="eve-stat-card card border-0 h-100">
-            <div class="card-body text-center p-3">
-                <div class="eve-stat-icon mb-2"><i class="bi bi-globe2 fs-3"></i></div>
-                <div class="eve-stat-value">{{ total_colonies }}</div>
-                <div class="eve-stat-label">Colonies</div>
+{% if roles_scope_missing %}
+<div class="alert eve-card border-0 py-2 px-3 mb-4" style="background:rgba(244,163,0,.12);color:#d8b36a;">
+    <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap">
+        <div>
+            <i class="bi bi-info-circle me-2"></i>
+            Dem Main-Char fehlt der Scope <code>esi-characters.read_corporation_roles.v1</code>. CEO-Zugriff funktioniert weiter, Director-Zugriff braucht diesen Scope.
+        </div>
+        <a href="/auth/refresh-scopes" class="btn btn-sm eve-btn-outline">
+            <i class="bi bi-key me-1"></i>Scope aktualisieren
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<div class="row g-3 mb-4 align-items-stretch">
+    <div class="col-12 col-xl-7">
+        <div class="row g-3 h-100">
+            <div class="col-6 col-md-3">
+                <div class="eve-stat-card card border-0 h-100">
+                    <div class="card-body text-center p-3">
+                        <div class="eve-stat-icon mb-2"><i class="bi bi-globe2 fs-3"></i></div>
+                        <div class="eve-stat-value">{{ total_colonies }}</div>
+                        <div class="eve-stat-label">Kolonien</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="eve-stat-card card border-0 h-100">
+                    <div class="card-body text-center p-3">
+                        <div class="eve-stat-icon mb-2"><i class="bi bi-people fs-3"></i></div>
+                        <div class="eve-stat-value">{{ total_characters }}</div>
+                        <div class="eve-stat-label">Charaktere</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="eve-stat-card card border-0 h-100">
+                    <div class="card-body text-center p-3">
+                        <div class="eve-stat-icon mb-2"><i class="bi bi-person-badge fs-3"></i></div>
+                        <div class="eve-stat-value">{{ total_mains }}</div>
+                        <div class="eve-stat-label">Main Chars</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="eve-stat-card card border-0 h-100">
+                    <div class="card-body text-center p-3">
+                        <div class="eve-stat-icon mb-2"><i class="bi bi-cash-stack fs-3"></i></div>
+                        <div class="eve-stat-value">{{ total_isk_day | format_isk }}</div>
+                        <div class="eve-stat-label">ISK / Tag</div>
+                    </div>
+                </div>
+            </div>
+            {% if uncached_count > 0 and not can_manage_cache %}
+            <div class="col-12">
+                <div class="eve-stat-card card border-0 h-100">
+                    <div class="card-body p-3 d-flex align-items-center gap-2">
+                        <i class="bi bi-hourglass-split text-muted"></i>
+                        <span class="small text-muted">{{ uncached_count }} Account(s) sind noch nicht geladen. Ein Admin oder Owner kann den Cache fuer diese Corp vorbereiten.</span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-12 col-xl-5">
+        <div class="eve-card card border-0 h-100">
+            <div class="card-header eve-card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-person-lines-fill eve-accent"></i>
+                    <span class="fw-medium">Mains nach Kolonien</span>
+                </div>
+                <span class="badge eve-badge-count">{{ total_mains }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height:320px;overflow:auto;">
+                    <table class="table eve-table mb-0" id="corpMainTable">
+                        <thead>
+                            <tr>
+                                <th class="eve-sortable" data-main-col="main">Main <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                                <th class="eve-sortable text-end" data-main-col="colonies">Kolonien <i class="bi bi-chevron-down eve-sort-icon"></i></th>
+                                <th class="eve-sortable text-end" data-main-col="chars">Chars <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for row in corp_main_rows %}
+                            <tr data-sort-main="{{ row.main_name | lower }}"
+                                data-sort-colonies="{{ row.colony_count }}"
+                                data-sort-chars="{{ row.char_count }}">
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <img src="{{ row.main_portrait }}" class="eve-portrait-xs rounded-circle"
+                                             onerror="this.src='/static/img/default_char.svg'">
+                                        <span class="small">{{ row.main_name }}</span>
+                                    </div>
+                                </td>
+                                <td class="text-end small fw-semibold">{{ row.colony_count }}</td>
+                                <td class="text-end small text-muted">{{ row.char_count }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-6 col-lg-3">
-        <div class="eve-stat-card card border-0 h-100">
-            <div class="card-body text-center p-3">
-                <div class="eve-stat-icon mb-2"><i class="bi bi-currency-exchange fs-3"></i></div>
-                <div class="eve-stat-value">{{ total_isk_day | format_isk }}</div>
-                <div class="eve-stat-label">ISK / Day</div>
-            </div>
-        </div>
-    </div>
-    {% if uncached_count > 0 and not account.is_owner %}
-    <div class="col-12 col-lg-6">
-        <div class="eve-stat-card card border-0 h-100">
-            <div class="card-body p-3 d-flex align-items-center gap-2">
-                <i class="bi bi-hourglass-split text-muted"></i>
-                <span class="small text-muted">{{ uncached_count }} Account(s) not yet loaded – visit the Dashboard once to load their data.</span>
-            </div>
-        </div>
-    </div>
-    {% endif %}
 </div>
 
-<!-- Colonies Card with inline filter header -->
 <div class="eve-card card border-0">
     <div class="card-header eve-card-header d-flex align-items-center gap-3 flex-wrap py-2 px-3"
          style="background:rgba(30,45,61,0.3);border-color:var(--eve-card-border);">
@@ -85,23 +148,28 @@
         <div class="d-flex align-items-center gap-2 ms-3">
             <i class="bi bi-person-fill" style="color:var(--eve-text-muted);font-size:.8rem;"></i>
             <input type="text" id="filterChar" class="form-control form-control-sm eve-select"
-                   style="width:140px;" placeholder="Charakter…" oninput="applyCorpFilters()">
+                   style="width:140px;" placeholder="Charakter..." oninput="applyCorpFilters()">
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-bullseye" style="color:var(--eve-text-muted);font-size:.8rem;"></i>
+            <input type="text" id="filterMain" class="form-control form-control-sm eve-select"
+                   style="width:140px;" placeholder="Main..." oninput="applyCorpFilters()">
         </div>
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-geo-alt" style="color:var(--eve-text-muted);font-size:.8rem;"></i>
             <input type="text" id="filterSystem" class="form-control form-control-sm eve-select"
-                   style="width:140px;" placeholder="System / Region…" oninput="applyCorpFilters()">
+                   style="width:160px;" placeholder="System / Region..." oninput="applyCorpFilters()">
         </div>
         <div class="d-flex flex-wrap gap-1" id="typeToggles">
             {% for ptype in ['Barren','Gas','Ice','Lava','Oceanic','Plasma','Storm','Temperate'] %}
             <button class="btn btn-sm eve-filter-toggle" data-val="{{ ptype | lower }}"
-                    onclick="toggleFilter(this,'typeToggles')">{{ ptype }}</button>
+                    onclick="toggleFilter(this)">{{ ptype }}</button>
             {% endfor %}
         </div>
         <div class="d-flex flex-wrap gap-1" id="tierToggles">
             {% for tier in ['P1','P2','P3','P4'] %}
             <button class="btn btn-sm eve-filter-toggle" data-val="{{ tier | lower }}"
-                    onclick="toggleFilter(this,'tierToggles')">{{ tier }}</button>
+                    onclick="toggleFilter(this)">{{ tier }}</button>
             {% endfor %}
         </div>
     </div>
@@ -112,22 +180,24 @@
                 <thead>
                     <tr>
                         <th class="eve-sortable" data-col="char">Charakter <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                        <th class="eve-sortable" data-col="main">Main <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
                         <th class="eve-sortable" data-col="planet">Ort <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
                         <th class="eve-sortable" data-col="type">Typ <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
                         <th class="eve-sortable" data-col="level">Stufe <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
                         <th class="eve-sortable" data-col="tier">Tier <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
                         <th class="eve-sortable" data-col="expiry">Ablauf <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
-                        <th class="eve-sortable" data-col="isk">ISK/Tag <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
-                        <th>Lager</th>
+                        <th class="eve-sortable text-end" data-col="isk">ISK / Tag <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
                     </tr>
                 </thead>
                 <tbody>
                 {% for colony in corp_colonies %}
                 <tr data-char="{{ colony.character_name | lower }}"
+                    data-main="{{ colony.main_name | lower }}"
                     data-system="{{ colony.solar_system_name | lower }} {{ colony.region_name | lower }}"
                     data-type="{{ colony.planet_type | lower }}"
                     data-tier="{{ colony.highest_tier | lower if colony.highest_tier else 'none' }}"
                     data-sort-char="{{ colony.character_name }}"
+                    data-sort-main="{{ colony.main_name }}"
                     data-sort-planet="{{ colony.planet_name }}"
                     data-sort-type="{{ colony.planet_type }}"
                     data-sort-level="{{ colony.upgrade_level }}"
@@ -141,9 +211,16 @@
                             <span class="small">{{ colony.character_name }}</span>
                         </div>
                     </td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <img src="{{ colony.main_portrait }}" class="eve-portrait-xs rounded-circle"
+                                 onerror="this.src='/static/img/default_char.svg'">
+                            <span class="small">{{ colony.main_name }}</span>
+                        </div>
+                    </td>
                     <td class="small">
                         <div>{{ colony.planet_name }}</div>
-                        {% if colony.region_name and colony.region_name != '—' %}
+                        {% if colony.region_name and colony.region_name != '-' %}
                         <div style="color:#3a5a7a;font-size:.65rem;">{{ colony.region_name }}</div>
                         {% endif %}
                     </td>
@@ -182,7 +259,7 @@
                             {% endif %}
                         </div>
                         {% else %}
-                        <span class="text-muted small">—</span>
+                        <span class="text-muted small">-</span>
                         {% endif %}
                     </td>
                     <td class="small">
@@ -199,54 +276,16 @@
                         {% elif colony.is_stalled == true %}
                             <span class="eve-expiry-expired"><i class="bi bi-pause-circle me-1"></i>Stalled</span>
                         {% elif colony.is_stalled == false %}
-                            <span class="eve-expiry-ok"><i class="bi bi-play-circle me-1"></i>Läuft</span>
+                            <span class="eve-expiry-ok"><i class="bi bi-play-circle me-1"></i>Laeuft</span>
                         {% else %}
-                            <span class="text-muted">—</span>
+                            <span class="text-muted">-</span>
                         {% endif %}
                     </td>
-                    <td class="small">
+                    <td class="small text-end">
                         {% if not colony.is_active %}
-                            <span class="text-muted" title="Colony not running — theoretical value">~{{ colony.isk_day | format_isk }}</span>
+                            <span class="text-muted" title="Colony not running - theoretical value">~{{ colony.isk_day | format_isk }}</span>
                         {% else %}
                             {{ colony.isk_day | format_isk }}
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if colony.storage %}
-                            {% set max_pct = colony.storage | map(attribute='fill_pct') | max %}
-                            {% if max_pct > 85 %}{% set clr = '#e74c3c' %}
-                            {% elif max_pct > 60 %}{% set clr = '#f4a300' %}
-                            {% else %}{% set clr = '#2dc653' %}{% endif %}
-                            <div class="eve-hover-wrap">
-                                <span class="eve-storage-badge" style="color:{{ clr }};">
-                                    {{ colony.storage | length }}× {% if max_pct == 0 %}leer{% else %}{{ max_pct }}%{% endif %}
-                                </span>
-                                <div class="eve-hover-card eve-hover-card-right">
-                                    {% for s in colony.storage %}
-                                    {% if not loop.first %}<div style="border-top:1px solid #1a3a5a;margin:5px 0;"></div>{% endif %}
-                                    {% set pct = s.fill_pct %}
-                                    {% if pct > 85 %}{% set pct_clr = '#e74c3c' %}
-                                    {% elif pct > 60 %}{% set pct_clr = '#f4a300' %}
-                                    {% else %}{% set pct_clr = '#2dc653' %}{% endif %}
-                                    <div style="display:flex;justify-content:space-between;gap:16px;margin-bottom:3px;">
-                                        <span style="color:#b0c4d4;font-weight:600;">{{ s.label }}</span>
-                                        <span style="color:{{ pct_clr }};font-weight:600;">{{ pct }}%</span>
-                                    </div>
-                                    {% if s['items'] %}
-                                        {% for it in s['items'] %}
-                                        <div style="display:flex;justify-content:space-between;gap:16px;color:#7a8a9a;">
-                                            <span>{{ it.name }}</span>
-                                            <span>{{ "{:,}".format(it.amount) }}</span>
-                                        </div>
-                                        {% endfor %}
-                                    {% else %}
-                                        <div style="color:#3a5a7a;font-style:italic;">leer</div>
-                                    {% endif %}
-                                    {% endfor %}
-                                </div>
-                            </div>
-                        {% else %}
-                            <span class="text-muted small">—</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -256,41 +295,40 @@
         </div>
         <div id="corpTablePagination"></div>
         <div id="noResultsMsg" style="display:none;" class="text-center py-4 text-muted small">
-            <i class="bi bi-search me-1"></i>No colonies found.
+            <i class="bi bi-search me-1"></i>Keine Kolonien gefunden.
         </div>
         {% else %}
         <div class="text-center py-5">
             <i class="bi bi-globe fs-1 text-muted d-block mb-3"></i>
-            <p class="text-muted mb-2">No colony data available.</p>
-            <small class="text-muted">All corporation members must visit their Dashboard at least once to load data.</small>
+            <p class="text-muted mb-2">Keine Kolonie-Daten verfuegbar.</p>
+            <small class="text-muted">Die Mitglieder muessen ihre Daten zuerst einmal ueber das Dashboard laden.</small>
         </div>
         {% endif %}
     </div>
 </div>
 
-{% if account.is_owner %}
-<!-- Force-Load Modal -->
+{% if can_manage_cache %}
 <div class="modal fade" id="forceLoadModal" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content" style="background:var(--eve-bg-2);border:1px solid var(--eve-card-border);">
             <div class="modal-header" style="border-color:var(--eve-card-border);">
                 <h5 class="modal-title" style="font-size:.95rem;">
-                    <i class="bi bi-arrow-repeat me-2 eve-accent"></i>Corporation — Alle Accounts laden
+                    <i class="bi bi-arrow-repeat me-2 eve-accent"></i>Corporation - Alle Accounts laden
                 </h5>
             </div>
             <div class="modal-body">
                 <div class="d-flex align-items-center gap-2 mb-3">
                     <div id="forceLoadSpinner" class="spinner-border spinner-border-sm" style="color:var(--eve-accent);width:1rem;height:1rem;" role="status"></div>
-                    <span class="small text-muted">Verbleibend: <strong id="forceLoadRemaining">—</strong></span>
+                    <span class="small text-muted">Verbleibend: <strong id="forceLoadRemaining">-</strong></span>
                 </div>
                 <div id="forceLoadList" style="font-size:.82rem;max-height:320px;overflow-y:auto;"></div>
             </div>
             <div class="modal-footer" style="border-color:var(--eve-card-border);">
                 <button id="forceLoadDoneBtn" class="btn eve-btn-primary btn-sm d-none"
                         onclick="window.location.reload()">
-                    <i class="bi bi-check-lg me-1"></i>Fertig – Seite neu laden
+                    <i class="bi bi-check-lg me-1"></i>Fertig - Seite neu laden
                 </button>
-                <button class="btn eve-btn-outline btn-sm" data-bs-dismiss="modal">Schließen</button>
+                <button class="btn eve-btn-outline btn-sm" data-bs-dismiss="modal">Schliessen</button>
             </div>
         </div>
     </div>
@@ -301,17 +339,20 @@
 {% block extra_scripts %}
 <script>
 const MARKET_LAST_UPDATED_ISO = {{ market_last_updated_iso | tojson }};
-// ── Filter ────────────────────────────────────────────────────────────────────
+
 function getActive(groupId) {
-    return [...document.querySelectorAll(`#${groupId} .eve-filter-toggle.active`)].map(b => b.dataset.val);
+    return [...document.querySelectorAll(`#${groupId} .eve-filter-toggle.active`)].map(btn => btn.dataset.val);
 }
-function toggleFilter(btn, groupId) {
+
+function toggleFilter(btn) {
     btn.classList.toggle('active');
     applyCorpFilters();
 }
 
 const corpPager = EvePaginate('corpTable', {
-    pageSize: 12,
+    pageSize: 15,
+    pageSizes: [15, 25, 100, 0],
+    pageSizeLabels: ['15', '25', '100', 'Alle'],
     controlsId: 'corpTablePagination',
     onCount: n => {
         document.getElementById('tableBadge').textContent = n;
@@ -320,112 +361,169 @@ const corpPager = EvePaginate('corpTable', {
 });
 
 function applyCorpFilters() {
-    const char   = document.getElementById('filterChar').value.toLowerCase().trim();
+    const char = document.getElementById('filterChar').value.toLowerCase().trim();
+    const main = document.getElementById('filterMain').value.toLowerCase().trim();
     const system = document.getElementById('filterSystem').value.toLowerCase().trim();
-    const types  = getActive('typeToggles');
-    const tiers  = getActive('tierToggles');
-    const rows   = [...document.querySelectorAll('#corpTable tbody tr')];
+    const types = getActive('typeToggles');
+    const tiers = getActive('tierToggles');
+    const rows = [...document.querySelectorAll('#corpTable tbody tr')];
     const matched = rows.filter(row =>
-        (!char         || row.dataset.char.includes(char)) &&
-        (!system       || row.dataset.system.includes(system)) &&
+        (!char || row.dataset.char.includes(char)) &&
+        (!main || row.dataset.main.includes(main)) &&
+        (!system || row.dataset.system.includes(system)) &&
         (!types.length || types.includes(row.dataset.type)) &&
         (!tiers.length || tiers.includes(row.dataset.tier))
     );
     corpPager.applyFilter(matched);
 }
 
-// ── Sort ─────────────────────────────────────────────────────────────────────
-let _sortCol = null, _sortAsc = true;
-const tbody = document.querySelector('#corpTable tbody');
-const allRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+let corpSortCol = null;
+let corpSortAsc = true;
+const corpTbody = document.querySelector('#corpTable tbody');
+const allCorpRows = corpTbody ? Array.from(corpTbody.querySelectorAll('tr')) : [];
 
 document.querySelectorAll('#corpTable th.eve-sortable').forEach(th => {
     th.addEventListener('click', () => {
         const col = th.dataset.col;
-        _sortAsc = (_sortCol === col) ? !_sortAsc : true;
-        _sortCol = col;
-        document.querySelectorAll('#corpTable th.eve-sortable').forEach(h => {
-            h.classList.remove('sort-asc','sort-desc');
-            h.querySelector('.eve-sort-icon').className = 'bi bi-chevron-expand eve-sort-icon';
+        corpSortAsc = corpSortCol === col ? !corpSortAsc : true;
+        corpSortCol = col;
+        document.querySelectorAll('#corpTable th.eve-sortable').forEach(header => {
+            header.classList.remove('sort-asc', 'sort-desc');
+            header.querySelector('.eve-sort-icon').className = 'bi bi-chevron-expand eve-sort-icon';
         });
-        th.classList.add(_sortAsc ? 'sort-asc' : 'sort-desc');
-        th.querySelector('.eve-sort-icon').className = _sortAsc
-            ? 'bi bi-chevron-up eve-sort-icon' : 'bi bi-chevron-down eve-sort-icon';
-        sortCorpTable(col, _sortAsc);
+        th.classList.add(corpSortAsc ? 'sort-asc' : 'sort-desc');
+        th.querySelector('.eve-sort-icon').className = corpSortAsc
+            ? 'bi bi-chevron-up eve-sort-icon'
+            : 'bi bi-chevron-down eve-sort-icon';
+        sortCorpTable(col, corpSortAsc);
     });
 });
 
 function sortCorpTable(col, asc) {
-    const attrMap = { char:'sortChar', planet:'sortPlanet', type:'sortType',
-                      level:'sortLevel', tier:'sortTier', expiry:'sortExpiry', isk:'sortIsk' };
+    const attrMap = {
+        char: 'sortChar',
+        main: 'sortMain',
+        planet: 'sortPlanet',
+        type: 'sortType',
+        level: 'sortLevel',
+        tier: 'sortTier',
+        expiry: 'sortExpiry',
+        isk: 'sortIsk'
+    };
     const attr = attrMap[col];
     if (!attr) return;
-    const sorted = [...allRows].sort((a, b) => {
-        let av = a.dataset[attr] || '', bv = b.dataset[attr] || '';
-        if (['expiry','isk','level'].includes(col)) {
-            av = parseFloat(av) || 0; bv = parseFloat(bv) || 0;
+    const sorted = [...allCorpRows].sort((a, b) => {
+        let av = a.dataset[attr] || '';
+        let bv = b.dataset[attr] || '';
+        if (['expiry', 'isk', 'level'].includes(col)) {
+            av = parseFloat(av) || 0;
+            bv = parseFloat(bv) || 0;
             return asc ? av - bv : bv - av;
         }
         if (col === 'tier') {
-            av = parseInt(av.replace('P','')) || 0;
-            bv = parseInt(bv.replace('P','')) || 0;
+            av = parseInt(av.replace('P', ''), 10) || 0;
+            bv = parseInt(bv.replace('P', ''), 10) || 0;
             return asc ? av - bv : bv - av;
         }
         return asc ? av.localeCompare(bv) : bv.localeCompare(av);
     });
-    sorted.forEach(r => tbody.appendChild(r));
+    sorted.forEach(row => corpTbody.appendChild(row));
     applyCorpFilters();
 }
 
-{% if account.is_owner %}
-// ── Force Load ────────────────────────────────────────────────────────────────
-const _corpId = {{ corp_id or 'null' }};
+let mainSortCol = 'colonies';
+let mainSortAsc = false;
+const mainTbody = document.querySelector('#corpMainTable tbody');
+const allMainRows = mainTbody ? Array.from(mainTbody.querySelectorAll('tr')) : [];
+
+document.querySelectorAll('#corpMainTable th.eve-sortable').forEach(th => {
+    th.addEventListener('click', () => {
+        const col = th.dataset.mainCol;
+        mainSortAsc = mainSortCol === col ? !mainSortAsc : col !== 'colonies';
+        mainSortCol = col;
+        document.querySelectorAll('#corpMainTable th.eve-sortable').forEach(header => {
+            header.classList.remove('sort-asc', 'sort-desc');
+            header.querySelector('.eve-sort-icon').className = 'bi bi-chevron-expand eve-sort-icon';
+        });
+        th.classList.add(mainSortAsc ? 'sort-asc' : 'sort-desc');
+        th.querySelector('.eve-sort-icon').className = mainSortAsc
+            ? 'bi bi-chevron-up eve-sort-icon'
+            : 'bi bi-chevron-down eve-sort-icon';
+        sortMainTable(col, mainSortAsc);
+    });
+});
+
+function sortMainTable(col, asc) {
+    const attr = {
+        main: 'sortMain',
+        colonies: 'sortColonies',
+        chars: 'sortChars'
+    }[col];
+    if (!attr || !mainTbody) return;
+    const sorted = [...allMainRows].sort((a, b) => {
+        let av = a.dataset[attr] || '';
+        let bv = b.dataset[attr] || '';
+        if (col === 'colonies' || col === 'chars') {
+            av = parseInt(av, 10) || 0;
+            bv = parseInt(bv, 10) || 0;
+            return asc ? av - bv : bv - av;
+        }
+        return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+    sorted.forEach(row => mainTbody.appendChild(row));
+}
+
+sortMainTable('colonies', false);
+
+{% if can_manage_cache %}
+const corpId = {{ corp_id or 'null' }};
 
 async function openForceLoad() {
-    if (!_corpId) return;
-    const _modal = new bootstrap.Modal(document.getElementById('forceLoadModal'));
-    const res = await fetch(`/dashboard/corp/accounts?corp_id=${_corpId}`);
-    const { accounts } = await res.json();
-
-    const uncached = accounts.filter(a => !a.is_cached);
+    if (!corpId) return;
+    const modal = new bootstrap.Modal(document.getElementById('forceLoadModal'));
+    const res = await fetch(`/dashboard/corp/accounts?corp_id=${corpId}`);
+    const data = await res.json();
+    const accounts = data.accounts || [];
+    const uncached = accounts.filter(acc => !acc.is_cached);
 
     const list = document.getElementById('forceLoadList');
     list.innerHTML = '';
     if (!uncached.length) {
-        list.insertAdjacentHTML('beforeend', '<div class="text-muted small py-2">Alle Accounts sind bereits gecacht.</div>');
+        list.insertAdjacentHTML('beforeend', '<div class=\"text-muted small py-2\">Alle Accounts sind bereits gecacht.</div>');
     }
     uncached.forEach(acc => {
         list.insertAdjacentHTML('beforeend', `
-        <div class="d-flex align-items-center gap-2 py-1 border-bottom" style="border-color:var(--eve-card-border)!important;">
-            <span id="spin_${acc.account_id}" class="d-inline-flex" style="width:1rem;text-align:center;">
-                <i class="bi bi-hourglass" style="color:var(--eve-text-muted);"></i>
+        <div class=\"d-flex align-items-center gap-2 py-1 border-bottom\" style=\"border-color:var(--eve-card-border)!important;\">
+            <span id=\"spin_${acc.account_id}\" class=\"d-inline-flex\" style=\"width:1rem;text-align:center;\">
+                <i class=\"bi bi-hourglass\" style=\"color:var(--eve-text-muted);\"></i>
             </span>
-            <span class="flex-grow-1">${acc.main_name}</span>
-            <span id="status_${acc.account_id}" class="small text-muted ms-auto">ausstehend</span>
+            <span class=\"flex-grow-1\">${acc.main_name}</span>
+            <span id=\"status_${acc.account_id}\" class=\"small text-muted ms-auto\">ausstehend</span>
         </div>`);
     });
+
     document.getElementById('forceLoadRemaining').textContent = uncached.length;
     document.getElementById('forceLoadDoneBtn').classList.add('d-none');
     document.getElementById('forceLoadSpinner').style.display = uncached.length ? '' : 'none';
-    _modal.show();
+    modal.show();
 
     let remaining = uncached.length;
     for (const acc of uncached) {
-        document.getElementById('spin_' + acc.account_id).innerHTML =
-            '<span class="spinner-border spinner-border-sm" style="width:.75rem;height:.75rem;border-width:2px;color:var(--eve-accent);"></span>';
-        document.getElementById('status_' + acc.account_id).textContent = 'lädt…';
+        document.getElementById(`spin_${acc.account_id}`).innerHTML =
+            '<span class=\"spinner-border spinner-border-sm\" style=\"width:.75rem;height:.75rem;border-width:2px;color:var(--eve-accent);\"></span>';
+        document.getElementById(`status_${acc.account_id}`).textContent = 'laedt...';
         try {
-            const r = await fetch(`/dashboard/corp/load-account/${acc.account_id}`, { method: 'POST' });
-            const d = await r.json();
-            document.getElementById('spin_' + acc.account_id).innerHTML =
-                d.ok ? '<i class="bi bi-check-circle-fill" style="color:#2dc653;"></i>'
-                     : '<i class="bi bi-x-circle-fill" style="color:#e63946;"></i>';
-            document.getElementById('status_' + acc.account_id).textContent =
-                d.ok ? `${d.colony_count} Kolonien` : 'Fehler';
+            const response = await fetch(`/dashboard/corp/load-account/${acc.account_id}`, { method: 'POST' });
+            const result = await response.json();
+            document.getElementById(`spin_${acc.account_id}`).innerHTML =
+                result.ok ? '<i class=\"bi bi-check-circle-fill\" style=\"color:#2dc653;\"></i>'
+                          : '<i class=\"bi bi-x-circle-fill\" style=\"color:#e63946;\"></i>';
+            document.getElementById(`status_${acc.account_id}`).textContent =
+                result.ok ? `${result.colony_count} Kolonien` : 'Fehler';
         } catch {
-            document.getElementById('spin_' + acc.account_id).innerHTML =
-                '<i class="bi bi-x-circle-fill" style="color:#e63946;"></i>';
-            document.getElementById('status_' + acc.account_id).textContent = 'Fehler';
+            document.getElementById(`spin_${acc.account_id}`).innerHTML =
+                '<i class=\"bi bi-x-circle-fill\" style=\"color:#e63946;\"></i>';
+            document.getElementById(`status_${acc.account_id}`).textContent = 'Fehler';
         }
         remaining--;
         document.getElementById('forceLoadRemaining').textContent = remaining;
@@ -435,6 +533,7 @@ async function openForceLoad() {
     document.getElementById('forceLoadDoneBtn').classList.remove('d-none');
 }
 {% endif %}
+
 enableMarketAutoReload(MARKET_LAST_UPDATED_ISO);
 </script>
 <style>
@@ -446,7 +545,16 @@ enableMarketAutoReload(MARKET_LAST_UPDATED_ISO);
     padding: 2px 8px;
     transition: all .15s;
 }
-.eve-filter-toggle:hover { border-color: var(--eve-accent); color: var(--eve-accent); }
-.eve-filter-toggle.active { background: rgba(0,180,216,.12); border-color: var(--eve-accent); color: var(--eve-accent); }
+
+.eve-filter-toggle:hover {
+    border-color: var(--eve-accent);
+    color: var(--eve-accent);
+}
+
+.eve-filter-toggle.active {
+    background: rgba(0,180,216,.12);
+    border-color: var(--eve-accent);
+    color: var(--eve-accent);
+}
 </style>
 {% endblock %}

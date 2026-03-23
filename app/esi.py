@@ -121,6 +121,34 @@ def get_character_planets(character_id: int, access_token: str) -> list:
         return []
 
 
+def get_character_roles(character_id: int, access_token: str) -> dict:
+    try:
+        response = requests.get(
+            f"{ESI_BASE}/characters/{character_id}/roles/",
+            params={"datasource": "tranquility"},
+            headers={**HEADERS, "Authorization": f"Bearer {access_token}"},
+            timeout=15,
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception:
+        return {}
+
+
+def get_character_skills(character_id: int, access_token: str) -> dict:
+    try:
+        response = requests.get(
+            f"{ESI_BASE}/characters/{character_id}/skills/",
+            params={"datasource": "tranquility"},
+            headers={**HEADERS, "Authorization": f"Bearer {access_token}"},
+            timeout=15,
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception:
+        return {}
+
+
 def search_entities(character_id: int, access_token: str, query: str) -> dict:
     """Sucht Corporations und Allianzen via ESI character search."""
     try:

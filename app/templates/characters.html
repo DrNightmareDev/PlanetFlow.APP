@@ -190,21 +190,26 @@
 <div id="viewList" style="display:none;">
     <div class="card border-0" style="background:var(--eve-card-bg,#0f1923);border:1px solid #1a2d3d !important;">
         <div class="table-responsive">
-            <table class="table table-dark table-hover mb-0" style="--bs-table-bg:transparent;--bs-table-hover-bg:#1a2d3d40;">
+            <table id="charactersListTable" class="table table-dark table-hover mb-0" style="--bs-table-bg:transparent;--bs-table-hover-bg:#1a2d3d40;">
                 <thead>
                     <tr style="border-bottom:1px solid #1a2d3d;">
                         <th class="text-muted small fw-normal ps-3" style="width:40px;"></th>
-                        <th class="text-muted small fw-normal">Charakter</th>
-                        <th class="text-muted small fw-normal d-none d-md-table-cell">Korporation / Allianz</th>
-                        <th class="text-muted small fw-normal d-none d-lg-table-cell">Char-ID</th>
-                        <th class="text-muted small fw-normal">Token</th>
-                        <th class="text-muted small fw-normal d-none d-xl-table-cell">PI Skills</th>
+                        <th class="text-muted small fw-normal eve-sortable-list" data-list-col="name" data-list-type="text">Charakter <i class="bi bi-chevron-expand eve-sort-icon ms-1"></i></th>
+                        <th class="text-muted small fw-normal d-none d-md-table-cell eve-sortable-list" data-list-col="corp" data-list-type="text">Korporation / Allianz <i class="bi bi-chevron-expand eve-sort-icon ms-1"></i></th>
+                        <th class="text-muted small fw-normal d-none d-lg-table-cell eve-sortable-list" data-list-col="id" data-list-type="number">Char-ID <i class="bi bi-chevron-expand eve-sort-icon ms-1"></i></th>
+                        <th class="text-muted small fw-normal eve-sortable-list" data-list-col="token" data-list-type="text">Token <i class="bi bi-chevron-expand eve-sort-icon ms-1"></i></th>
+                        <th class="text-muted small fw-normal d-none d-xl-table-cell eve-sortable-list" data-list-col="skills" data-list-type="number">PI Skills <i class="bi bi-chevron-expand eve-sort-icon ms-1"></i></th>
                         <th class="text-muted small fw-normal pe-3"></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for char in characters %}
-                    <tr style="border-bottom:1px solid #1a2d3d20;">
+                    <tr style="border-bottom:1px solid #1a2d3d20;"
+                        data-sort-name="{{ char.character_name | lower }}"
+                        data-sort-corp="{{ ((char.corporation_name or '') ~ ' ' ~ (char.alliance_name or '')) | lower }}"
+                        data-sort-id="{{ char.eve_character_id }}"
+                        data-sort-token="{% if char.token_expires_at and char.access_token %}Aktiv{% elif char.token_expires_at %}Abgelaufen{% else %}Kein Token{% endif %}"
+                        data-sort-skills="{{ char.pi_skill_total }}">
                         <td class="ps-3 align-middle">
                             <img src="{{ char.portrait_url }}"
                                  alt="{{ char.character_name }}"
@@ -313,5 +318,51 @@ function setView(mode) {
 
 const savedView = localStorage.getItem('charView') || 'grid';
 setView(savedView);
+
+const charactersListTable = document.getElementById('charactersListTable');
+let activeListSort = {col: '', asc: true};
+
+function sortCharactersList(col, type) {
+    if (!charactersListTable) return;
+    const tbody = charactersListTable.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const asc = activeListSort.col === col ? !activeListSort.asc : true;
+    activeListSort = {col, asc};
+
+    rows.sort((a, b) => {
+        let av = a.dataset[`sort${col.charAt(0).toUpperCase()}${col.slice(1)}`] || '';
+        let bv = b.dataset[`sort${col.charAt(0).toUpperCase()}${col.slice(1)}`] || '';
+        if (type === 'number') {
+            av = Number(av || 0);
+            bv = Number(bv || 0);
+            return asc ? av - bv : bv - av;
+        }
+        return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+
+    rows.forEach(row => tbody.appendChild(row));
+
+    document.querySelectorAll('.eve-sortable-list').forEach(th => {
+        const icon = th.querySelector('.eve-sort-icon');
+        if (!icon) return;
+        if (th.dataset.listCol === col) {
+            icon.className = asc ? 'bi bi-chevron-up eve-sort-icon ms-1' : 'bi bi-chevron-down eve-sort-icon ms-1';
+        } else {
+            icon.className = 'bi bi-chevron-expand eve-sort-icon ms-1';
+        }
+    });
+}
+
+document.querySelectorAll('.eve-sortable-list').forEach(th => {
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', () => sortCharactersList(th.dataset.listCol, th.dataset.listType || 'text'));
+});
+
+sortCharactersList('name', 'text');
 </script>
+<style>
+.eve-sortable-list:hover {
+    color: var(--eve-accent) !important;
+}
+</style>
 {% endblock %}

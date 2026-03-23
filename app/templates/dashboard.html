@@ -264,7 +264,15 @@
                                     </div>
                                 </td>
                                 <td class="small">
-                                    <div>{{ colony.planet_name }}</div>
+                                    <div>
+                                        <a href="https://evemaps.dotlan.net/map/Tribute/{{ colony.solar_system_name | replace(' ', '_') }}#sec"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           class="text-decoration-none"
+                                           style="color:#7ec8e3;">
+                                            {{ colony.planet_name }}
+                                        </a>
+                                    </div>
                                     {% if colony.region_name and colony.region_name != '—' %}
                                     <div style="color:#3a5a7a;font-size:.65rem;">{{ colony.region_name }}</div>
                                     {% endif %}
@@ -1020,10 +1028,25 @@ initServiceWorker();
     left: auto;
     right: 0;
 }
-.eve-hover-wrap:hover .eve-hover-card {
-    display: block;
+.eve-global-hover-card {
+    display: none;
+    position: fixed;
+    z-index: 20000;
+    background: #0a1825;
+    border: 1px solid #1a3a5a;
+    border-radius: 6px;
+    padding: 8px 10px;
+    min-width: 160px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.7);
+    font-size: .72rem;
+    white-space: nowrap;
+    pointer-events: none;
+    font-weight: 400;
+    font-family: inherit;
+    line-height: 1.5;
+    text-align: left;
 }
-.eve-table tbody tr:nth-last-child(-n+4) .eve-hover-card {
+.eve-table tbody tr.eve-hover-up .eve-hover-card {
     top: auto;
     bottom: calc(100% + 5px);
 }
@@ -1086,6 +1109,83 @@ function toggleActiveFilter() {
     const btn = document.getElementById('activeFilter');
     btn.classList.toggle('active');
     window.applyFilters();
+}
+
+function updateVisibleHoverCards() {
+    const rows = Array.from(document.querySelectorAll('#coloniesTable tbody tr'));
+    const visibleRows = rows.filter(row => row.style.display !== 'none');
+    const visibleTail = new Set(visibleRows.slice(-4));
+    rows.forEach(row => {
+        const shouldBeUp = visibleTail.has(row);
+        if (shouldBeUp) row.classList.add('eve-hover-up');
+        else row.classList.remove('eve-hover-up');
+    });
+}
+
+function initGlobalHoverCards() {
+    const wraps = Array.from(document.querySelectorAll('#coloniesTable .eve-hover-wrap'));
+    if (!wraps.length) return;
+
+    let globalCard = document.getElementById('eveGlobalHoverCard');
+    if (!globalCard) {
+        globalCard = document.createElement('div');
+        globalCard.id = 'eveGlobalHoverCard';
+        globalCard.className = 'eve-global-hover-card';
+        document.body.appendChild(globalCard);
+    }
+
+    const hideCard = () => {
+        globalCard.style.display = 'none';
+        globalCard.innerHTML = '';
+    };
+
+    const showCard = (wrap) => {
+        const source = wrap.querySelector('.eve-hover-card');
+        if (!source) return;
+
+        globalCard.innerHTML = source.innerHTML;
+        globalCard.style.display = 'block';
+        globalCard.style.visibility = 'hidden';
+
+        const wrapRect = wrap.getBoundingClientRect();
+        const cardWidth = globalCard.offsetWidth;
+        const cardHeight = globalCard.offsetHeight;
+        const wantsUp = !!wrap.closest('tr')?.classList.contains('eve-hover-up');
+        const alignRight = source.classList.contains('eve-hover-card-right');
+
+        let left = alignRight ? wrapRect.right - cardWidth : wrapRect.left;
+        left = Math.max(8, Math.min(left, window.innerWidth - cardWidth - 8));
+
+        let top = wantsUp ? wrapRect.top - cardHeight - 6 : wrapRect.bottom + 6;
+        if (top + cardHeight > window.innerHeight - 8) top = wrapRect.top - cardHeight - 6;
+        if (top < 8) top = Math.min(window.innerHeight - cardHeight - 8, wrapRect.bottom + 6);
+
+        globalCard.style.left = `${left}px`;
+        globalCard.style.top = `${top}px`;
+        globalCard.style.visibility = 'visible';
+    };
+
+    wraps.forEach(wrap => {
+        if (wrap.dataset.hoverBound === '1') return;
+        wrap.dataset.hoverBound = '1';
+        wrap.addEventListener('mouseenter', () => showCard(wrap));
+        wrap.addEventListener('mouseleave', hideCard);
+    });
+
+    window.addEventListener('scroll', hideCard, true);
+    window.addEventListener('resize', hideCard);
+}
+
+const coloniesTableBody = document.querySelector('#coloniesTable tbody');
+if (coloniesTableBody) {
+    const hoverObserver = new MutationObserver(() => updateVisibleHoverCards());
+    hoverObserver.observe(coloniesTableBody, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style']
+    });
+    updateVisibleHoverCards();
+    initGlobalHoverCards();
 }
 </script>
 {% endblock %}

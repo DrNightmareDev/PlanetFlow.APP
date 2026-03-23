@@ -7,9 +7,10 @@ Planetary Industry Dashboard fuer EVE Online - selbst gehostet.
 - PI Kolonien fuer Main und Alts
 - Persistente DB-Caches fuer Marktpreise, Dashboard-Daten und Skyhook-Werte
 - Automatischer 15-Minuten-Refresh fuer Preis- und Wertdaten
-- Dashboard mit Aktiv/Inaktiv-Filtern, ISK/Tag und Ablaufwarnungen
+- Dashboard mit Aktiv/Inaktiv-Filtern, ISK/Tag, Ablaufwarnungen und Dotlan-Links aus der Orts-Spalte
 - Skyhook Inventar mit Verlauf und DB-Wert-Cache
 - PI Skills pro Charakter in Karten- und Listenansicht
+- Sortierbare Charakter-Liste in der Listenansicht
 - Corporation-Uebersicht mit Main-Tabelle und Pagination
 - System Analyzer, System Vergleich und PI Chain Planner
 - Admin Panel und Zugangspolitik
@@ -67,6 +68,13 @@ bash ~/PI_Manager/scripts/update_lxc.sh
 ```
 
 Das Script zieht `main`, installiert Abhaengigkeiten, fuehrt Migrationen aus und startet den Service neu.
+
+## Deployment-Workflow
+
+- Schnelle UI-/Template-Tests laufen auf `192.168.2.44` (`pitest`).
+- Dauerhafte Stände werden per Commit nach `main` gepusht.
+- Produktive oder persistente Updates sollen anschliessend ueber das vorhandene Update-Script eingespielt werden.
+- Nach Template-Aenderungen immer kurz Service-Status und Logs pruefen.
 
 ## Service-Verwaltung
 

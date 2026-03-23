@@ -840,7 +840,6 @@ def dashboard(
             skyhook_data[e.planet_id] = [
                 {"product_name": i.product_name, "quantity": i.quantity} for i in e.items
             ]
-
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "account": account,

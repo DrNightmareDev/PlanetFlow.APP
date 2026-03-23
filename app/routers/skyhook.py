@@ -79,10 +79,14 @@ def skyhook_page(
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
-    from app.routers.dashboard import _dashboard_cache
+    from app.routers.dashboard import _dashboard_cache, _load_colony_cache
     from app.market import get_prices_by_mode
     cached = _dashboard_cache.get(account.id)
-    colonies = cached["colonies"] if cached else []
+    if cached:
+        colonies = cached["colonies"]
+    else:
+        db_cached = _load_colony_cache(account.id, db)
+        colonies = db_cached["colonies"] if db_cached else []
 
     planet_ids = [c["planet_id"] for c in colonies if c.get("planet_id")]
     latest  = _load_latest(account.id, planet_ids, db)

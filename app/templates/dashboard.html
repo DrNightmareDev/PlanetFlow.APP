@@ -886,7 +886,15 @@ function setPriceMode(mode) {
 {% if refreshing %}
 (function pollBgRefresh() {
     const badge = document.getElementById('bgRefreshBadge');
+    let polls = 0;
+    const MAX_POLLS = 20; // max 60s (3s * 20)
     function poll() {
+        polls++;
+        if (polls > MAX_POLLS) {
+            // Refresh hängt oder dauert zu lange → Badge ausblenden
+            if (badge) badge.style.display = 'none';
+            return;
+        }
         fetch('/dashboard/refresh-status')
         .then(r => r.json())
         .then(d => {

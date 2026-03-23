@@ -47,7 +47,7 @@
         <div class="collapse navbar-collapse" id="navMain">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0 gap-1">
                 <li class="nav-item">
-                    <a class="nav-link {% if request.url.path.startswith('/dashboard') and not request.url.path.startswith('/dashboard/characters') and not request.url.path.startswith('/dashboard/overview') and not request.url.path.startswith('/dashboard/corp') %}active{% endif %}"
+                    <a class="nav-link {% if request.url.path.startswith('/dashboard') and not request.url.path.startswith('/dashboard/characters') and not request.url.path.startswith('/dashboard/corp') %}active{% endif %}"
                        href="/dashboard">
                         <i class="bi bi-speedometer2 me-1"></i>Dashboard
                     </a>
@@ -87,12 +87,6 @@
                     <a class="nav-link {% if request.url.path == '/dashboard/corp' %}active{% endif %}"
                        href="/dashboard/corp">
                         <i class="bi bi-building me-1"></i>Corporation
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.url.path == '/dashboard/overview' %}active{% endif %}"
-                       href="/dashboard/overview">
-                        <i class="bi bi-grid-3x3-gap me-1"></i>Übersicht
                     </a>
                 </li>
                 {% if account.is_admin %}

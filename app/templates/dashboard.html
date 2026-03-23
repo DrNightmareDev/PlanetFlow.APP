@@ -1,5 +1,5 @@
-ï»¿{% extends "base.html" %}
-{% block title %}Dashboard â€“ EVE PI Manager{% endblock %}
+{% extends "base.html" %}
+{% block title %}Dashboard – EVE PI Manager{% endblock %}
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -39,7 +39,12 @@
                         <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
                             <h2 class="eve-char-heading mb-0">{{ main_char.character_name }}</h2>
                             <span class="badge eve-badge-main">Main</span>
-                            {% if account.is_owner and account.is_admin %}
+                            {% if account.is_owner %}
+                            <span class="badge" style="background:#f4a30020;color:#f4a300;border:1px solid #f4a30040;">
+                                <i class="bi bi-star-fill me-1"></i>Besitzer
+                            </span>
+                            {% endif %}
+                            {% if account.is_admin %}
                             <span class="badge eve-badge-admin">
                                 <i class="bi bi-shield-fill me-1"></i>Admin
                             </span>
@@ -67,7 +72,7 @@
                             <i class="bi bi-people me-1"></i>Charaktere verwalten
                         </a>
                         <a href="/auth/add-character" class="btn btn-sm eve-btn-outline">
-                            <i class="bi bi-person-plus me-1"></i>Alt hinzufÃ¼gen
+                            <i class="bi bi-person-plus me-1"></i>Alt hinzufügen
                         </a>
                     </div>
                 </div>
@@ -80,9 +85,9 @@
             <div class="card-body text-center py-5">
                 <i class="bi bi-person-x fs-1 text-muted mb-3 d-block"></i>
                 <h4>Kein Main-Charakter festgelegt</h4>
-                <p class="text-muted">FÃ¼ge einen Charakter hinzu oder lege einen als Main fest.</p>
+                <p class="text-muted">Füge einen Charakter hinzu oder lege einen als Main fest.</p>
                 <a href="/auth/login" class="btn eve-btn-primary me-2">
-                    <i class="bi bi-person-plus me-1"></i>Charakter hinzufÃ¼gen
+                    <i class="bi bi-person-plus me-1"></i>Charakter hinzufügen
                 </a>
             </div>
         </div>
@@ -119,7 +124,7 @@
             </div>
         </div>
     </div>
-    <!-- NÃ¤chster Ablauf -->
+    <!-- Nächster Ablauf -->
     <div class="col-6 col-lg-3">
         <div class="eve-stat-card card border-0 h-100">
             <div class="card-body text-center p-3">
@@ -141,14 +146,14 @@
                         </div>
                     {% endif %}
                     {% if next_expiry_char %}
-                    <div class="eve-stat-label">NÃ¤chster Ablauf</div>
+                    <div class="eve-stat-label">Nächster Ablauf</div>
                     <div class="text-muted" style="font-size:0.7rem; margin-top:2px; opacity:0.7;">{{ next_expiry_char }}</div>
                     {% else %}
-                    <div class="eve-stat-label">NÃ¤chster Ablauf</div>
+                    <div class="eve-stat-label">Nächster Ablauf</div>
                     {% endif %}
                 {% else %}
-                    <div class="eve-stat-value text-muted">â€”</div>
-                    <div class="eve-stat-label">NÃ¤chster Ablauf</div>
+                    <div class="eve-stat-value text-muted">—</div>
+                    <div class="eve-stat-label">Nächster Ablauf</div>
                 {% endif %}
             </div>
         </div>
@@ -192,7 +197,7 @@
                         </span>
                         <button class="btn btn-sm eve-btn-outline" id="refreshBtn"
                                 onclick="forceRefresh()"
-                                title="Daten aktualisieren (max. 1Ã— pro Minute)"
+                                title="Daten aktualisieren (max. 1× pro Minute)"
                                 {% if cooldown_remaining > 0 %}disabled{% endif %}>
                             <i class="bi bi-arrow-clockwise" id="refreshIcon"></i>
                             <span id="refreshCooldownLabel">
@@ -260,7 +265,7 @@
                                 </td>
                                 <td class="small">
                                     <div>{{ colony.planet_name }}</div>
-                                    {% if colony.region_name and colony.region_name != 'â€”' %}
+                                    {% if colony.region_name and colony.region_name != '—' %}
                                     <div style="color:#3a5a7a;font-size:.65rem;">{{ colony.region_name }}</div>
                                     {% endif %}
                                 </td>
@@ -288,7 +293,7 @@
                                         {% endif %}
                                     </div>
                                     {% else %}
-                                    <span class="text-muted small">â€”</span>
+                                    <span class="text-muted small">—</span>
                                     {% endif %}
                                 </td>
                                 <td class="small">
@@ -316,15 +321,15 @@
                                         </span>
                                     {% elif colony.is_stalled == false %}
                                         <span class="eve-expiry-ok">
-                                            <i class="bi bi-play-circle me-1"></i>LÃ¤uft
+                                            <i class="bi bi-play-circle me-1"></i>Läuft
                                         </span>
                                     {% else %}
-                                        <span class="text-muted">â€”</span>
+                                        <span class="text-muted">—</span>
                                     {% endif %}
                                 </td>
                                 <td class="small">
                                     {% if not colony.is_active %}
-                                        <span class="text-muted" title="Kolonie lÃ¤uft nicht â€” theoretischer Wert">
+                                        <span class="text-muted" title="Kolonie läuft nicht — theoretischer Wert">
                                             ~{{ colony.isk_day | format_isk }}
                                         </span>
                                     {% else %}
@@ -339,7 +344,7 @@
                                         {% else %}{% set clr = '#2dc653' %}{% endif %}
                                         <div class="eve-hover-wrap">
                                             <span class="eve-storage-badge" style="color:{{ clr }};cursor:pointer;" onclick="openColonyDetail({{ loop.index0 }})">
-                                                {{ colony.storage | length }}Ã— {% if max_pct == 0 %}leer{% else %}{{ max_pct }}%{% endif %}
+                                                {{ colony.storage | length }}× {% if max_pct == 0 %}leer{% else %}{{ max_pct }}%{% endif %}
                                             </span>
                                             <div class="eve-hover-card eve-hover-card-right">
                                                 {% for s in colony.storage %}
@@ -366,7 +371,7 @@
                                             </div>
                                         </div>
                                     {% else %}
-                                        <span class="text-muted small">â€”</span>
+                                        <span class="text-muted small">—</span>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -375,7 +380,7 @@
                                     {% if sh_items %}
                                     <div class="eve-hover-wrap">
                                         <span style="font-size:0.75rem;color:#7a9a6a;white-space:nowrap;cursor:default;">
-                                            <i class="bi bi-box-seam me-1" style="font-size:.7rem;"></i>{{ sh_items | length }}Ã—
+                                            <i class="bi bi-box-seam me-1" style="font-size:.7rem;"></i>{{ sh_items | length }}×
                                         </span>
                                         <div class="eve-hover-card" style="min-width:180px;">
                                             <div style="color:#586e75;font-size:.65rem;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">Skyhook</div>
@@ -388,7 +393,7 @@
                                         </div>
                                     </div>
                                     {% else %}
-                                    <span class="text-muted small" style="font-size:.7rem;">â€”</span>
+                                    <span class="text-muted small" style="font-size:.7rem;">—</span>
                                     {% endif %}
                                     <a href="/skyhook?planet={{ colony.planet_id }}"
                                        title="Skyhook bearbeiten"
@@ -460,40 +465,6 @@
     {% endif %}
 
     <!-- Admin-Schnellzugriff -->
-    {% if account.is_owner or account.is_admin %}
-    <div class="col-12">
-        <h5 class="text-muted mb-3">
-            <i class="bi bi-shield-fill me-2"></i>Admin-Schnellzugriff
-        </h5>
-        <div class="row g-3">
-            <div class="col-md-6">
-                <a href="/dashboard/overview" class="text-decoration-none">
-                    <div class="eve-dev-card card border-0 h-100">
-                        <div class="card-body text-center p-4">
-                            <i class="bi bi-grid-3x3-gap fs-2 eve-accent d-block mb-3"></i>
-                            <h6 class="fw-semibold">Gesamt-Ãœbersicht</h6>
-                            <p class="text-muted small mb-2">Alle Kolonien aller Accounts auf einen Blick</p>
-                            <span class="badge" style="background:#f4a30020;color:#f4a300;border:1px solid #f4a30040;">Owner / Admin</span>
-                        </div>
-                    </div>
-                </a>
-            </div>
-            <div class="col-md-6">
-                <a href="/dashboard/corp" class="text-decoration-none">
-                    <div class="eve-dev-card card border-0 h-100">
-                        <div class="card-body text-center p-4">
-                            <i class="bi bi-building fs-2 eve-accent d-block mb-3"></i>
-                            <h6 class="fw-semibold">Korporation-View</h6>
-                            <p class="text-muted small mb-2">Kolonien aller Mitglieder der eigenen Korporation</p>
-                            <span class="badge" style="background:#f4a30020;color:#f4a300;border:1px solid #f4a30040;">CEO / Admin / Owner</span>
-                        </div>
-                    </div>
-                </a>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
     <!-- Werkzeuge -->
     <div class="col-12">
         <h5 class="text-muted mb-3">
@@ -506,8 +477,8 @@
                         <div class="card-body text-center p-4">
                             <i class="bi bi-diagram-3 fs-2 eve-accent d-block mb-3"></i>
                             <h6 class="fw-semibold">PI Chain Planner</h6>
-                            <p class="text-muted small mb-2">VollstÃ¤ndige Produktionsketten P0?P4 planen</p>
-                            <span class="badge" style="background:#2dc65320;color:#2dc653;border:1px solid #2dc65340;">VerfÃ¼gbar</span>
+                            <p class="text-muted small mb-2">Vollständige Produktionsketten P0?P4 planen</p>
+                            <span class="badge" style="background:#2dc65320;color:#2dc653;border:1px solid #2dc65340;">Verfügbar</span>
                         </div>
                     </div>
                 </a>
@@ -519,7 +490,7 @@
                             <i class="bi bi-layout-split fs-2 eve-accent d-block mb-3"></i>
                             <h6 class="fw-semibold">System Vergleich</h6>
                             <p class="text-muted small mb-2">Bis zu 4 Systeme nebeneinander vergleichen</p>
-                            <span class="badge" style="background:#2dc65320;color:#2dc653;border:1px solid #2dc65340;">VerfÃ¼gbar</span>
+                            <span class="badge" style="background:#2dc65320;color:#2dc653;border:1px solid #2dc65340;">Verfügbar</span>
                         </div>
                     </div>
                 </a>
@@ -530,7 +501,7 @@
                         <i class="bi bi-bell fs-2 eve-accent d-block mb-2"></i>
                         <h6 class="fw-semibold">Push-Benachrichtigungen</h6>
                         <p class="text-muted small mb-2">Werde benachrichtigt wenn deine Extraktoren ablaufen</p>
-                        <span id="notifyFeatureTxt" class="badge" style="background:#2dc65320;color:#2dc653;border:1px solid #2dc65340;">VerfÃ¼gbar</span>
+                        <span id="notifyFeatureTxt" class="badge" style="background:#2dc65320;color:#2dc653;border:1px solid #2dc65340;">Verfügbar</span>
                         <div class="mt-2">
                             <button id="notifyFeatureBtn" onclick="toggleNotifications()" class="btn btn-sm eve-btn-ghost">
                                 <i class="bi bi-bell me-1"></i>Aktivieren
@@ -571,7 +542,7 @@
 
 {% block extra_scripts %}
 <script>
-// -- Daten fÃ¼r Colony-Detail-Modal ---------------------------------------------
+// -- Daten für Colony-Detail-Modal ---------------------------------------------
 const COLONY_META = [
 {% for colony in colonies %}
   {"name": {{ colony.planet_name | tojson }}, "type": {{ colony.planet_type | tojson }}, "char": {{ colony.character_name | tojson }}, "color": {{ colony.color | tojson }}},
@@ -614,7 +585,7 @@ const colonyModal = new bootstrap.Modal(document.getElementById('colonyDetailMod
 const TIER_COLORS = {P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
 
 function formatIsk(val) {
-    if (!val || val === 0) return 'â€”';
+    if (!val || val === 0) return '—';
     if (val >= 1e9) return (val / 1e9).toFixed(2) + ' B ISK';
     if (val >= 1e6) return (val / 1e6).toFixed(2) + ' M ISK';
     if (val >= 1e3) return (val / 1e3).toFixed(1) + ' K ISK';
@@ -622,8 +593,8 @@ function formatIsk(val) {
 }
 
 function fmtM3(val) {
-    if (val >= 1000) return (val/1000).toFixed(1) + ' kmÂ³';
-    return val.toFixed(0) + ' mÂ³';
+    if (val >= 1000) return (val/1000).toFixed(1) + ' km³';
+    return val.toFixed(0) + ' m³';
 }
 
 function openColonyDetail(idx) {
@@ -647,9 +618,9 @@ function openColonyDetail(idx) {
         }
     }
     let locLine = '';
-    if (loc.system && loc.system !== 'â€”') {
+    if (loc.system && loc.system !== '—') {
         locLine = `<div class="small text-muted mt-1"><i class="bi bi-geo-alt me-1"></i>${loc.system}`;
-        if (loc.region && loc.region !== 'â€”') locLine += ` Â· ${loc.region}`;
+        if (loc.region && loc.region !== '—') locLine += ` · ${loc.region}`;
         locLine += '</div>';
     }
     document.getElementById('colonyDetailTitle').innerHTML =
@@ -711,7 +682,7 @@ function openColonyDetail(idx) {
     // -- Fehlende Inputs ----------------------------------------------
     if (missing.length > 0) {
         html += '<hr style="border-color:#1a2d3d;margin:.5rem 0;"><div class="p-3 pt-2">';
-        html += '<h6 class="small text-muted fw-semibold mb-2"><i class="bi bi-box-arrow-in-down me-1"></i>FEHLENDE INPUTS (tÃ¤glich zu importieren)</h6>';
+        html += '<h6 class="small text-muted fw-semibold mb-2"><i class="bi bi-box-arrow-in-down me-1"></i>FEHLENDE INPUTS (täglich zu importieren)</h6>';
         html += '<div class="d-flex flex-wrap gap-1">';
         missing.forEach(m => {
             html += `<span class="badge" style="background:#2a1a0a;color:#f4a300;border:1px solid #5a3a0a;font-size:.7em;">
@@ -765,7 +736,7 @@ function startCooldownUI(seconds) {
     }, 1000);
 }
 
-// Server-seitigen Cooldown in UI Ã¼bernehmen (falls Seite wÃ¤hrend Cooldown geladen wurde)
+// Server-seitigen Cooldown in UI übernehmen (falls Seite während Cooldown geladen wurde)
 const serverCooldown = {{ cooldown_remaining }};
 if (serverCooldown > 0) startCooldownUI(serverCooldown);
 enableMarketAutoReload(MARKET_LAST_UPDATED_ISO);
@@ -862,7 +833,7 @@ if (localStorage.getItem('isk_chart_open') === 'true') _initIskChart();
 
 // -- Preis-Modus (Sell / Buy / Split) -----------------------------------------
 function setPriceMode(mode) {
-    // Sofort aktiven Button setzen fÃ¼r Instant-Feedback
+    // Sofort aktiven Button setzen für Instant-Feedback
     document.querySelectorAll('#priceModeButtons .eve-filter-toggle').forEach(b => {
         b.classList.toggle('active', b.getAttribute('onclick').includes("'" + mode + "'"));
         b.disabled = true;
@@ -947,7 +918,7 @@ function sendExpiriesToSW() {
 
 async function toggleNotifications() {
     if (!('Notification' in window)) {
-        alert('Dein Browser unterstÃ¼tzt keine Benachrichtigungen.');
+        alert('Dein Browser unterstützt keine Benachrichtigungen.');
         return;
     }
     if (localStorage.getItem(NOTIFY_KEY) === '1') {
@@ -981,7 +952,7 @@ function updateNotifyBtn() {
                    && Notification.permission === 'granted';
     icon.className = active ? 'bi bi-bell-fill' : 'bi bi-bell';
     icon.style.color = active ? 'var(--eve-accent)' : '';
-    btn.title = active ? 'Benachrichtigungen aktiv â€“ klicken zum Deaktivieren'
+    btn.title = active ? 'Benachrichtigungen aktiv – klicken zum Deaktivieren'
                        : 'Extractor-Benachrichtigungen aktivieren';
 }
 
@@ -997,7 +968,7 @@ function updateThresholdUI() {
             ? '<i class="bi bi-bell-slash me-1"></i>Deaktivieren'
             : '<i class="bi bi-bell me-1"></i>Aktivieren';
     }
-    if (featureTxt) featureTxt.textContent = active ? 'Aktiv' : 'VerfÃ¼gbar';
+    if (featureTxt) featureTxt.textContent = active ? 'Aktiv' : 'Verfügbar';
 
     // Threshold-Buttons hervorheben
     const t = getThreshold();
@@ -1099,7 +1070,7 @@ initServiceWorker();
 }
 </style>
 <script>
-// tooltips via CSS .eve-hover-wrap â€“ no JS init needed
+// tooltips via CSS .eve-hover-wrap – no JS init needed
 
 function toggleExpiredFilter() {
     const btn = document.getElementById('expiredFilter');
@@ -1114,4 +1085,5 @@ function toggleActiveFilter() {
 }
 </script>
 {% endblock %}
+
 

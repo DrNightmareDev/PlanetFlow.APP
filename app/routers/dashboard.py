@@ -915,60 +915,6 @@ def refresh_status(account=Depends(require_account)):
     running = (account.id in _bg_refresh_running) and not done
     return JSONResponse({"running": running, "done": done})
 
-
-@router.get("/overview", response_class=HTMLResponse)
-def overview_page(
-    request: Request,
-    account=Depends(require_account),
-    db: Session = Depends(get_db),
-):
-    """Gesamt-Übersicht aller Kolonien (nur für Owner und Admins)."""
-    if not (account.is_owner or account.is_admin):
-        raise HTTPException(status_code=403, detail="Kein Zugriff")
-
-    all_accounts = db.query(Account).all()
-    all_colonies: list[dict] = []
-    uncached: list[dict] = []
-    price_mode = getattr(account, "price_mode", "sell")
-
-    for acc in all_accounts:
-        cached = _load_colony_cache(acc.id, db)
-        if cached:
-            colonies = cached.get("colonies", [])
-            meta = cached.get("meta", {})
-            _recompute_expiry(colonies)
-            colonies, _ = _apply_price_mode(colonies, meta, price_mode)
-            all_colonies.extend(colonies)
-        else:
-            chars = db.query(Character).filter(Character.account_id == acc.id).all()
-            main = None
-            if acc.main_character_id:
-                main = db.query(Character).filter(Character.id == acc.main_character_id).first()
-            uncached.append({
-                "id": acc.id,
-                "main_name": main.character_name if main else f"Account #{acc.id}",
-                "char_count": len(chars),
-            })
-
-    all_colonies.sort(key=lambda x: (x.get("character_name", ""), x.get("planet_name", "")))
-    total_isk = sum(c.get("isk_day", 0) for c in all_colonies if c.get("is_active", True))
-    market_last_updated = get_market_last_updated(db)
-    market_last_updated_iso = None
-    if market_last_updated:
-        ts = market_last_updated.replace(tzinfo=timezone.utc) if market_last_updated.tzinfo is None else market_last_updated
-        market_last_updated_iso = ts.astimezone(timezone.utc).isoformat()
-
-    return templates.TemplateResponse("overview.html", {
-        "request": request,
-        "account": account,
-        "all_colonies": all_colonies,
-        "uncached": uncached,
-        "total_colonies": len(all_colonies),
-        "total_isk_day": total_isk,
-        "market_last_updated_iso": market_last_updated_iso,
-    })
-
-
 def _corp_access_flags(account: Account, main_char: Character | None, db: Session) -> dict:
     own_corp_id = main_char.corporation_id if main_char else None
     own_corp_name = main_char.corporation_name if main_char else None
@@ -1047,6 +993,7 @@ def corp_view_page(
         account_char_names = {c.character_name for c in chars_by_account.get(acc_id, [])}
         cached = _load_colony_cache(acc_id, db)
         colony_count = 0
+        planet_type_counts: dict[str, int] = {}
         if cached:
             colonies = cached.get("colonies", [])
             meta = cached.get("meta", {})
@@ -1059,6 +1006,9 @@ def corp_view_page(
                     corp_colony["main_name"] = main.character_name if main else f"Account #{acc_id}"
                     corp_colony["main_portrait"] = main.portrait_url if main else "/static/img/default_char.svg"
                     corp_colonies.append(corp_colony)
+                    planet_type = colony.get("planet_type")
+                    if planet_type:
+                        planet_type_counts[planet_type] = planet_type_counts.get(planet_type, 0) + 1
         else:
             uncached_count += 1
 
@@ -1073,6 +1023,17 @@ def corp_view_page(
             "main_portrait": main.portrait_url if main else "/static/img/default_char.svg",
             "colony_count": colony_count,
             "char_count": len(chars_by_account.get(acc_id, [])),
+            "planet_types": [
+                {
+                    "type": planet_type,
+                    "count": count,
+                    "color": PLANET_TYPE_COLORS.get(planet_type, "#586e75"),
+                }
+                for planet_type, count in sorted(
+                    planet_type_counts.items(),
+                    key=lambda item: (-item[1], item[0].lower()),
+                )
+            ],
         })
 
     corp_colonies.sort(key=lambda x: (x.get("character_name", ""), x.get("planet_name", "")))

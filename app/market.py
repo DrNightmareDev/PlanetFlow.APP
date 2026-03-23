@@ -445,6 +445,34 @@ def get_sell_prices_by_names(names: list[str]) -> dict[str, float]:
         return {}
 
 
+def get_prices_by_mode(names: list[str], mode: str) -> dict[str, float]:
+    """
+    Holt Preise für Item-Namen je nach Modus: 'sell', 'buy' oder 'split' (Mittelwert).
+    Returns: dict von name -> price (ISK)
+    """
+    if not names:
+        return {}
+    name_to_id = {n: _PI_NAME_TO_ID[n] for n in names if n in _PI_NAME_TO_ID}
+    if not name_to_id:
+        return {}
+    try:
+        fuzz = _fetch_fuzzwork_prices(list(name_to_id.values()))
+        result = {}
+        for name, tid in name_to_id.items():
+            d = fuzz.get(tid, {})
+            sell = d.get("sell", 0.0)
+            buy = d.get("buy", 0.0)
+            if mode == "buy":
+                result[name] = buy
+            elif mode == "split":
+                result[name] = (sell + buy) / 2.0 if (sell or buy) else 0.0
+            else:
+                result[name] = sell
+        return result
+    except Exception:
+        return {}
+
+
 def get_prices_by_names(names: list[str]) -> dict[str, dict]:
     """
     Holt Sell+Buy+Angebot für Item-Namen via Fuzzwork (eine Batch-Anfrage).

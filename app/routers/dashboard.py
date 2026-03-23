@@ -3,14 +3,14 @@ import time as _time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Body
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import require_account
 from app.esi import ensure_valid_token, get_character_planets, get_planet_detail, get_planet_info, get_schematic, invalidate_planet_detail_cache
-from app.market import get_sell_prices_by_names
+from app.market import get_sell_prices_by_names, get_prices_by_mode
 from app.models import Account, Character, IskSnapshot, SkyhookEntry, SkyhookItem
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import joinedload as _joinedload
@@ -384,7 +384,7 @@ def _record_isk_snapshot(account_id: int, isk_day: float, colony_count: int, db:
             pass
 
 
-def _build_dashboard_payload(account, characters: list, db: Session) -> dict:
+def _build_dashboard_payload(account, characters: list, db: Session, price_mode: str = "sell") -> dict:
     """Holt alle ESI/Markt-Daten frisch und gibt den vollständigen Payload zurück."""
 
     # Schritt 1: Alle (char, colony, access_token) sammeln
@@ -422,7 +422,7 @@ def _build_dashboard_payload(account, characters: list, db: Session) -> dict:
         all_product_names.update(productions.keys())
 
     # Schritt 4: Eine einzige Batch-Preisabfrage
-    prices = get_sell_prices_by_names(list(all_product_names)) if all_product_names else {}
+    prices = get_prices_by_mode(list(all_product_names), price_mode) if all_product_names else {}
 
     # Schritt 5: Kolonien-Liste aufbauen
     colonies = []
@@ -520,7 +520,7 @@ def dashboard(
     if cached and (now - cached["fetched_at"]) < DASHBOARD_CACHE_TTL:
         payload = cached
     else:
-        payload = _build_dashboard_payload(account, characters, db)
+        payload = _build_dashboard_payload(account, characters, db, price_mode=getattr(account, "price_mode", "sell"))
         _dashboard_cache[account.id] = payload
 
     # ISK-Historie (immer frisch aus DB — billig)
@@ -578,6 +578,7 @@ def dashboard(
         "cooldown_remaining": cooldown_remaining,
         "isk_history": isk_history,
         "skyhook_data": skyhook_data,
+        "price_mode": getattr(account, "price_mode", "sell"),
     })
 
 
@@ -602,6 +603,22 @@ def force_refresh(account=Depends(require_account)):
         db.close()
     _refresh_cooldown[account.id] = now
     return JSONResponse({"ok": True})
+
+
+@router.post("/price-mode")
+def set_price_mode(
+    mode: str = Body(..., embed=True),
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """Speichert den Preis-Modus (sell/buy/split) für den Account."""
+    if mode not in ("sell", "buy", "split"):
+        raise HTTPException(status_code=400, detail="Ungültiger Modus")
+    account.price_mode = mode
+    db.commit()
+    # Cache invalidieren, damit nächster Load die neuen Preise verwendet
+    _dashboard_cache.pop(account.id, None)
+    return JSONResponse({"ok": True, "mode": mode})
 
 
 @router.get("/overview", response_class=HTMLResponse)
@@ -790,7 +807,7 @@ def force_load_account(
         raise HTTPException(status_code=404)
     chars = db.query(Character).filter(Character.account_id == target_account_id).all()
     try:
-        payload = _build_dashboard_payload(target, chars, db)
+        payload = _build_dashboard_payload(target, chars, db, price_mode=getattr(target, "price_mode", "sell"))
         _dashboard_cache[target_account_id] = payload
         return JSONResponse({"ok": True, "colony_count": payload["colony_count"]})
     except Exception as e:

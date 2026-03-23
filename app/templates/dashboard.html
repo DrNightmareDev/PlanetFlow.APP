@@ -108,6 +108,12 @@
                 <div class="eve-stat-icon mb-2"><i class="bi bi-currency-exchange fs-3"></i></div>
                 <div class="eve-stat-value">{{ total_isk_day | format_isk }}</div>
                 <div class="eve-stat-label">ISK / Tag</div>
+                <div class="d-flex justify-content-center gap-1 mt-2" id="priceModeButtons">
+                    {% for lbl, val in [('Sell','sell'),('Buy','buy'),('Split','split')] %}
+                    <button class="eve-filter-toggle{% if price_mode == val %} active{% endif %}"
+                            onclick="setPriceMode('{{ val }}')" title="Jita {{ lbl }} Preis">{{ lbl }}</button>
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </div>
@@ -850,6 +856,22 @@ function _initIskChart() {
 // Init only if chart is already open (from localStorage)
 if (localStorage.getItem('isk_chart_open') === 'true') _initIskChart();
 {% endif %}
+
+// ── Preis-Modus (Sell / Buy / Split) ─────────────────────────────────────────
+function setPriceMode(mode) {
+    fetch('/dashboard/price-mode', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({mode})
+    }).then(r => r.json()).then(d => {
+        if (!d.ok) return;
+        document.querySelectorAll('#priceModeButtons .eve-filter-toggle').forEach(b => {
+            b.classList.toggle('active', b.getAttribute('onclick').includes("'" + mode + "'"));
+        });
+        // Cache invalidated on server — reload to show new prices
+        window.location.reload();
+    });
+}
 
 // ── Push-Benachrichtigungen (Service Worker) ──────────────────────────────────
 const COLONY_EXPIRIES = [

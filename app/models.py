@@ -15,6 +15,7 @@ class Account(Base):
     is_admin = Column(Boolean, default=False, nullable=False)
     is_owner = Column(Boolean, default=False, nullable=False)
     main_character_id = Column(Integer, ForeignKey("characters.id", use_alter=True, name="fk_account_main_char"), nullable=True)
+    price_mode = Column(String(10), nullable=False, default="sell")
 
     characters = relationship(
         "Character",

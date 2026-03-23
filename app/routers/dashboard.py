@@ -486,11 +486,15 @@ def dashboard(
         db.query(IskSnapshot)
         .filter(IskSnapshot.account_id == account.id)
         .order_by(IskSnapshot.recorded_at)
-        .limit(60)
+        .limit(365)
         .all()
     )
     isk_history = [
-        {"date": s.recorded_at.strftime("%d.%m"), "isk": float(s.isk_day or 0)}
+        {
+            "date": s.recorded_at.strftime("%d.%m"),
+            "date_iso": s.recorded_at.strftime("%Y-%m-%d"),
+            "isk": float(s.isk_day or 0),
+        }
         for s in snapshots
     ]
 

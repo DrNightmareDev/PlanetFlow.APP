@@ -3,6 +3,18 @@
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+.eve-filter-toggle {
+    background: var(--eve-bg-2);
+    border: 1px solid var(--eve-card-border);
+    color: var(--eve-text-muted);
+    font-size: .72rem;
+    padding: 2px 8px;
+    transition: all .15s;
+}
+.eve-filter-toggle:hover { border-color: var(--eve-accent); color: var(--eve-accent); }
+.eve-filter-toggle.active { background: rgba(0,180,216,.12); border-color: var(--eve-accent); color: var(--eve-accent); }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -403,10 +415,15 @@
     {% if isk_history | length > 1 %}
     <div class="col-12">
         <div class="eve-card card border-0">
-            <div class="card-header eve-card-header d-flex align-items-center gap-2">
+            <div class="card-header eve-card-header d-flex align-items-center gap-2 flex-wrap">
                 <i class="bi bi-graph-up-arrow eve-accent"></i>
                 <span class="fw-medium">ISK/Tag Verlauf</span>
-                <span class="text-muted small">(letzte {{ isk_history | length }} Tage)</span>
+                <div class="d-flex gap-1 ms-auto" id="iskRangeBtns">
+                    {% for label, days in [('1T',1),('1W',7),('1M',30),('3M',90),('1J',365)] %}
+                    <button class="btn btn-sm eve-filter-toggle{% if loop.last %} active{% endif %}"
+                            data-days="{{ days }}" onclick="setIskRange(this)">{{ label }}</button>
+                    {% endfor %}
+                </div>
             </div>
             <div class="card-body p-3">
                 <canvas id="iskChart" style="max-height:200px;"></canvas>
@@ -727,21 +744,45 @@ if (serverCooldown > 0) startCooldownUI(serverCooldown);
 // ── ISK-Verlauf Chart ─────────────────────────────────────────────────────────
 {% if isk_history | length > 1 %}
 const iskHistoryData = {{ isk_history | tojson }};
+let _iskChart = null;
+
+function _iskFiltered(days) {
+    if (!days || days >= iskHistoryData.length) return iskHistoryData;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const cut = cutoff.toISOString().slice(0, 10);
+    const filtered = iskHistoryData.filter(d => d.date_iso >= cut);
+    return filtered.length > 0 ? filtered : iskHistoryData.slice(-days);
+}
+
+function setIskRange(btn) {
+    document.querySelectorAll('#iskRangeBtns .eve-filter-toggle').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const days = parseInt(btn.dataset.days);
+    const data = _iskFiltered(days);
+    if (!_iskChart) return;
+    _iskChart.data.labels = data.map(d => d.date);
+    _iskChart.data.datasets[0].data = data.map(d => d.isk);
+    _iskChart.data.datasets[0].pointRadius = data.length <= 14 ? 4 : data.length <= 60 ? 2 : 1;
+    _iskChart.update();
+}
+
 (function() {
     const ctx = document.getElementById('iskChart');
     if (!ctx) return;
-    new Chart(ctx, {
+    const initial = _iskFiltered(365);
+    _iskChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: iskHistoryData.map(d => d.date),
+            labels: initial.map(d => d.date),
             datasets: [{
                 label: 'ISK/Tag',
-                data: iskHistoryData.map(d => d.isk),
+                data: initial.map(d => d.isk),
                 borderColor: '#f4a300',
                 backgroundColor: 'rgba(244,163,0,0.08)',
                 tension: 0.3,
                 fill: true,
-                pointRadius: iskHistoryData.length <= 14 ? 4 : 2,
+                pointRadius: initial.length <= 14 ? 4 : initial.length <= 60 ? 2 : 1,
                 pointHoverRadius: 6,
             }]
         },
@@ -761,7 +802,7 @@ const iskHistoryData = {{ isk_history | tojson }};
                 }
             },
             scales: {
-                x: {grid: {color: 'rgba(255,255,255,0.04)'}, ticks: {color: '#586e75', maxTicksLimit: 10}},
+                x: {grid: {color: 'rgba(255,255,255,0.04)'}, ticks: {color: '#586e75', maxTicksLimit: 12}},
                 y: {
                     grid: {color: 'rgba(255,255,255,0.04)'},
                     ticks: {

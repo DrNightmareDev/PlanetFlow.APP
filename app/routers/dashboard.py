@@ -984,6 +984,7 @@ def corp_view_page(
     corp_colonies: list[dict] = []
     corp_main_rows: list[dict] = []
     corp_accounts: list[dict] = []
+    corp_product_rows: list[dict] = []
     uncached_count = 0
     for acc_id in account_ids:
         acc = db.query(Account).filter(Account.id == acc_id).first()
@@ -1006,6 +1007,16 @@ def corp_view_page(
                     corp_colony["main_name"] = main.character_name if main else f"Account #{acc_id}"
                     corp_colony["main_portrait"] = main.portrait_url if main else "/static/img/default_char.svg"
                     corp_colonies.append(corp_colony)
+                    for product_name in sorted((corp_colony.get("productions") or {}).keys()):
+                        corp_product_rows.append({
+                            "product_name": product_name,
+                            "main_name": corp_colony["main_name"],
+                            "main_portrait": corp_colony["main_portrait"],
+                            "planet_name": corp_colony.get("planet_name") or "-",
+                            "planet_type": corp_colony.get("planet_type") or "-",
+                            "character_name": corp_colony.get("character_name") or "-",
+                            "is_active": bool(corp_colony.get("is_active", True)),
+                        })
                     planet_type = colony.get("planet_type")
                     if planet_type:
                         planet_type_counts[planet_type] = planet_type_counts.get(planet_type, 0) + 1
@@ -1038,6 +1049,7 @@ def corp_view_page(
 
     corp_colonies.sort(key=lambda x: (x.get("character_name", ""), x.get("planet_name", "")))
     corp_main_rows.sort(key=lambda x: (-x["colony_count"], x["main_name"].lower()))
+    corp_product_rows.sort(key=lambda x: (x["product_name"].lower(), x["main_name"].lower(), x["planet_name"].lower()))
     total_isk = sum(c.get("isk_day", 0) for c in corp_colonies if c.get("is_active", True))
     market_last_updated = get_market_last_updated(db)
     market_last_updated_iso = None
@@ -1052,6 +1064,7 @@ def corp_view_page(
         "corp_id": active_corp_id,
         "corp_colonies": corp_colonies,
         "corp_main_rows": corp_main_rows,
+        "corp_product_rows": corp_product_rows,
         "corp_accounts": corp_accounts,
         "uncached_count": uncached_count,
         "total_colonies": len(corp_colonies),

@@ -167,6 +167,73 @@
     </div>
 </div>
 
+<div class="eve-card card border-0 mt-4">
+    <div class="card-header eve-card-header d-flex align-items-center justify-content-between gap-3 flex-wrap py-2 px-3"
+         style="background:rgba(30,45,61,0.3);border-color:var(--eve-card-border);">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-search eve-accent"></i>
+            <span class="fw-medium">Produkt Suche</span>
+            <span class="badge eve-badge-count" id="productSearchBadge">0</span>
+        </div>
+        <div class="input-group input-group-sm" style="max-width:340px;">
+            <span class="input-group-text eve-input-prefix"><i class="bi bi-box-seam"></i></span>
+            <input id="corpProductSearch"
+                   type="text"
+                   class="form-control eve-input"
+                   placeholder="Produkt suchen, z. B. Coolant">
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div id="productSearchHint" class="text-center py-4 text-muted small">
+            <i class="bi bi-info-circle me-1"></i>Produkt eingeben, um passende Mains und Planeten anzuzeigen.
+        </div>
+        <div id="productSearchWrap" class="table-responsive" style="display:none;">
+            <table class="table eve-table mb-0" id="corpProductTable">
+                <thead>
+                    <tr>
+                        <th>Produkt</th>
+                        <th>Main</th>
+                        <th>Planet</th>
+                        <th>Char</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in corp_product_rows %}
+                    <tr data-product="{{ row.product_name | lower }}"
+                        data-main="{{ row.main_name | lower }}"
+                        data-planet="{{ row.planet_name | lower }}">
+                        <td class="small fw-semibold">{{ row.product_name }}</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <img src="{{ row.main_portrait }}" class="eve-portrait-xs rounded-circle"
+                                     onerror="this.src='/static/img/default_char.svg'">
+                                <span class="small">{{ row.main_name }}</span>
+                            </div>
+                        </td>
+                        <td class="small">
+                            <div>{{ row.planet_name }}</div>
+                            <div class="text-muted" style="font-size:.72rem;">{{ row.planet_type }}</div>
+                        </td>
+                        <td class="small text-muted">{{ row.character_name }}</td>
+                        <td class="small">
+                            {% if row.is_active %}
+                            <span class="badge" style="background:#2dc65322;color:#2dc653;border:1px solid #2dc65340;">Aktiv</span>
+                            {% else %}
+                            <span class="badge" style="background:#7a8a9a22;color:#7a8a9a;border:1px solid #7a8a9a40;">Inaktiv</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div id="productNoResultsMsg" style="display:none;" class="text-center py-4 text-muted small">
+            <i class="bi bi-search me-1"></i>Kein passendes Produkt gefunden.
+        </div>
+    </div>
+</div>
+
 {% if can_manage_cache %}
 <div class="modal fade" id="forceLoadModal" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered">
@@ -255,6 +322,44 @@ function sortMainTable(col, asc) {
 }
 
 sortMainTable('colonies', false);
+
+const productSearchInput = document.getElementById('corpProductSearch');
+const productSearchWrap = document.getElementById('productSearchWrap');
+const productSearchHint = document.getElementById('productSearchHint');
+const productNoResultsMsg = document.getElementById('productNoResultsMsg');
+const productSearchBadge = document.getElementById('productSearchBadge');
+const allProductRows = Array.from(document.querySelectorAll('#corpProductTable tbody tr'));
+
+function applyCorpProductSearch() {
+    const q = (productSearchInput?.value || '').trim().toLowerCase();
+    if (!q) {
+        productSearchWrap.style.display = 'none';
+        productNoResultsMsg.style.display = 'none';
+        productSearchHint.style.display = '';
+        productSearchBadge.textContent = '0';
+        allProductRows.forEach(row => row.style.display = '');
+        return;
+    }
+
+    let visible = 0;
+    allProductRows.forEach(row => {
+        const matches =
+            row.dataset.product.includes(q) ||
+            row.dataset.main.includes(q) ||
+            row.dataset.planet.includes(q);
+        row.style.display = matches ? '' : 'none';
+        if (matches) visible++;
+    });
+
+    productSearchHint.style.display = 'none';
+    productSearchWrap.style.display = visible ? '' : 'none';
+    productNoResultsMsg.style.display = visible ? 'none' : '';
+    productSearchBadge.textContent = String(visible);
+}
+
+if (productSearchInput) {
+    productSearchInput.addEventListener('input', applyCorpProductSearch);
+}
 
 {% if can_manage_cache %}
 const corpId = {{ corp_id or 'null' }};

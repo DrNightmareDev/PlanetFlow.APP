@@ -175,12 +175,16 @@
             <span class="fw-medium">Produkt Suche</span>
             <span class="badge eve-badge-count" id="productSearchBadge">0</span>
         </div>
-        <div class="input-group input-group-sm" style="max-width:340px;">
-            <span class="input-group-text eve-input-prefix"><i class="bi bi-box-seam"></i></span>
-            <input id="corpProductSearch"
-                   type="text"
-                   class="form-control eve-input"
-                   placeholder="Produkt suchen, z. B. Coolant">
+        <div class="position-relative" style="max-width:340px;width:100%;">
+            <div class="input-group input-group-sm">
+                <span class="input-group-text eve-input-prefix"><i class="bi bi-box-seam"></i></span>
+                <input id="corpProductSearch"
+                       type="text"
+                       class="form-control eve-input"
+                       placeholder="Produkt suchen, z. B. Coolant"
+                       autocomplete="off">
+            </div>
+            <div id="corpProductDropdown" class="eve-search-dropdown position-absolute w-100 d-none"></div>
         </div>
     </div>
     <div class="card-body p-0">
@@ -324,11 +328,14 @@ function sortMainTable(col, asc) {
 sortMainTable('colonies', false);
 
 const productSearchInput = document.getElementById('corpProductSearch');
+const productSearchDropdown = document.getElementById('corpProductDropdown');
 const productSearchWrap = document.getElementById('productSearchWrap');
 const productSearchHint = document.getElementById('productSearchHint');
 const productNoResultsMsg = document.getElementById('productNoResultsMsg');
 const productSearchBadge = document.getElementById('productSearchBadge');
 const allProductRows = Array.from(document.querySelectorAll('#corpProductTable tbody tr'));
+const ALL_PRODUCTS = {{ all_products | tojson }};
+const TIER_COLORS = {P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
 
 function applyCorpProductSearch() {
     const q = (productSearchInput?.value || '').trim().toLowerCase();
@@ -359,6 +366,56 @@ function applyCorpProductSearch() {
 
 if (productSearchInput) {
     productSearchInput.addEventListener('input', applyCorpProductSearch);
+    productSearchInput.addEventListener('input', function() {
+        showCorpProductDropdown(this.value.trim().toLowerCase());
+    });
+    productSearchInput.addEventListener('focus', function() {
+        showCorpProductDropdown(this.value.trim().toLowerCase());
+    });
+    productSearchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') productSearchDropdown.classList.add('d-none');
+    });
+}
+
+document.addEventListener('click', e => {
+    if (!e.target.closest('#corpProductSearch') && !e.target.closest('#corpProductDropdown')) {
+        productSearchDropdown?.classList.add('d-none');
+    }
+});
+
+function showCorpProductDropdown(q) {
+    if (!productSearchDropdown) return;
+
+    let filtered = ALL_PRODUCTS;
+    if (q) filtered = filtered.filter(p => p.name.toLowerCase().includes(q));
+    filtered = [...filtered].sort((a, b) => a.name.localeCompare(b.name)).slice(0, 20);
+
+    productSearchDropdown.innerHTML = '';
+    if (!filtered.length) {
+        productSearchDropdown.classList.add('d-none');
+        return;
+    }
+
+    filtered.forEach(p => {
+        const tc = TIER_COLORS[p.tier] || '#586e75';
+        const item = document.createElement('div');
+        item.className = 'eve-search-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            <span class="fw-medium">${p.name}</span>
+            <span class="badge" style="background:${tc}18;color:${tc};border:1px solid ${tc}30;">${p.tier}</span>
+        `;
+        item.addEventListener('click', () => selectCorpProduct(p));
+        productSearchDropdown.appendChild(item);
+    });
+
+    productSearchDropdown.classList.remove('d-none');
+}
+
+function selectCorpProduct(product) {
+    if (!productSearchInput) return;
+    productSearchInput.value = product.name;
+    productSearchDropdown?.classList.add('d-none');
+    applyCorpProductSearch();
 }
 
 {% if can_manage_cache %}

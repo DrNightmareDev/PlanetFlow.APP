@@ -16,7 +16,7 @@ from app.market import get_prices_by_mode, get_market_last_updated
 from app.models import Account, Character, DashboardCache, IskSnapshot, SkyhookEntry, SkyhookItem
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import joinedload as _joinedload
-from app.pi_data import PLANET_TYPE_COLORS
+from app.pi_data import PLANET_TYPE_COLORS, ALL_P1, ALL_P2, ALL_P3, ALL_P4
 from app import sde as _sde
 from app.templates_env import templates
 
@@ -1056,6 +1056,12 @@ def corp_view_page(
     if market_last_updated:
         ts = market_last_updated.replace(tzinfo=timezone.utc) if market_last_updated.tzinfo is None else market_last_updated
         market_last_updated_iso = ts.astimezone(timezone.utc).isoformat()
+    all_products = (
+        [{"name": n, "tier": "P1"} for n in sorted(ALL_P1)] +
+        [{"name": n, "tier": "P2"} for n in sorted(ALL_P2)] +
+        [{"name": n, "tier": "P3"} for n in sorted(ALL_P3)] +
+        [{"name": n, "tier": "P4"} for n in sorted(ALL_P4)]
+    )
 
     return templates.TemplateResponse("corp_view.html", {
         "request": request,
@@ -1076,6 +1082,7 @@ def corp_view_page(
         "roles_scope_missing": access["roles_scope_missing"],
         "can_manage_cache": access["can_manage"],
         "market_last_updated_iso": market_last_updated_iso,
+        "all_products": all_products,
     })
 
 

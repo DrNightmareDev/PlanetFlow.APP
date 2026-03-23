@@ -47,6 +47,18 @@ def invalidate_dashboard_cache(account_id: int) -> None:
     _dashboard_cache.pop(account_id, None)
 
 
+def _touch_colony_cache(account_id: int, db: Session) -> None:
+    """Nur fetched_at aktualisieren ohne Kolonie-Daten zu überschreiben."""
+    try:
+        row = db.query(DashboardCache).filter(DashboardCache.account_id == account_id).first()
+        if row:
+            row.fetched_at = datetime.now(timezone.utc)
+            db.commit()
+    except Exception as e:
+        logger.warning(f"Colony-Cache touch error: {e}")
+        db.rollback()
+
+
 def _save_colony_cache(account_id: int, payload: dict, db: Session) -> None:
     """Speichert Colony-ESI-Daten persistent in DB."""
     next_expiry = payload.get("next_expiry")
@@ -158,7 +170,10 @@ def _start_bg_refresh(account_id: int, char_ids: list[int], price_mode: str) -> 
                 _dashboard_cache[account_id] = {**payload, "price_mode": pm}
                 logger.info(f"BG-Refresh account {account_id}: {colony_count} Kolonien gespeichert")
             else:
-                logger.warning(f"BG-Refresh account {account_id}: ESI lieferte 0 Kolonien – DB-Cache nicht überschrieben")
+                # ESI returned 0 – keep existing colony data, only bump timestamp to
+                # prevent the next page load from immediately triggering another refresh.
+                _touch_colony_cache(account_id, newdb)
+                logger.warning(f"BG-Refresh account {account_id}: ESI lieferte 0 Kolonien – Timestamp aktualisiert, Kolonie-Daten unverändert")
             _bg_refresh_done[account_id] = True
         except Exception as e:
             logger.error(f"BG-Refresh account {account_id} fehlgeschlagen: {e}")
@@ -518,7 +533,11 @@ def _build_dashboard_payload(account, characters: list, db: Session, price_mode:
     char_colony_token: list[tuple] = []
     for char in characters:
         access_token = ensure_valid_token(char, db)
-        raw_colonies = get_character_planets(char.eve_character_id, access_token or "")
+        if not access_token:
+            logger.warning(f"Kein gültiges Token für Char {char.character_name} ({char.eve_character_id}) – übersprungen")
+            continue
+        raw_colonies = get_character_planets(char.eve_character_id, access_token)
+        logger.debug(f"ESI Kolonien für {char.character_name}: {len(raw_colonies)}")
         for colony in raw_colonies:
             char_colony_token.append((char, colony, access_token))
 

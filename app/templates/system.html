@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}System Analyzer – EVE PI Manager{% endblock %}
+{% block title %}System Analyzer - EVE PI Manager{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
@@ -62,7 +62,7 @@
         <div class="card-body p-3">
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <h4 class="mb-0 fw-bold" id="systemName">—</h4>
+                    <h4 class="mb-0 fw-bold" id="systemName">&mdash;</h4>
                     <button class="btn btn-sm eve-btn-ghost p-0" id="favBtn" onclick="toggleFav()" title="Als Favorit speichern">
                         <i class="bi bi-star" id="favIcon" style="font-size:1.1rem;"></i>
                     </button>
@@ -94,7 +94,7 @@
             <div class="d-flex align-items-center gap-2">
                 <i class="bi bi-layers eve-accent"></i>
                 <span class="fw-medium">Verfügbare P0 Ressourcen</span>
-                <span class="text-muted small" style="font-size:0.72rem;">— Kacheln anklicken zum Filtern</span>
+                <span class="text-muted small" style="font-size:0.72rem;">&mdash; Kacheln anklicken zum Filtern</span>
             </div>
             <button id="clearPlanetFilter" class="btn btn-sm eve-tier-filter-btn d-none" onclick="clearFilters()">
                 <i class="bi bi-x-circle me-1"></i>Filter löschen
@@ -304,7 +304,7 @@ async function analyzeSystem() {
 // ── Formatierung ───────────────────────────────────────────────────────────
 
 function formatIsk(val) {
-    if (!val || val === 0) return '—';
+    if (!val || val === 0) return '&mdash;';
     if (val >= 1e9) return (val / 1e9).toFixed(2) + ' B ISK';
     if (val >= 1e6) return (val / 1e6).toFixed(2) + ' M ISK';
     if (val >= 1e3) return (val / 1e3).toFixed(1) + ' K ISK';
@@ -312,19 +312,19 @@ function formatIsk(val) {
 }
 
 function supplyHtml(level) {
-    if (!level || level === 'none') return '<span class="text-muted">—</span>';
+    if (!level || level === 'none') return '<span class="text-muted">&mdash;</span>';
     const cfg = {
         green:  { color: '#2dc653', label: 'Wenig Angebot' },
         yellow: { color: '#f4a300', label: 'Mittleres Angebot' },
         red:    { color: '#e63946', label: 'Viel Angebot' },
     };
-    const c = cfg[level] || { color: '#586e75', label: '—' };
+    const c = cfg[level] || { color: '#586e75', label: '&mdash;' };
     return `<span style="color:${c.color};font-size:1.1rem;" title="${c.label}">●</span>`;
 }
 
 function trendHtml(rec) {
     const val = rec[currentTrendPeriod];
-    if (val == null) return '<span class="text-muted small">—</span>';
+    if (val == null) return '<span class="text-muted small">&mdash;</span>';
     const abs = Math.abs(val).toFixed(1);
     if (val > 0.5)  return `<span style="color:#2dc653;font-size:0.85rem;">▲ ${abs}%</span>`;
     if (val < -0.5) return `<span style="color:#e63946;font-size:0.85rem;">▼ ${abs}%</span>`;
@@ -521,9 +521,9 @@ function renderAnalysis(data) {
     });
 
     // System Header
-    document.getElementById('systemName').textContent    = data.system_name || '—';
+    document.getElementById('systemName').textContent    = data.system_name || '\u2014';
     document.getElementById('planetCount').textContent   = (data.planets || []).length;
-    document.getElementById('systemRegion').textContent  = data.region || '—';
+    document.getElementById('systemRegion').textContent  = data.region || '\u2014';
 
     const sec = data.security;
     const secColor = sec >= 0.5 ? '#2dc653' : (sec > 0 ? '#f4a300' : '#e63946');
@@ -564,7 +564,7 @@ function renderAnalysis(data) {
                     <span class="badge fw-semibold" style="background:${pt.color}22;color:${pt.color};border:1px solid ${pt.color}3a;">${pt.type}</span>
                     <span class="text-muted small">×${pt.count} Planeten</span>
                 </div>
-                <div>${resources || '<span class="text-muted small">—</span>'}</div>
+                <div>${resources || '<span class="text-muted small">&mdash;</span>'}</div>
             </div>`;
         resGrid.appendChild(col);
     });
@@ -721,10 +721,10 @@ function renderRecs() {
 
         const iskSellDisplay = rec.isk_sell > 0
             ? `<span style="color:var(--eve-gold);">${formatIsk(rec.isk_sell)}</span>`
-            : `<span class="text-muted">—</span>`;
+            : `<span class="text-muted">&mdash;</span>`;
         const iskBuyDisplay = rec.isk_buy > 0
             ? `<span style="color:#2dc653;">${formatIsk(rec.isk_buy)}</span>`
-            : `<span class="text-muted">—</span>`;
+            : `<span class="text-muted">&mdash;</span>`;
 
         const inputBadges  = (rec.inputs || []).map(i => inputBadge(i, rec.tier)).join('');
         const planetBadges = (rec.planets_needed || []).map(p => planetBadge(p)).join('');
@@ -739,8 +739,8 @@ function renderRecs() {
             <td class="small">${iskBuyDisplay}</td>
             <td class="text-center">${supplyHtml(rec.supply_level)}</td>
             <td class="small">${trendHtml(rec)}</td>
-            <td class="small">${inputBadges || '<span class="text-muted">—</span>'}</td>
-            <td class="small">${planetBadges || '<span class="text-muted">—</span>'}</td>
+            <td class="small">${inputBadges || '<span class="text-muted">&mdash;</span>'}</td>
+            <td class="small">${planetBadges || '<span class="text-muted">&mdash;</span>'}</td>
         `;
         tbody.appendChild(tr);
     });

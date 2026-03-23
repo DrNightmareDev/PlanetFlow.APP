@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Skyhook Inventar – EVE PI Manager{% endblock %}
+{% block title %}Skyhook Inventar - EVE PI Manager{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -148,7 +148,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
             <select id="filterSystem" class="form-select form-select-sm eve-select" onchange="applyFilters()">
                 <option value="">Alle Systeme</option>
                 {% for sys in colonies | map(attribute='solar_system_name') | unique | sort %}
-                {% if sys and sys != '—' %}<option>{{ sys }}</option>{% endif %}
+                {% if sys and sys != '&mdash;' %}<option>{{ sys }}</option>{% endif %}
                 {% endfor %}
             </select>
         </div>
@@ -240,7 +240,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                         {% for f in tier_products %}
                         <div style="color:var(--eve-text-muted);font-size:.7rem;margin-top:2px;">{{ f.name }}</div>
                         {% endfor %}
-                        {% else %}<span class="text-muted">—</span>{% endif %}
+                        {% else %}<span class="text-muted">&mdash;</span>{% endif %}
                     </td>
 
                     <!-- Direkt editierbarer Bestand -->
@@ -278,7 +278,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                             <span id="val_tot_{{ ri }}">
                                 {% if planet_value > 0 %}
                                 <span style="color:#7a9a6a;font-weight:600;font-size:.82rem;cursor:default;">{{ planet_value | format_isk }}</span>
-                                {% else %}<span class="text-muted">—</span>{% endif %}
+                                {% else %}<span class="text-muted">&mdash;</span>{% endif %}
                             </span>
                             <div class="eve-hover-card" id="val_det_{{ ri }}" style="min-width:220px;right:0;top:calc(100% + 4px);">
                                 {% for it in planet_details %}{% if it.unit_price > 0 and it.quantity > 0 %}
@@ -299,7 +299,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                             <i class="bi bi-clock-history"></i>
                             <span id="hist_count_{{ ri }}" style="font-size:.65rem;vertical-align:middle;margin-left:2px;">{{ hist | length }}</span>
                         </button>
-                        <span id="hist_empty_{{ ri }}" class="text-muted" style="font-size:.7rem;{{ 'display:none;' if hist else '' }}">—</span>
+                        <span id="hist_empty_{{ ri }}" class="text-muted" style="font-size:.7rem;{{ 'display:none;' if hist else '' }}">&mdash;</span>
                         <div class="sh-hist-popup" id="hist_{{ ri }}">
                             <div style="color:var(--eve-text-muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.6rem;">Letzte Einträge</div>
                             {% for h in hist %}
@@ -329,8 +329,8 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
 
 {% block extra_scripts %}
 <script>
-// ri = row index (loop.index0) — unique per row even if same planet_id
-// planetId = EVE planet ID — used only for API calls
+// ri = row index (loop.index0) - unique per row even if same planet_id
+// planetId = EVE planet ID - used only for API calls
 const SH_PRODUCTS = {{ pi_products | tojson }};
 const SH_PRICES   = {{ prices | tojson }};
 const MARKET_LAST_UPDATED_ISO = {{ market_last_updated_iso | tojson }};
@@ -369,7 +369,7 @@ function updateFillBar(ri) {
 }
 
 function _fmtIsk(v) {
-    if (!v) return '—';
+    if (!v) return '&mdash;';
     if (v >= 1e9) return (v/1e9).toFixed(2) + ' B ISK';
     if (v >= 1e6) return (v/1e6).toFixed(2) + ' M ISK';
     if (v >= 1e3) return (v/1e3).toFixed(1) + ' K ISK';
@@ -401,7 +401,7 @@ function updateValueCell(ri) {
 
     totEl.innerHTML = total > 0
         ? `<span style="color:#7a9a6a;font-weight:600;font-size:.82rem;cursor:default;">${_fmtIsk(total)}</span>`
-        : '<span class="text-muted">—</span>';
+        : '<span class="text-muted">&mdash;</span>';
 
     if (detEl) {
         detEl.innerHTML = lines.map(l =>
@@ -484,7 +484,7 @@ function undoEntry(ri) {
 }
 
 function buildOptions(selected) {
-    let html = '<option value="">— Produkt —</option>';
+    let html = '<option value="">&mdash; Produkt &mdash;</option>';
     for (const [tier, prods] of Object.entries(SH_PRODUCTS)) {
         html += `<optgroup label="${tier}">`;
         for (const p of prods) {

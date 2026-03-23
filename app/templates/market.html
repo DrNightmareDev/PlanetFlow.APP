@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Jita Markt – EVE PI Manager{% endblock %}
+{% block title %}Jita Markt - EVE PI Manager{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
@@ -83,23 +83,23 @@
                             <span class="badge" style="background:{{ tc }}1a;color:{{ tc }};border:1px solid {{ tc }}3a;">{{ row.tier }}</span>
                         </td>
                         <td class="text-end small" style="color:var(--eve-gold);">
-                            {% if row.sell > 0 %}{{ "{:,.2f}".format(row.sell) }}{% else %}—{% endif %}
+                            {% if row.sell > 0 %}{{ "{:,.2f}".format(row.sell) }}{% else %}&mdash;{% endif %}
                         </td>
                         <td class="text-end small" style="color:#2dc653;">
-                            {% if row.buy > 0 %}{{ "{:,.2f}".format(row.buy) }}{% else %}—{% endif %}
+                            {% if row.buy > 0 %}{{ "{:,.2f}".format(row.buy) }}{% else %}&mdash;{% endif %}
                         </td>
                         <td class="text-end small">
                             {% if row.spread is not none %}
                             <span class="{{ 'eve-green' if row.spread < 5 else ('eve-gold' if row.spread < 20 else 'eve-red') }}">
                                 {{ "{:.1f}".format(row.spread) }}%
                             </span>
-                            {% else %}—{% endif %}
+                            {% else %}&mdash;{% endif %}
                         </td>
                         <td class="text-end small trend-1d" data-name="{{ row.name }}">
-                            <span class="text-muted">…</span>
+                            <span class="text-muted">...</span>
                         </td>
                         <td class="text-end small trend-7d" data-name="{{ row.name }}">
-                            <span class="text-muted">…</span>
+                            <span class="text-muted">...</span>
                         </td>
                     </tr>
                     {% endfor %}
@@ -208,13 +208,13 @@ async function loadTrends() {
         });
     } catch(e) {
         document.querySelectorAll('.trend-1d, .trend-7d').forEach(cell => {
-            cell.innerHTML = '<span class="text-muted small">—</span>';
+            cell.innerHTML = '<span class="text-muted small">&mdash;</span>';
         });
     }
 }
 
 function trendHtml(val) {
-    if (val == null) return '<span class="text-muted small">—</span>';
+    if (val == null) return '<span class="text-muted small">&mdash;</span>';
     const abs = Math.abs(val).toFixed(1);
     if (val > 0.5)  return `<span style="color:#2dc653;">▲ ${abs}%</span>`;
     if (val < -0.5) return `<span style="color:#e63946;">▼ ${abs}%</span>`;
@@ -232,7 +232,7 @@ startCooldownUI({{ cooldown_remaining }});
 async function forceRefresh() {
     const btn = document.getElementById('refreshBtn');
     btn.disabled = true;
-    document.getElementById('refreshBtnText').textContent = 'Lädt…';
+    document.getElementById('refreshBtnText').textContent = 'Laedt...';
     try {
         const res = await fetch('/market/refresh', {method: 'POST'});
         const data = await res.json();

@@ -90,21 +90,19 @@
                     </a>
                 </li>
                 {% endif %}
-                {% if account and account.is_owner %}
-                {% if account.is_admin %}
+                {% if account and account.is_admin %}
                 <li class="nav-item">
                     <a class="nav-link eve-admin-link {% if request.url.path.startswith('/admin') %}active{% endif %}"
                        href="/admin">
                         <i class="bi bi-shield-fill me-1"></i>Admin
                     </a>
                 </li>
-                {% else %}
+                {% elif account and account.is_owner %}
                 <li class="nav-item">
                     <a class="nav-link" href="/auth/become-admin" style="color:#f4a300;">
                         <i class="bi bi-star-fill me-1"></i>Admin werden
                     </a>
                 </li>
-                {% endif %}
                 {% endif %}
             </ul>
 

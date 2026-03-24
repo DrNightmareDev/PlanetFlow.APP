@@ -453,6 +453,68 @@ def _get_extractor_status(pins: list) -> dict:
     return {"total": total, "expired": expired}
 
 
+def _compute_extractor_balance(pins: list) -> dict | None:
+    """Liefert Balance-Daten fuer genau zwei laufende Extraktoren auf einem Planeten."""
+    from app.sde import get_type_name
+
+    now = datetime.now(timezone.utc)
+    running: list[dict] = []
+
+    for pin in pins:
+        details = pin.get("extractor_details") or {}
+        if not details:
+            continue
+
+        exp_dt = _parse_expiry(pin.get("expiry_time", ""))
+        if exp_dt is None or exp_dt <= now:
+            continue
+
+        cycle_time = float(details.get("cycle_time") or 0)
+        product_type_id = details.get("product_type_id")
+        product_name = get_type_name(product_type_id) if product_type_id else None
+        qty_per_cycle = float(
+            details.get("qty_per_cycle")
+            or details.get("quantity_per_cycle")
+            or details.get("output_per_cycle")
+            or 0
+        )
+        install_dt = _parse_expiry(pin.get("install_time", "")) or _parse_expiry(pin.get("last_cycle_start", ""))
+        program_cycles = None
+        total_output = None
+        if cycle_time > 0 and install_dt is not None and exp_dt > install_dt:
+            duration_seconds = (exp_dt - install_dt).total_seconds()
+            program_cycles = max(int(round(duration_seconds / cycle_time)), 1)
+            if qty_per_cycle > 0:
+                total_output = qty_per_cycle * program_cycles
+
+        avg_per_hour = qty_per_cycle * (3600.0 / cycle_time) if cycle_time > 0 and qty_per_cycle > 0 else 0.0
+        running.append({
+            "name": product_name or "Unknown",
+            "qty_per_cycle": round(qty_per_cycle, 1) if qty_per_cycle else 0.0,
+            "cycle_time_minutes": round(cycle_time / 60.0, 1) if cycle_time else 0.0,
+            "program_cycles": program_cycles,
+            "total_output": round(total_output, 1) if total_output is not None else None,
+            "avg_per_hour": round(avg_per_hour, 1),
+            "expiry_iso": exp_dt.isoformat(),
+            "expiry_hours": _hours_until(exp_dt),
+        })
+
+    if len(running) != 2 or any((entry.get("avg_per_hour") or 0) <= 0 for entry in running):
+        return None
+
+    running.sort(key=lambda entry: entry["name"].lower())
+    first, second = running
+    diff_per_hour = abs(first["avg_per_hour"] - second["avg_per_hour"])
+    base = max(first["avg_per_hour"], second["avg_per_hour"], 1.0)
+    diff_pct = (diff_per_hour / base) * 100.0
+
+    return {
+        "extractors": running,
+        "diff_per_hour": round(diff_per_hour, 1),
+        "diff_pct": round(diff_pct, 2),
+    }
+
+
 def _compute_colony_productions(pins: list) -> tuple[dict[str, float], dict[str, int], str | None]:
     """Gibt (productions, prod_tiers, highest_tier_label) zurück.
     prod_tiers: product_name -> tier_num (1–4).
@@ -717,6 +779,7 @@ def _build_dashboard_payload(account, characters: list, db: Session, price_mode:
             "factories": _compute_factories(pins, prices),
             "storage": _compute_storage(pins),
             "extractor_status": _get_extractor_status(pins),
+            "extractor_balance": _compute_extractor_balance(pins),
             "missing_inputs": _compute_missing_inputs(pins),
         })
 
@@ -763,31 +826,46 @@ def dashboard(
         colonies = db_cached["colonies"]
         meta = db_cached["meta"]
 
-        # Ablaufzeiten relativ zur jetzigen Zeit neu berechnen
-        next_expiry_dt, next_expiry_char = _recompute_expiry(colonies)
+        needs_balance_refresh = any("extractor_balance" not in colony for colony in colonies)
+        if needs_balance_refresh:
+            payload = _build_dashboard_payload(account, characters, db, price_mode=current_price_mode)
+            _save_colony_cache(account.id, payload, db)
+            _dashboard_cache[account.id] = {**payload, "price_mode": current_price_mode}
 
-        # ISK/Tag aus DB-Preiscache (MarketCache) neu berechnen — sehr schnell
-        colonies, total_isk_day = _apply_price_mode(colonies, meta, current_price_mode)
-        char_count = meta.get("char_count", len(characters))
-        colony_count = len(colonies)
-        next_expiry_hours = _hours_until(next_expiry_dt)
-        if next_expiry_hours is None:
-            next_expiry_hours = meta.get("next_expiry_hours")
+            colonies = payload["colonies"]
+            total_isk_day = payload["total_isk_day"]
+            next_expiry_dt = payload["next_expiry"]
+            next_expiry_hours = payload["next_expiry_hours"]
+            next_expiry_char = payload["next_expiry_char"]
+            char_count = payload["char_count"]
+            colony_count = payload["colony_count"]
+            cache_age_sec = 0
+        else:
+            # Ablaufzeiten relativ zur jetzigen Zeit neu berechnen
+            next_expiry_dt, next_expiry_char = _recompute_expiry(colonies)
 
-        # In-Memory-Cache synchron halten (für Skyhook)
-        _dashboard_cache[account.id] = {
-            "colonies": colonies,
-            "total_isk_day": total_isk_day,
-            "next_expiry": next_expiry_dt,
-            "next_expiry_hours": next_expiry_hours,
-            "next_expiry_char": next_expiry_char,
-            "char_count": char_count,
-            "colony_count": colony_count,
-            "fetched_at": db_cached["fetched_at"],
-            "price_mode": current_price_mode,
-        }
+            # ISK/Tag aus DB-Preiscache (MarketCache) neu berechnen — sehr schnell
+            colonies, total_isk_day = _apply_price_mode(colonies, meta, current_price_mode)
+            char_count = meta.get("char_count", len(characters))
+            colony_count = len(colonies)
+            next_expiry_hours = _hours_until(next_expiry_dt)
+            if next_expiry_hours is None:
+                next_expiry_hours = meta.get("next_expiry_hours")
 
-        cache_age_sec = int(cache_age)
+            # In-Memory-Cache synchron halten (für Skyhook)
+            _dashboard_cache[account.id] = {
+                "colonies": colonies,
+                "total_isk_day": total_isk_day,
+                "next_expiry": next_expiry_dt,
+                "next_expiry_hours": next_expiry_hours,
+                "next_expiry_char": next_expiry_char,
+                "char_count": char_count,
+                "colony_count": colony_count,
+                "fetched_at": db_cached["fetched_at"],
+                "price_mode": current_price_mode,
+            }
+
+            cache_age_sec = int(cache_age)
 
     else:
         # Erster Start: synchron laden und sofort in DB speichern
@@ -864,6 +942,12 @@ def dashboard(
         for items in skyhook_data.values()
         for item in items
         if item.get("product_name")
+    )
+    product_names.update(
+        extractor.get("name")
+        for colony in colonies
+        for extractor in ((colony.get("extractor_balance") or {}).get("extractors") or [])
+        if extractor.get("name")
     )
     product_labels = {
         name: translate_type_name(PI_TYPE_IDS.get(name) or _sde.find_type_id_by_name(name), fallback=name, lang=lang)

@@ -177,6 +177,12 @@
                         <span class="badge" style="background:rgba(244,163,0,0.12);color:#f4a300;border:1px solid rgba(244,163,0,0.35);font-size:.82rem;font-weight:500;padding:.42rem .72rem;">
                             {{ stalled_colony_count }} {{ t('common.stalled') }}
                         </span>
+                        <div class="d-flex align-items-center gap-2 ms-1" title="Maximal erlaubte Abweichung der Extraktoren pro Stunde">
+                            <span class="small text-muted" style="font-size:.78rem;">Delta</span>
+                            <input id="balanceThresholdRange" type="range" min="1" max="20" step="0.5" value="5"
+                                   style="width:90px;" oninput="updateBalanceThreshold(this.value)">
+                            <span id="balanceThresholdValue" class="small" style="min-width:42px;color:#c9d1d9;">5.0%</span>
+                        </div>
                     </div>
                     {% endif %}
                 </div>
@@ -340,6 +346,7 @@
                                                 <i class="bi bi-clock me-1"></i>{{ colony.expiry_hours | format_expiry }}
                                             </span>
                                         {% endif %}
+                                        <span class="colony-balance-slot ms-2" data-colony-idx="{{ loop.index0 }}"></span>
                                     {% elif colony.is_stalled == true %}
                                         <span class="eve-expiry-warn">
                                             <i class="bi bi-pause-circle me-1"></i>{{ t('common.stalled') }}
@@ -348,6 +355,7 @@
                                         <span class="eve-expiry-ok">
                                             <i class="bi bi-play-circle me-1"></i>Läuft
                                         </span>
+                                        <span class="colony-balance-slot ms-2" data-colony-idx="{{ loop.index0 }}"></span>
                                     {% else %}
                                         <span class="text-muted">—</span>
                                     {% endif %}
@@ -591,6 +599,12 @@ const COLONY_EXTRACTOR = [
 
 {% endfor %}
 ];
+const COLONY_EXTRACTOR_BALANCE = [
+{% for colony in colonies %}
+  {{ colony.get('extractor_balance') | tojson }}{% if not loop.last %},{% endif %}
+
+{% endfor %}
+];
 const COLONY_MISSING_INPUTS = [
 {% for colony in colonies %}
   {{ colony.missing_inputs | tojson }}{% if not loop.last %},{% endif %}
@@ -603,7 +617,23 @@ const COLONY_LOCATION = [
 
 {% endfor %}
 ];
+const DASHBOARD_PRODUCT_LABELS = {{ product_labels | tojson }};
 const MARKET_LAST_UPDATED_ISO = {{ market_last_updated_iso | tojson }};
+const BALANCE_LABELS = {
+    totalOutput: {{ 'Total Output' | tojson }},
+    cycleTime: {{ 'Cycle Time' | tojson }},
+    programCycles: {{ 'Program Cycles' | tojson }},
+    averagePerCycle: {{ 'Average per Cycle' | tojson }},
+    averagePerHour: {{ 'Average per hour' | tojson }},
+    expiresIn: {{ 'Expires in' | tojson }},
+    balance: {{ 'Balance' | tojson }},
+    difference: {{ 'Difference' | tojson }},
+    unitsPerProgram: {{ 'units per program' | tojson }},
+    units: {{ 'units' | tojson }},
+    unitsPerHour: {{ 'u/h' | tojson }},
+    minutes: {{ 'minutes' | tojson }},
+};
+const BALANCE_THRESHOLD_KEY = 'eve_pi_balance_threshold_pct';
 
 // -- Colony Detail Modal -------------------------------------------------------
 const colonyModal = new bootstrap.Modal(document.getElementById('colonyDetailModal'));
@@ -1168,6 +1198,82 @@ function formatDashboardIsk(val) {
     return Math.round(val) + ' ISK';
 }
 
+function getBalanceThreshold() {
+    const raw = parseFloat(localStorage.getItem(BALANCE_THRESHOLD_KEY) || '5');
+    return Number.isFinite(raw) ? raw : 5;
+}
+
+function formatBalanceDuration(hours) {
+    if (hours == null || !Number.isFinite(hours)) return '—';
+    const totalSeconds = Math.max(0, Math.round(hours * 3600));
+    const hh = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+    const mm = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+    const ss = String(totalSeconds % 60).padStart(2, '0');
+    return `00:${hh}:${mm}:${ss}`;
+}
+
+function buildExtractorBalanceCard(balance) {
+    if (!balance || !Array.isArray(balance.extractors) || balance.extractors.length !== 2) return '';
+    const sections = balance.extractors.map(ext => `
+        <div>
+            <div style="color:#f0f3f6;font-weight:600;margin-bottom:4px;">${DASHBOARD_PRODUCT_LABELS[ext.name] || ext.name}</div>
+            <div>· ${BALANCE_LABELS.totalOutput}: ${ext.total_output ?? '—'} ${BALANCE_LABELS.unitsPerProgram}</div>
+            <div>· ${BALANCE_LABELS.cycleTime}: ${ext.cycle_time_minutes ?? '—'} ${BALANCE_LABELS.minutes}</div>
+            <div>· ${BALANCE_LABELS.programCycles}: ${ext.program_cycles ?? '—'}</div>
+            <div>· ${BALANCE_LABELS.averagePerCycle}: ${ext.qty_per_cycle ?? '—'} ${BALANCE_LABELS.units}</div>
+            <div>· ${BALANCE_LABELS.averagePerHour}: ${ext.avg_per_hour ?? '—'} ${BALANCE_LABELS.units}</div>
+            <div>· ${BALANCE_LABELS.expiresIn}: ${formatBalanceDuration(ext.expiry_hours)}</div>
+        </div>
+    `).join('<div style="border-top:1px solid #1a2d3d;margin:8px 0;"></div>');
+
+    return `${sections}
+        <div style="border-top:1px solid #1a2d3d;margin:8px 0;"></div>
+        <div style="color:#e74c3c;font-weight:700;margin-bottom:4px;">${BALANCE_LABELS.balance}</div>
+        ${balance.extractors.map(ext => `<div>· ${DASHBOARD_PRODUCT_LABELS[ext.name] || ext.name}: ${ext.avg_per_hour ?? '—'} ${BALANCE_LABELS.unitsPerHour}</div>`).join('')}
+        <div style="border-top:1px solid #1a2d3d;margin-top:8px;padding-top:8px;color:#e74c3c;font-weight:700;">
+            ${BALANCE_LABELS.difference}: ${balance.diff_per_hour ?? '—'} ${BALANCE_LABELS.unitsPerHour}
+        </div>`;
+}
+
+function renderExtractorBalanceIndicators() {
+    const threshold = getBalanceThreshold();
+    document.querySelectorAll('.colony-balance-slot').forEach(slot => {
+        const idx = parseInt(slot.dataset.colonyIdx, 10);
+        const balance = COLONY_EXTRACTOR_BALANCE[idx];
+        slot.innerHTML = '';
+        if (!balance || !Array.isArray(balance.extractors) || balance.extractors.length !== 2) return;
+
+        const ok = (balance.diff_pct ?? 999) <= threshold;
+        const iconClass = ok ? 'bi bi-check-circle-fill' : 'bi bi-exclamation-circle-fill';
+        const color = ok ? '#2dc653' : '#e74c3c';
+
+        slot.innerHTML = `
+            <span class="eve-hover-wrap">
+                <span style="color:${color};display:inline-flex;align-items:center;cursor:default;">
+                    <i class="${iconClass}"></i>
+                </span>
+                <div class="eve-hover-card eve-hover-card-right" style="white-space:normal;min-width:320px;">
+                    ${buildExtractorBalanceCard(balance)}
+                    <div style="margin-top:8px;color:${color};font-weight:700;">
+                        Δ ${(balance.diff_pct ?? 0).toFixed(1)}% / Limit ${threshold.toFixed(1)}%
+                    </div>
+                </div>
+            </span>`;
+        slot.querySelectorAll('.eve-hover-wrap').forEach(wrap => { wrap.dataset.hoverBound = '0'; });
+    });
+    initGlobalHoverCards();
+}
+
+function updateBalanceThreshold(value) {
+    const numeric = Math.max(1, Math.min(20, parseFloat(value) || 5));
+    localStorage.setItem(BALANCE_THRESHOLD_KEY, String(numeric));
+    const range = document.getElementById('balanceThresholdRange');
+    const label = document.getElementById('balanceThresholdValue');
+    if (range) range.value = String(numeric);
+    if (label) label.textContent = `${numeric.toFixed(1)}%`;
+    renderExtractorBalanceIndicators();
+}
+
 function updateDashboardIskFromVisibleRows() {
     const valueEl = document.getElementById('dashboardIskValue');
     const rows = Array.from(document.querySelectorAll('#coloniesTable tbody tr'));
@@ -1247,6 +1353,7 @@ if (coloniesTableBody) {
     updateVisibleHoverCards();
     updateDashboardIskFromVisibleRows();
     initGlobalHoverCards();
+    updateBalanceThreshold(getBalanceThreshold());
 }
 </script>
 {% endblock %}

@@ -243,7 +243,7 @@ function renderCards(systems) {
                     </div>
                     <div class="d-flex flex-wrap gap-1">${topPt}</div>
                     <div class="mt-2">
-                        <a href="/system/${s.system_id}" class="btn btn-sm eve-btn-outline w-100" style="font-size:0.75rem;">
+                        <a href="/system/${encodeURIComponent(s.system_name)}" class="btn btn-sm eve-btn-outline w-100" style="font-size:0.75rem;">
                             <i class="bi bi-search me-1"></i>{{ t('compare.open_analyzer') }}
                         </a>
                     </div>

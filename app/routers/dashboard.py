@@ -826,7 +826,15 @@ def dashboard(
         colonies = db_cached["colonies"]
         meta = db_cached["meta"]
 
-        needs_balance_refresh = any("extractor_balance" not in colony for colony in colonies)
+        needs_balance_refresh = any(
+            ("extractor_balance" not in colony)
+            or (
+                colony.get("extractor_balance") is None
+                and int((colony.get("extractor_status") or {}).get("total") or 0) == 2
+                and int((colony.get("extractor_status") or {}).get("expired") or 0) == 0
+            )
+            for colony in colonies
+        )
         if needs_balance_refresh:
             payload = _build_dashboard_payload(account, characters, db, price_mode=current_price_mode)
             _save_colony_cache(account.id, payload, db)

@@ -1189,6 +1189,7 @@ function updateVisibleHoverCards() {
         else row.classList.remove('eve-hover-up');
     });
 }
+window.updateVisibleHoverCards = updateVisibleHoverCards;
 
 function formatDashboardIsk(val) {
     if (!val || val === 0) return '0 ISK';
@@ -1263,6 +1264,7 @@ function renderExtractorBalanceIndicators() {
     });
     initGlobalHoverCards();
 }
+window.renderExtractorBalanceIndicators = renderExtractorBalanceIndicators;
 
 function updateBalanceThreshold(value) {
     const numeric = Math.max(1, Math.min(20, parseFloat(value) || 5));
@@ -1273,6 +1275,7 @@ function updateBalanceThreshold(value) {
     if (label) label.textContent = `${numeric.toFixed(1)}%`;
     renderExtractorBalanceIndicators();
 }
+window.updateBalanceThreshold = updateBalanceThreshold;
 
 function updateDashboardIskFromVisibleRows() {
     const valueEl = document.getElementById('dashboardIskValue');
@@ -1284,6 +1287,7 @@ function updateDashboardIskFromVisibleRows() {
     }, 0);
     valueEl.textContent = formatDashboardIsk(total);
 }
+window.updateDashboardIskFromVisibleRows = updateDashboardIskFromVisibleRows;
 
 function initGlobalHoverCards() {
     const wraps = Array.from(document.querySelectorAll('#coloniesTable .eve-hover-wrap'));

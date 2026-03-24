@@ -952,6 +952,21 @@ document.addEventListener('DOMContentLoaded', function () {
         onCount: n => { if (badge) badge.textContent = n; }
     });
 
+    function notifyDashboardTableChanged() {
+        if (typeof window.updateVisibleHoverCards === 'function') {
+            window.updateVisibleHoverCards();
+        }
+        if (typeof window.updateDashboardIskFromVisibleRows === 'function') {
+            window.updateDashboardIskFromVisibleRows();
+        }
+        if (typeof window.renderExtractorBalanceIndicators === 'function') {
+            window.renderExtractorBalanceIndicators();
+        }
+        if (typeof window.initGlobalHoverCards === 'function') {
+            window.initGlobalHoverCards();
+        }
+    }
+
     table.querySelectorAll('th.eve-sortable').forEach(th => {
         th.addEventListener('click', () => {
             const col = th.dataset.col;
@@ -996,6 +1011,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         sorted.forEach(r => tbody.appendChild(r));
         applyFilter();
+        notifyDashboardTableChanged();
     }
 
     const filterSelect = document.getElementById('charFilter');
@@ -1021,6 +1037,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return charOk && stateOk;
         });
         pager.applyFilter(matched);
+        notifyDashboardTableChanged();
         saveFilterState();
     }
 

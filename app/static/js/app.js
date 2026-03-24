@@ -1020,11 +1020,43 @@ document.addEventListener('DOMContentLoaded', function () {
     const activeCheck = document.getElementById('activeFilter');
     const expiredCheck = document.getElementById('expiredFilter');
     const stalledCheck = document.getElementById('stalledFilter');
+    const tierButtons = {
+        P1: document.getElementById('tierFilterP1'),
+        P2: document.getElementById('tierFilterP2'),
+        P3: document.getElementById('tierFilterP3'),
+        P4: document.getElementById('tierFilterP4'),
+    };
+    let currentTierFilters = [];
 
     window.applyFilters = applyFilter;
+    function renderTierFilterButtons() {
+        Object.entries(tierButtons).forEach(([key, btn]) => {
+            if (!btn) return;
+            btn.classList.toggle('active', currentTierFilters.length === 0 || currentTierFilters.includes(key));
+        });
+    }
+
+    window.setTierFilter = function setTierFilter(tier) {
+        const allTiers = ['P1', 'P2', 'P3', 'P4'];
+        if (!tier) {
+            currentTierFilters = [];
+        } else if (currentTierFilters.length === 0) {
+            currentTierFilters = allTiers.filter(value => value !== tier);
+        } else if (currentTierFilters.includes(tier)) {
+            currentTierFilters = currentTierFilters.filter(value => value !== tier);
+        } else {
+            currentTierFilters = [...currentTierFilters, tier];
+        }
+        if (currentTierFilters.length === allTiers.length) {
+            currentTierFilters = [];
+        }
+        renderTierFilterButtons();
+        applyFilter();
+    };
 
     function applyFilter() {
         const charVal = filterSelect ? filterSelect.value : '';
+        const tierVals = currentTierFilters;
         const onlyBalanced = balancedCheck ? balancedCheck.classList.contains('active') : false;
         const onlyUnbalanced = unbalancedCheck ? unbalancedCheck.classList.contains('active') : false;
         const onlyActive = activeCheck ? activeCheck.classList.contains('active') : false;
@@ -1039,11 +1071,13 @@ document.addEventListener('DOMContentLoaded', function () {
             : 0;
         const matched = rows.filter(r => {
             const charOk = !charVal || r.dataset.char === charVal;
+            const tierOk = !tierVals.length || tierVals.includes(r.dataset.sortTier);
             const threshold = typeof window.getBalanceThreshold === 'function'
                 ? window.getBalanceThreshold()
                 : 5;
             const hasComparableBalance = r.dataset.hasBalance === '1';
             const balanceDiffPct = parseFloat(r.dataset.balanceDiffPct || '-1');
+            const totalExtractorRate = parseFloat(r.dataset.totalExtractorRate || '-1');
             const isBalanced = hasComparableBalance && Number.isFinite(balanceDiffPct) && balanceDiffPct <= threshold;
             const isUnbalanced = hasComparableBalance && Number.isFinite(balanceDiffPct) && balanceDiffPct > threshold;
             const minExtractorRate = parseFloat(r.dataset.minExtractorRate || '-1');
@@ -1054,9 +1088,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 minExtractorRate < extractorRateThreshold
             );
             const singleRateOk = singleExtractorRateThreshold <= 0 || extractorCount !== 1 || (
-                Number.isFinite(minExtractorRate) &&
-                minExtractorRate >= 0 &&
-                minExtractorRate < singleExtractorRateThreshold
+                Number.isFinite(totalExtractorRate) &&
+                totalExtractorRate >= 0 &&
+                totalExtractorRate < singleExtractorRateThreshold
             );
             const stateOk = !hasStateFilter || (
                 (onlyBalanced && isBalanced) ||
@@ -1065,7 +1099,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 (onlyExpired && r.dataset.expired === '1') ||
                 (onlyStalled && r.dataset.stalled === '1')
             );
-            return charOk && stateOk && multiRateOk && singleRateOk;
+            return charOk && tierOk && stateOk && multiRateOk && singleRateOk;
         });
         pager.applyFilter(matched);
         notifyDashboardTableChanged();
@@ -1076,6 +1110,7 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             localStorage.setItem(FILTER_KEY, JSON.stringify({
                 char: filterSelect ? filterSelect.value : '',
+                tiers: currentTierFilters,
                 balanced: balancedCheck ? balancedCheck.classList.contains('active') : false,
                 unbalanced: unbalancedCheck ? unbalancedCheck.classList.contains('active') : false,
                 active: activeCheck ? activeCheck.classList.contains('active') : false,
@@ -1091,6 +1126,10 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const state = JSON.parse(localStorage.getItem(FILTER_KEY) || '{}');
             if (state.char && filterSelect) filterSelect.value = state.char;
+            currentTierFilters = Array.isArray(state.tiers)
+                ? state.tiers.filter(value => ['P1', 'P2', 'P3', 'P4'].includes(value))
+                : (state.tier ? [state.tier] : []);
+            renderTierFilterButtons();
             if (state.balanced && balancedCheck) balancedCheck.classList.add('active');
             if (state.unbalanced && unbalancedCheck) unbalancedCheck.classList.add('active');
             if (state.active && activeCheck) activeCheck.classList.add('active');

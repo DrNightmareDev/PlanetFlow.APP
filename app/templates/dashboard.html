@@ -15,6 +15,13 @@
 .eve-filter-toggle:hover { border-color: var(--eve-accent); color: var(--eve-accent); }
 .eve-filter-toggle.active { background: rgba(0,180,216,.12); border-color: var(--eve-accent); color: var(--eve-accent); }
 .eve-price-btn { border-radius: 10px; padding: 1px 7px; font-size: .68rem; }
+.eve-tier-filter-toggle { min-width: 44px; justify-content: center; }
+.eve-tier-filter-toggle.active {
+    background: rgba(0,180,216,.22);
+    border-color: rgba(0,180,216,.9);
+    color: #9eeaff;
+    box-shadow: inset 0 0 0 1px rgba(0,180,216,.22), 0 0 10px rgba(0,180,216,.16);
+}
 </style>
 {% endblock %}
 
@@ -234,6 +241,15 @@
                     </div>
                     {% endif %}
                     {% if colonies %}
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="small text-muted" style="font-size:.78rem;">Tier</span>
+                        <button id="tierFilterP1" class="eve-state-toggle eve-tier-filter-toggle" onclick="setTierFilter('P1')">P1</button>
+                        <button id="tierFilterP2" class="eve-state-toggle eve-tier-filter-toggle" onclick="setTierFilter('P2')">P2</button>
+                        <button id="tierFilterP3" class="eve-state-toggle eve-tier-filter-toggle" onclick="setTierFilter('P3')">P3</button>
+                        <button id="tierFilterP4" class="eve-state-toggle eve-tier-filter-toggle" onclick="setTierFilter('P4')">P4</button>
+                    </div>
+                    {% endif %}
+                    {% if colonies %}
                     <div class="d-flex align-items-center gap-3 flex-wrap">
                         <div class="d-flex align-items-center gap-2" title="Maximal erlaubte Abweichung der Extraktoren pro Stunde">
                             <span class="small text-muted" style="font-size:.78rem;">{{ t('dashboard.balance_threshold') }}</span>
@@ -249,7 +265,7 @@
                                    style="width:110px;" oninput="updateExtractorRateThreshold(this.value)">
                             <span id="extractorRateThresholdValue" class="small" style="min-width:60px;color:#c9d1d9;">0</span>
                         </div>
-                        <div class="d-flex align-items-center gap-2" title="Zeige nur Planeten mit genau einem laufenden Extraktor, wenn er unter diesem Wert pro Stunde liegt">
+                        <div class="d-flex align-items-center gap-2" title="Zeige nur Planeten mit genau einem laufenden Extraktor, wenn seine gesamte Abbaurate pro Stunde unter diesem Wert liegt">
                             <span class="small text-muted d-inline-flex align-items-center" style="font-size:.82rem;min-width:34px;" aria-label="Ein Extraktor">
                                 <i class="bi bi-1-circle"></i>
                             </span>
@@ -314,6 +330,7 @@
                                 data-has-balance="{{ '1' if colony.get('extractor_balance') and colony.get('extractor_balance', {}).get('extractors') and (colony.get('extractor_balance', {}).get('extractors') | length) == 2 else '0' }}"
                                 data-balance-diff-pct="{{ (colony.get('extractor_balance') or {}).get('diff_pct', -1) }}"
                                 data-min-extractor-rate="{{ (colony.get('extractor_rate_summary') or {}).get('min_avg_per_hour', -1) }}"
+                                data-total-extractor-rate="{{ (colony.get('extractor_rate_summary') or {}).get('total_avg_per_hour', -1) }}"
                                 data-extractor-count="{{ (colony.get('extractor_status') or {}).get('total', 0) }}"
                                 data-expired="{{ '1' if colony.expiry_hours is not none and colony.expiry_hours < 0 else '0' }}"
                                 data-stalled="{{ '1' if colony.expiry_hours is none and colony.is_stalled == true else '0' }}"
@@ -1355,6 +1372,7 @@ function buildSingleExtractorRateCard(summary) {
             <div>· ${BALANCE_LABELS.programCycles}: ${ext.program_cycles ?? '—'}</div>
             <div>· ${BALANCE_LABELS.averagePerCycle}: ${ext.qty_per_cycle ?? '—'} ${BALANCE_LABELS.units}</div>
             <div>· ${BALANCE_LABELS.averagePerHour}: ${ext.avg_per_hour ?? '—'} ${BALANCE_LABELS.unitsPerHour}</div>
+            <div>· Σ ${BALANCE_LABELS.unitsPerHour}: ${summary.total_avg_per_hour ?? ext.avg_per_hour ?? '—'} ${BALANCE_LABELS.unitsPerHour}</div>
             <div>· ${BALANCE_LABELS.expiresIn}: ${formatBalanceDuration(ext.expiry_hours)}</div>
         </div>`;
 }
@@ -1405,7 +1423,7 @@ function renderExtractorBalanceIndicators() {
                     <div class="eve-hover-card eve-hover-card-right" style="white-space:normal;min-width:320px;">
                         ${buildSingleExtractorRateCard(rateSummary)}
                         <div style="margin-top:8px;color:#f4a300;font-weight:700;">
-                            ${BALANCE_LABELS.averagePerHour}: ${(rateSummary.min_avg_per_hour ?? 0).toFixed(1)} ${BALANCE_LABELS.unitsPerHour}
+                            Σ ${BALANCE_LABELS.unitsPerHour}: ${(rateSummary.total_avg_per_hour ?? rateSummary.min_avg_per_hour ?? 0).toFixed(1)} ${BALANCE_LABELS.unitsPerHour}
                         </div>
                     </div>
                 </span>`;

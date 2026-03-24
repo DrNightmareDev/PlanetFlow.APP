@@ -590,6 +590,7 @@ def _compute_extractor_rate_summary(pins: list) -> dict | None:
         "count": len(rates),
         "min_avg_per_hour": min(rates),
         "max_avg_per_hour": max(rates),
+        "total_avg_per_hour": round(sum(rates), 1),
         "extractors": extractors,
     }
 

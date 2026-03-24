@@ -16,12 +16,16 @@
 .eve-filter-toggle.active { background: rgba(0,180,216,.12); border-color: var(--eve-accent); color: var(--eve-accent); }
 .eve-price-btn { border-radius: 10px; padding: 1px 7px; font-size: .68rem; }
 .eve-tier-filter-toggle { min-width: 44px; justify-content: center; }
-.eve-tier-filter-toggle.active {
-    background: rgba(0,180,216,.22);
-    border-color: rgba(0,180,216,.9);
-    color: #9eeaff;
-    box-shadow: inset 0 0 0 1px rgba(0,180,216,.22), 0 0 10px rgba(0,180,216,.16);
-}
+.eve-tier-filter-toggle { font-weight: 700; }
+.eve-tier-filter-toggle.active { box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 0 12px rgba(255,255,255,.08); }
+.eve-tier-filter-p1 { background: rgba(88,110,117,.12); border-color: rgba(88,110,117,.45); color: #9aaab0; }
+.eve-tier-filter-p1.active { background: rgba(88,110,117,.28); border-color: rgba(88,110,117,.9); color: #d9e0e3; }
+.eve-tier-filter-p2 { background: rgba(0,180,216,.12); border-color: rgba(0,180,216,.45); color: #59d8f0; }
+.eve-tier-filter-p2.active { background: rgba(0,180,216,.28); border-color: rgba(0,180,216,.95); color: #b8f5ff; }
+.eve-tier-filter-p3 { background: rgba(244,163,0,.12); border-color: rgba(244,163,0,.45); color: #f0b74d; }
+.eve-tier-filter-p3.active { background: rgba(244,163,0,.24); border-color: rgba(244,163,0,.95); color: #ffe1a0; }
+.eve-tier-filter-p4 { background: rgba(230,57,70,.12); border-color: rgba(230,57,70,.45); color: #ff6f7b; }
+.eve-tier-filter-p4.active { background: rgba(230,57,70,.24); border-color: rgba(230,57,70,.95); color: #ffc1c7; }
 </style>
 {% endblock %}
 
@@ -243,10 +247,10 @@
                     {% if colonies %}
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                         <span class="small text-muted" style="font-size:.78rem;">Tier</span>
-                        <button id="tierFilterP1" class="eve-state-toggle eve-tier-filter-toggle" onclick="setTierFilter('P1')">P1</button>
-                        <button id="tierFilterP2" class="eve-state-toggle eve-tier-filter-toggle" onclick="setTierFilter('P2')">P2</button>
-                        <button id="tierFilterP3" class="eve-state-toggle eve-tier-filter-toggle" onclick="setTierFilter('P3')">P3</button>
-                        <button id="tierFilterP4" class="eve-state-toggle eve-tier-filter-toggle" onclick="setTierFilter('P4')">P4</button>
+                        <button id="tierFilterP1" class="eve-state-toggle eve-tier-filter-toggle eve-tier-filter-p1" onclick="setTierFilter('P1')">P1</button>
+                        <button id="tierFilterP2" class="eve-state-toggle eve-tier-filter-toggle eve-tier-filter-p2" onclick="setTierFilter('P2')">P2</button>
+                        <button id="tierFilterP3" class="eve-state-toggle eve-tier-filter-toggle eve-tier-filter-p3" onclick="setTierFilter('P3')">P3</button>
+                        <button id="tierFilterP4" class="eve-state-toggle eve-tier-filter-toggle eve-tier-filter-p4" onclick="setTierFilter('P4')">P4</button>
                     </div>
                     {% endif %}
                     {% if colonies %}

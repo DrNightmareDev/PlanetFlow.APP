@@ -188,6 +188,14 @@
                 </div>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     {% if colonies %}
+                    <button id="balancedFilter" class="eve-state-toggle" onclick="toggleBalancedFilter()"
+                            style="border:1px solid rgba(45,198,83,0.3);background:rgba(45,198,83,0.07);color:#4cb36b;">
+                        <i class="bi bi-check-circle"></i>Balanced
+                    </button>
+                    <button id="unbalancedFilter" class="eve-state-toggle" onclick="toggleUnbalancedFilter()"
+                            style="border:1px solid rgba(231,76,60,0.3);background:rgba(231,76,60,0.07);color:#c0534a;">
+                        <i class="bi bi-exclamation-circle"></i>Unbalanced
+                    </button>
                     <button id="activeFilter" class="eve-state-toggle eve-state-toggle-active" onclick="toggleActiveFilter()">
                         <i class="bi bi-play-circle"></i>{{ t('common.active') }}
                     </button>
@@ -277,6 +285,7 @@
                                 data-sort-expiry="{{ colony.expiry_hours if colony.expiry_hours is not none else 9999999 }}"
                                 data-sort-isk="{{ colony.isk_day }}"
                                 data-sort-storage="{{ colony.storage | map(attribute='fill_pct') | max if colony.storage else -1 }}"
+                                data-colony-idx="{{ loop.index0 }}"
                                 data-expired="{{ '1' if colony.expiry_hours is not none and colony.expiry_hours < 0 else '0' }}"
                                 data-stalled="{{ '1' if colony.expiry_hours is none and colony.is_stalled == true else '0' }}"
                                 data-active="{{ '1' if (colony.expiry_hours is not none and colony.expiry_hours > 0) or colony.is_stalled == false else '0' }}">
@@ -605,6 +614,7 @@ const COLONY_EXTRACTOR_BALANCE = [
 
 {% endfor %}
 ];
+window.COLONY_EXTRACTOR_BALANCE = COLONY_EXTRACTOR_BALANCE;
 const COLONY_MISSING_INPUTS = [
 {% for colony in colonies %}
   {{ colony.missing_inputs | tojson }}{% if not loop.last %},{% endif %}
@@ -1173,6 +1183,18 @@ function toggleActiveFilter() {
     window.applyFilters();
 }
 
+function toggleBalancedFilter() {
+    const btn = document.getElementById('balancedFilter');
+    btn.classList.toggle('active');
+    window.applyFilters();
+}
+
+function toggleUnbalancedFilter() {
+    const btn = document.getElementById('unbalancedFilter');
+    btn.classList.toggle('active');
+    window.applyFilters();
+}
+
 function toggleStalledFilter() {
     const btn = document.getElementById('stalledFilter');
     btn.classList.toggle('active');
@@ -1203,6 +1225,7 @@ function getBalanceThreshold() {
     const raw = parseFloat(localStorage.getItem(BALANCE_THRESHOLD_KEY) || '5');
     return Number.isFinite(raw) ? raw : 5;
 }
+window.getBalanceThreshold = getBalanceThreshold;
 
 function formatBalanceDuration(hours) {
     if (hours == null || !Number.isFinite(hours)) return '—';
@@ -1274,6 +1297,9 @@ function updateBalanceThreshold(value) {
     if (range) range.value = String(numeric);
     if (label) label.textContent = `${numeric.toFixed(1)}%`;
     renderExtractorBalanceIndicators();
+    if (typeof window.applyFilters === 'function') {
+        window.applyFilters();
+    }
 }
 window.updateBalanceThreshold = updateBalanceThreshold;
 

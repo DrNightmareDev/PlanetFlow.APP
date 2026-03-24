@@ -1015,6 +1015,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const filterSelect = document.getElementById('charFilter');
+    const balancedCheck = document.getElementById('balancedFilter');
+    const unbalancedCheck = document.getElementById('unbalancedFilter');
     const activeCheck = document.getElementById('activeFilter');
     const expiredCheck = document.getElementById('expiredFilter');
     const stalledCheck = document.getElementById('stalledFilter');
@@ -1023,13 +1025,33 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function applyFilter() {
         const charVal = filterSelect ? filterSelect.value : '';
+        const onlyBalanced = balancedCheck ? balancedCheck.classList.contains('active') : false;
+        const onlyUnbalanced = unbalancedCheck ? unbalancedCheck.classList.contains('active') : false;
         const onlyActive = activeCheck ? activeCheck.classList.contains('active') : false;
         const onlyExpired = expiredCheck ? expiredCheck.classList.contains('active') : false;
         const onlyStalled = stalledCheck ? stalledCheck.classList.contains('active') : false;
-        const hasStateFilter = onlyActive || onlyExpired || onlyStalled;
+        const hasStateFilter = onlyBalanced || onlyUnbalanced || onlyActive || onlyExpired || onlyStalled;
         const matched = rows.filter(r => {
             const charOk = !charVal || r.dataset.char === charVal;
+            const threshold = typeof window.getBalanceThreshold === 'function'
+                ? window.getBalanceThreshold()
+                : 5;
+            const colonyIdx = parseInt(r.dataset.colonyIdx || '-1', 10);
+            const balanceList = Array.isArray(window.COLONY_EXTRACTOR_BALANCE)
+                ? window.COLONY_EXTRACTOR_BALANCE
+                : [];
+            const balance = colonyIdx >= 0 ? balanceList[colonyIdx] : null;
+            const hasComparableBalance = !!(
+                balance &&
+                Array.isArray(balance.extractors) &&
+                balance.extractors.length === 2 &&
+                Number.isFinite(Number(balance.diff_pct))
+            );
+            const isBalanced = hasComparableBalance && Number(balance.diff_pct) <= threshold;
+            const isUnbalanced = hasComparableBalance && Number(balance.diff_pct) > threshold;
             const stateOk = !hasStateFilter || (
+                (onlyBalanced && isBalanced) ||
+                (onlyUnbalanced && isUnbalanced) ||
                 (onlyActive && r.dataset.active === '1') ||
                 (onlyExpired && r.dataset.expired === '1') ||
                 (onlyStalled && r.dataset.stalled === '1')
@@ -1045,6 +1067,8 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             localStorage.setItem(FILTER_KEY, JSON.stringify({
                 char: filterSelect ? filterSelect.value : '',
+                balanced: balancedCheck ? balancedCheck.classList.contains('active') : false,
+                unbalanced: unbalancedCheck ? unbalancedCheck.classList.contains('active') : false,
                 active: activeCheck ? activeCheck.classList.contains('active') : false,
                 expired: expiredCheck ? expiredCheck.classList.contains('active') : false,
                 stalled: stalledCheck ? stalledCheck.classList.contains('active') : false,
@@ -1058,6 +1082,8 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const state = JSON.parse(localStorage.getItem(FILTER_KEY) || '{}');
             if (state.char && filterSelect) filterSelect.value = state.char;
+            if (state.balanced && balancedCheck) balancedCheck.classList.add('active');
+            if (state.unbalanced && unbalancedCheck) unbalancedCheck.classList.add('active');
             if (state.active && activeCheck) activeCheck.classList.add('active');
             if (state.expired && expiredCheck) expiredCheck.classList.add('active');
             if (state.stalled && stalledCheck) stalledCheck.classList.add('active');

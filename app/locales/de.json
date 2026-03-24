@@ -58,7 +58,7 @@
   "help.title": "Hilfe",
   "help.subtitle": "Kurze Orientierung zu den wichtigsten Seiten",
   "help.esi_notice_title": "Wichtiger Hinweis zur EVE ESI",
-  "help.esi_notice_text": "Die PI-Daten werden von der EVE ESI in der Praxis erst dann sichtbar aktualisiert, wenn du in das betreffende System reist, die PI-Oberflaeche oeffnest und sich dort etwas an den Lagern geaendert hat.",
+  "help.esi_notice_text": "Die PI-Daten werden von der EVE ESI in der Praxis erst dann sichtbar aktualisiert, wenn du in das betreffende System reist, die PI-Oberflaeche oeffnest und sich dort etwas an den Lagern geaendert hat. Eine Interaktion mit dem Skyhook kann die Daten ebenfalls aktualisieren. Andernfalls muss gewartet werden, bis der Cache der Daten ablaeuft.",
   "help.section_pages": "Seiten im Tool",
   "help.page.dashboard": "Zeigt alle PI-Kolonien, Filter, Ablaufzeiten, Lagerstaende, Skyhook-Bezug und den taeglichen ISK-Wert deiner aktiven Daten.",
   "help.page.skyhooks": "Hier kannst du Skyhook-Bestaende pro Planet pflegen, Werte ansehen und Veraenderungen im Verlauf verfolgen.",

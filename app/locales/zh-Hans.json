@@ -58,7 +58,7 @@
   "help.title": "帮助",
   "help.subtitle": "主要页面的快速说明",
   "help.esi_notice_title": "关于 EVE ESI 的重要说明",
-  "help.esi_notice_text": "在实际使用中，PI 数据通常只有在你飞到对应星系、打开 PI 界面，并且仓储内容发生变化后，才会通过 EVE ESI 显示为已更新。",
+  "help.esi_notice_text": "在实际使用中，PI 数据通常只有在你飞到对应星系、打开 PI 界面，并且仓储内容发生变化后，才会通过 EVE ESI 显示为已更新。与 Skyhook 进行交互也可能触发数据刷新。否则就需要等待数据缓存自然过期。",
   "help.section_pages": "页面说明",
   "help.page.dashboard": "显示所有 PI 殖民地、筛选器、到期时间、仓储状态、Skyhook 信息以及当前数据的每日 ISK 价值。",
   "help.page.skyhooks": "用于维护每个行星的 Skyhook 库存、查看价值，并跟踪库存历史。",

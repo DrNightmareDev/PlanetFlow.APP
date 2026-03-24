@@ -58,7 +58,7 @@
   "help.title": "Help",
   "help.subtitle": "Quick guidance for the main pages",
   "help.esi_notice_title": "Important note about EVE ESI",
-  "help.esi_notice_text": "In practice, PI data only becomes visibly updated through EVE ESI after you travel to the relevant system, open the PI interface there, and something in storage has changed.",
+  "help.esi_notice_text": "In practice, PI data only becomes visibly updated through EVE ESI after you travel to the relevant system, open the PI interface there, and something in storage has changed. Interacting with the skyhook can also refresh the data. Otherwise, you have to wait until the data cache expires.",
   "help.section_pages": "Pages in the tool",
   "help.page.dashboard": "Shows all PI colonies, filters, expiry timers, storage states, skyhook context, and the daily ISK value of your current data.",
   "help.page.skyhooks": "Lets you maintain skyhook inventories per planet, inspect values, and review inventory history.",

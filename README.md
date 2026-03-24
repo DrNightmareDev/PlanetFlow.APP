@@ -45,6 +45,10 @@ Both update scripts also support a custom branch:
 - Linux: `bash scripts/update_linux.sh --branch main`
 - Windows: `powershell -ExecutionPolicy Bypass -File .\scripts\update_windows.ps1 -Branch main`
 
+## CCP Notice
+
+EVE Online and all related logos and designs are trademarks or registered trademarks of CCP ehf. This project is not affiliated with, endorsed by, or connected to CCP ehf.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

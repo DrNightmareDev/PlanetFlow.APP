@@ -252,6 +252,10 @@ Wirkung:
 - Bootstrap 5
 - APScheduler
 
+## CCP-Hinweis
+
+EVE Online und alle zugehoerigen Logos und Designs sind Marken oder eingetragene Marken von CCP ehf. Dieses Projekt steht in keiner Verbindung zu CCP ehf und wird nicht von CCP ehf unterstuetzt oder empfohlen.
+
 ## Lizenz
 
 MIT. Siehe [LICENSE](LICENSE).

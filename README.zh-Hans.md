@@ -238,6 +238,10 @@ cd /opt/eve-pi-manager
 - Bootstrap 5
 - APScheduler
 
+## CCP 声明
+
+EVE Online 及其相关标志与设计均为 CCP ehf. 的商标或注册商标。本项目与 CCP ehf. 没有任何关联，也未获得 CCP ehf. 的认可或支持。
+
 ## 许可证
 
 MIT。见 [LICENSE](LICENSE)。

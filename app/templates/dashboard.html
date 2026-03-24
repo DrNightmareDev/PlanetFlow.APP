@@ -162,7 +162,8 @@
     <!-- PI Kolonien -->
     <div class="col-12">
         <div class="eve-card card border-0">
-            <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="card-header eve-card-header d-flex flex-column gap-2">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-2">
                     <i class="bi bi-globe2 eve-accent"></i>
                     <span class="fw-medium">PI Kolonien</span>
@@ -177,68 +178,87 @@
                         <span class="badge" style="background:rgba(244,163,0,0.12);color:#f4a300;border:1px solid rgba(244,163,0,0.35);font-size:.82rem;font-weight:500;padding:.42rem .72rem;">
                             {{ stalled_colony_count }} {{ t('common.stalled') }}
                         </span>
-                        <div class="d-flex align-items-center gap-2 ms-1" title="Maximal erlaubte Abweichung der Extraktoren pro Stunde">
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="d-flex align-items-center gap-1" style="min-width:9rem;justify-content:flex-end">
+                    <span class="text-muted small" id="cacheAgeText" style="min-width:6.5rem;text-align:right;white-space:nowrap">
+                        {% if cache_age_sec < 60 %}Gerade aktualisiert
+                        {% elif cache_age_sec < 3600 %}Vor {{ cache_age_sec // 60 }} Min.
+                        {% else %}Vor {{ cache_age_sec // 3600 }}h{% endif %}
+                    </span>
+                    <button class="btn btn-sm eve-btn-outline" id="refreshBtn"
+                            onclick="forceRefresh()"
+                            title="Daten aktualisieren (max. 1Ã— pro Minute)"
+                            {% if cooldown_remaining > 0 %}disabled{% endif %}>
+                        <i class="bi bi-arrow-clockwise" id="refreshIcon"></i>
+                        <span id="refreshCooldownLabel">
+                            {% if cooldown_remaining > 0 %}{{ cooldown_remaining }}s{% endif %}
+                        </span>
+                    </button>
+                </div>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    {% if colonies %}
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <button id="balancedFilter" class="eve-state-toggle eve-state-toggle-balanced" onclick="toggleBalancedFilter()">
+                            <i class="bi bi-check-circle"></i>{{ t('common.balanced') }}
+                        </button>
+                        <button id="unbalancedFilter" class="eve-state-toggle eve-state-toggle-unbalanced" onclick="toggleUnbalancedFilter()">
+                            <i class="bi bi-exclamation-circle"></i>{{ t('common.unbalanced') }}
+                        </button>
+                        <button id="activeFilter" class="eve-state-toggle eve-state-toggle-active" onclick="toggleActiveFilter()">
+                            <i class="bi bi-play-circle"></i>{{ t('common.active') }}
+                        </button>
+                        <button id="expiredFilter" class="eve-state-toggle eve-state-toggle-inactive" onclick="toggleExpiredFilter()">
+                            <i class="bi bi-exclamation-circle"></i>{{ t('common.expired') }}
+                        </button>
+                        <button id="stalledFilter" class="eve-state-toggle eve-state-toggle-stalled" onclick="toggleStalledFilter()">
+                            <i class="bi bi-pause-circle"></i>{{ t('common.stalled') }}
+                        </button>
+                    </div>
+                    {% endif %}
+                    {% if colonies and char_count > 1 %}
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="small text-muted" style="font-size:.78rem;">Char</span>
+                        <select id="charFilter" class="eve-select form-select form-select-sm" onchange="applyFilters()" style="max-width:160px">
+                            <option value="">Alle Charaktere</option>
+                            {% set seen = [] %}
+                            {% for colony in colonies %}
+                                {% if colony.character_name not in seen %}
+                                    {% set _ = seen.append(colony.character_name) %}
+                                    <option value="{{ colony.character_name }}">{{ colony.character_name }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                    {% if colonies %}
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <div class="d-flex align-items-center gap-2" title="Maximal erlaubte Abweichung der Extraktoren pro Stunde">
                             <span class="small text-muted" style="font-size:.78rem;">{{ t('dashboard.balance_threshold') }}</span>
                             <input id="balanceThresholdRange" type="range" min="1" max="50" step="0.5" value="5"
                                    style="width:90px;" oninput="updateBalanceThreshold(this.value)">
                             <span id="balanceThresholdValue" class="small" style="min-width:42px;color:#c9d1d9;">5.0%</span>
                         </div>
-                        <div class="d-flex align-items-center gap-2 ms-1" title="Zeige nur Planeten mit mindestens einem laufenden Extraktor unter diesem Wert pro Stunde">
-                            <span class="small text-muted" style="font-size:.78rem;">{{ t('dashboard.extractor_rate_threshold') }}</span>
+                        <div class="d-flex align-items-center gap-2" title="Zeige nur Planeten mit zwei oder mehr laufenden Extraktoren, wenn mindestens einer unter diesem Wert pro Stunde liegt">
+                            <span class="small text-muted d-inline-flex align-items-center" style="font-size:.82rem;min-width:34px;" aria-label="2 oder mehr Extraktoren">
+                                <i class="bi bi-2-circle me-1"></i><span style="font-size:.72rem;">+</span>
+                            </span>
                             <input id="extractorRateThresholdRange" type="range" min="0" max="50000" step="500" value="0"
                                    style="width:110px;" oninput="updateExtractorRateThreshold(this.value)">
                             <span id="extractorRateThresholdValue" class="small" style="min-width:60px;color:#c9d1d9;">0</span>
                         </div>
-                    </div>
-                    {% endif %}
-                </div>
-                <div class="d-flex align-items-center gap-2 flex-wrap">
-                    {% if colonies %}
-                    <button id="balancedFilter" class="eve-state-toggle eve-state-toggle-balanced" onclick="toggleBalancedFilter()">
-                        <i class="bi bi-check-circle"></i>{{ t('common.balanced') }}
-                    </button>
-                    <button id="unbalancedFilter" class="eve-state-toggle eve-state-toggle-unbalanced" onclick="toggleUnbalancedFilter()">
-                        <i class="bi bi-exclamation-circle"></i>{{ t('common.unbalanced') }}
-                    </button>
-                    <button id="activeFilter" class="eve-state-toggle eve-state-toggle-active" onclick="toggleActiveFilter()">
-                        <i class="bi bi-play-circle"></i>{{ t('common.active') }}
-                    </button>
-                    <button id="expiredFilter" class="eve-state-toggle eve-state-toggle-inactive" onclick="toggleExpiredFilter()">
-                        <i class="bi bi-exclamation-circle"></i>{{ t('common.expired') }}
-                    </button>
-                    <button id="stalledFilter" class="eve-state-toggle eve-state-toggle-stalled" onclick="toggleStalledFilter()">
-                        <i class="bi bi-pause-circle"></i>{{ t('common.stalled') }}
-                    </button>
-                    {% endif %}
-                    {% if colonies and char_count > 1 %}
-                    <select id="charFilter" class="eve-select form-select form-select-sm" onchange="applyFilters()" style="max-width:160px">
-                        <option value="">Alle Charaktere</option>
-                        {% set seen = [] %}
-                        {% for colony in colonies %}
-                            {% if colony.character_name not in seen %}
-                                {% set _ = seen.append(colony.character_name) %}
-                                <option value="{{ colony.character_name }}">{{ colony.character_name }}</option>
-                            {% endif %}
-                        {% endfor %}
-                    </select>
-                    {% endif %}
-                    <!-- Cache-Alter + Refresh-Button -->
-                    <div class="d-flex align-items-center gap-1" style="min-width:9rem;justify-content:flex-end">
-                        <span class="text-muted small" id="cacheAgeText" style="min-width:6.5rem;text-align:right;white-space:nowrap">
-                            {% if cache_age_sec < 60 %}Gerade aktualisiert
-                            {% elif cache_age_sec < 3600 %}Vor {{ cache_age_sec // 60 }} Min.
-                            {% else %}Vor {{ cache_age_sec // 3600 }}h{% endif %}
-                        </span>
-                        <button class="btn btn-sm eve-btn-outline" id="refreshBtn"
-                                onclick="forceRefresh()"
-                                title="Daten aktualisieren (max. 1× pro Minute)"
-                                {% if cooldown_remaining > 0 %}disabled{% endif %}>
-                            <i class="bi bi-arrow-clockwise" id="refreshIcon"></i>
-                            <span id="refreshCooldownLabel">
-                                {% if cooldown_remaining > 0 %}{{ cooldown_remaining }}s{% endif %}
+                        <div class="d-flex align-items-center gap-2" title="Zeige nur Planeten mit genau einem laufenden Extraktor, wenn er unter diesem Wert pro Stunde liegt">
+                            <span class="small text-muted d-inline-flex align-items-center" style="font-size:.82rem;min-width:34px;" aria-label="Ein Extraktor">
+                                <i class="bi bi-1-circle"></i>
                             </span>
-                        </button>
+                            <input id="singleExtractorRateThresholdRange" type="range" min="0" max="100000" step="1000" value="0"
+                                   style="width:118px;" oninput="updateSingleExtractorRateThreshold(this.value)">
+                            <span id="singleExtractorRateThresholdValue" class="small" style="min-width:66px;color:#c9d1d9;">0</span>
+                        </div>
                     </div>
+                    {% endif %}
                 </div>
             </div>
             <div class="card-body p-0">
@@ -293,6 +313,7 @@
                                 data-has-balance="{{ '1' if colony.get('extractor_balance') and colony.get('extractor_balance', {}).get('extractors') and (colony.get('extractor_balance', {}).get('extractors') | length) == 2 else '0' }}"
                                 data-balance-diff-pct="{{ (colony.get('extractor_balance') or {}).get('diff_pct', -1) }}"
                                 data-min-extractor-rate="{{ (colony.get('extractor_rate_summary') or {}).get('min_avg_per_hour', -1) }}"
+                                data-extractor-count="{{ (colony.get('extractor_status') or {}).get('total', 0) }}"
                                 data-expired="{{ '1' if colony.expiry_hours is not none and colony.expiry_hours < 0 else '0' }}"
                                 data-stalled="{{ '1' if colony.expiry_hours is none and colony.is_stalled == true else '0' }}"
                                 data-active="{{ '1' if (colony.expiry_hours is not none and colony.expiry_hours > 0) or colony.is_stalled == false else '0' }}">
@@ -644,6 +665,7 @@ const COLONY_LOCATION = [
 const DASHBOARD_PRODUCT_LABELS = {{ product_labels | tojson }};
 const MARKET_LAST_UPDATED_ISO = {{ market_last_updated_iso | tojson }};
 const EXTRACTOR_RATE_THRESHOLD_KEY = 'eve_pi_extractor_rate_threshold';
+const SINGLE_EXTRACTOR_RATE_THRESHOLD_KEY = 'eve_pi_single_extractor_rate_threshold';
 const BALANCE_LABELS = {
     totalOutput: {{ 'Total Output' | tojson }},
     cycleTime: {{ 'Cycle Time' | tojson }},
@@ -1278,6 +1300,12 @@ function getExtractorRateThreshold() {
 }
 window.getExtractorRateThreshold = getExtractorRateThreshold;
 
+function getSingleExtractorRateThreshold() {
+    const raw = parseFloat(localStorage.getItem(SINGLE_EXTRACTOR_RATE_THRESHOLD_KEY) || '0');
+    return Number.isFinite(raw) ? raw : 0;
+}
+window.getSingleExtractorRateThreshold = getSingleExtractorRateThreshold;
+
 function formatBalanceDuration(hours) {
     if (hours == null || !Number.isFinite(hours)) return '—';
     const totalSeconds = Math.max(0, Math.round(hours * 3600));
@@ -1327,7 +1355,7 @@ function buildSingleExtractorRateCard(summary) {
 
 function renderExtractorBalanceIndicators() {
     const threshold = getBalanceThreshold();
-    const rateThreshold = getExtractorRateThreshold();
+    const singleRateThreshold = getSingleExtractorRateThreshold();
     document.querySelectorAll('.colony-balance-slot').forEach(slot => {
         const idx = parseInt(slot.dataset.colonyIdx, 10);
         const balance = COLONY_EXTRACTOR_BALANCE[idx];
@@ -1356,12 +1384,12 @@ function renderExtractorBalanceIndicators() {
         }
 
         if (
-            rateThreshold > 0 &&
+            singleRateThreshold > 0 &&
             rateSummary &&
             Array.isArray(rateSummary.extractors) &&
             rateSummary.extractors.length === 1 &&
             Number.isFinite(rateSummary.min_avg_per_hour) &&
-            rateSummary.min_avg_per_hour < rateThreshold
+            rateSummary.min_avg_per_hour < singleRateThreshold
         ) {
             slot.innerHTML = `
                 <span class="eve-hover-wrap">
@@ -1408,6 +1436,20 @@ function updateExtractorRateThreshold(value) {
     }
 }
 window.updateExtractorRateThreshold = updateExtractorRateThreshold;
+
+function updateSingleExtractorRateThreshold(value) {
+    const numeric = Math.max(0, Math.min(100000, parseFloat(value) || 0));
+    localStorage.setItem(SINGLE_EXTRACTOR_RATE_THRESHOLD_KEY, String(numeric));
+    const range = document.getElementById('singleExtractorRateThresholdRange');
+    const label = document.getElementById('singleExtractorRateThresholdValue');
+    if (range) range.value = String(numeric);
+    if (label) label.textContent = `${Math.round(numeric)}`;
+    renderExtractorBalanceIndicators();
+    if (typeof window.applyFilters === 'function') {
+        window.applyFilters();
+    }
+}
+window.updateSingleExtractorRateThreshold = updateSingleExtractorRateThreshold;
 
 function updateDashboardIskFromVisibleRows() {
     const valueEl = document.getElementById('dashboardIskValue');
@@ -1491,8 +1533,10 @@ if (coloniesTableBody) {
     initGlobalHoverCards();
     updateBalanceThreshold(getBalanceThreshold());
     updateExtractorRateThreshold(getExtractorRateThreshold());
+    updateSingleExtractorRateThreshold(getSingleExtractorRateThreshold());
 }
 </script>
 {% endblock %}
+
 
 

@@ -1034,6 +1034,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const extractorRateThreshold = typeof window.getExtractorRateThreshold === 'function'
             ? window.getExtractorRateThreshold()
             : 0;
+        const singleExtractorRateThreshold = typeof window.getSingleExtractorRateThreshold === 'function'
+            ? window.getSingleExtractorRateThreshold()
+            : 0;
         const matched = rows.filter(r => {
             const charOk = !charVal || r.dataset.char === charVal;
             const threshold = typeof window.getBalanceThreshold === 'function'
@@ -1044,10 +1047,16 @@ document.addEventListener('DOMContentLoaded', function () {
             const isBalanced = hasComparableBalance && Number.isFinite(balanceDiffPct) && balanceDiffPct <= threshold;
             const isUnbalanced = hasComparableBalance && Number.isFinite(balanceDiffPct) && balanceDiffPct > threshold;
             const minExtractorRate = parseFloat(r.dataset.minExtractorRate || '-1');
-            const rateOk = extractorRateThreshold <= 0 || (
+            const extractorCount = parseInt(r.dataset.extractorCount || '0', 10) || 0;
+            const multiRateOk = extractorRateThreshold <= 0 || extractorCount < 2 || (
                 Number.isFinite(minExtractorRate) &&
                 minExtractorRate >= 0 &&
                 minExtractorRate < extractorRateThreshold
+            );
+            const singleRateOk = singleExtractorRateThreshold <= 0 || extractorCount !== 1 || (
+                Number.isFinite(minExtractorRate) &&
+                minExtractorRate >= 0 &&
+                minExtractorRate < singleExtractorRateThreshold
             );
             const stateOk = !hasStateFilter || (
                 (onlyBalanced && isBalanced) ||
@@ -1056,7 +1065,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 (onlyExpired && r.dataset.expired === '1') ||
                 (onlyStalled && r.dataset.stalled === '1')
             );
-            return charOk && stateOk && rateOk;
+            return charOk && stateOk && multiRateOk && singleRateOk;
         });
         pager.applyFilter(matched);
         notifyDashboardTableChanged();

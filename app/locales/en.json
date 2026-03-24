@@ -204,5 +204,7 @@
   "manager.i18n.saved": "Translation saved",
   "manager.i18n.save_error": "Failed to save translation",
   "dashboard.balance_threshold": "Delta",
-  "dashboard.extractor_rate_threshold": "u/h"
+  "dashboard.extractor_rate_threshold": "u/h",
+  "dashboard.multi_extractor_rate_threshold": "3x+ u/h",
+  "dashboard.single_extractor_rate_threshold": "1x u/h"
 }

@@ -204,5 +204,7 @@
   "manager.i18n.saved": "翻译已保存",
   "manager.i18n.save_error": "保存翻译失败",
   "dashboard.balance_threshold": "差值",
-  "dashboard.extractor_rate_threshold": "单位/小时"
+  "dashboard.extractor_rate_threshold": "单位/小时",
+  "dashboard.multi_extractor_rate_threshold": "3个以上 单位/小时",
+  "dashboard.single_extractor_rate_threshold": "单个 单位/小时"
 }

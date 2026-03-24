@@ -534,8 +534,11 @@ def _compute_extractor_balance(pins: list) -> dict | None:
 
 def _compute_extractor_rate_summary(pins: list) -> dict | None:
     """Liefert Kennzahlen fuer laufende Extraktoren eines Planeten."""
+    from app.sde import get_type_name
+
     now = datetime.now(timezone.utc)
     rates: list[float] = []
+    extractors: list[dict] = []
 
     for pin in pins:
         details = pin.get("extractor_details") or {}
@@ -553,9 +556,31 @@ def _compute_extractor_rate_summary(pins: list) -> dict | None:
             or details.get("output_per_cycle")
             or 0
         )
+        product_type_id = details.get("product_type_id")
+        product_name = get_type_name(product_type_id) if product_type_id else None
+        install_dt = _parse_expiry(pin.get("install_time", "")) or _parse_expiry(pin.get("last_cycle_start", ""))
+        program_cycles = None
+        total_output = None
+        if cycle_time > 0 and install_dt is not None and exp_dt > install_dt:
+            duration_seconds = (exp_dt - install_dt).total_seconds()
+            program_cycles = max(int(round(duration_seconds / cycle_time)), 1)
+            if qty_per_cycle > 0:
+                total_output = qty_per_cycle * program_cycles
+
         avg_per_hour = qty_per_cycle * (3600.0 / cycle_time) if cycle_time > 0 and qty_per_cycle > 0 else 0.0
         if avg_per_hour > 0:
-            rates.append(round(avg_per_hour, 1))
+            rounded_avg = round(avg_per_hour, 1)
+            rates.append(rounded_avg)
+            extractors.append({
+                "name": product_name or "Unknown",
+                "qty_per_cycle": round(qty_per_cycle, 1) if qty_per_cycle else 0.0,
+                "cycle_time_minutes": round(cycle_time / 60.0, 1) if cycle_time else 0.0,
+                "program_cycles": program_cycles,
+                "total_output": round(total_output, 1) if total_output is not None else None,
+                "avg_per_hour": rounded_avg,
+                "expiry_iso": exp_dt.isoformat(),
+                "expiry_hours": _hours_until(exp_dt),
+            })
 
     if not rates:
         return None
@@ -564,6 +589,7 @@ def _compute_extractor_rate_summary(pins: list) -> dict | None:
         "count": len(rates),
         "min_avg_per_hour": min(rates),
         "max_avg_per_hour": max(rates),
+        "extractors": extractors,
     }
 
 

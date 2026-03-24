@@ -622,6 +622,13 @@ const COLONY_EXTRACTOR_BALANCE = [
 {% endfor %}
 ];
 window.COLONY_EXTRACTOR_BALANCE = COLONY_EXTRACTOR_BALANCE;
+const COLONY_EXTRACTOR_RATE_SUMMARY = [
+{% for colony in colonies %}
+  {{ colony.get('extractor_rate_summary') | tojson }}{% if not loop.last %},{% endif %}
+
+{% endfor %}
+];
+window.COLONY_EXTRACTOR_RATE_SUMMARY = COLONY_EXTRACTOR_RATE_SUMMARY;
 const COLONY_MISSING_INPUTS = [
 {% for colony in colonies %}
   {{ colony.missing_inputs | tojson }}{% if not loop.last %},{% endif %}
@@ -1303,31 +1310,73 @@ function buildExtractorBalanceCard(balance) {
         </div>`;
 }
 
+function buildSingleExtractorRateCard(summary) {
+    if (!summary || !Array.isArray(summary.extractors) || summary.extractors.length !== 1) return '';
+    const ext = summary.extractors[0];
+    return `
+        <div>
+            <div style="color:#f0f3f6;font-weight:600;margin-bottom:4px;">${DASHBOARD_PRODUCT_LABELS[ext.name] || ext.name}</div>
+            <div>· ${BALANCE_LABELS.totalOutput}: ${ext.total_output ?? '—'} ${BALANCE_LABELS.unitsPerProgram}</div>
+            <div>· ${BALANCE_LABELS.cycleTime}: ${ext.cycle_time_minutes ?? '—'} ${BALANCE_LABELS.minutes}</div>
+            <div>· ${BALANCE_LABELS.programCycles}: ${ext.program_cycles ?? '—'}</div>
+            <div>· ${BALANCE_LABELS.averagePerCycle}: ${ext.qty_per_cycle ?? '—'} ${BALANCE_LABELS.units}</div>
+            <div>· ${BALANCE_LABELS.averagePerHour}: ${ext.avg_per_hour ?? '—'} ${BALANCE_LABELS.unitsPerHour}</div>
+            <div>· ${BALANCE_LABELS.expiresIn}: ${formatBalanceDuration(ext.expiry_hours)}</div>
+        </div>`;
+}
+
 function renderExtractorBalanceIndicators() {
     const threshold = getBalanceThreshold();
+    const rateThreshold = getExtractorRateThreshold();
     document.querySelectorAll('.colony-balance-slot').forEach(slot => {
         const idx = parseInt(slot.dataset.colonyIdx, 10);
         const balance = COLONY_EXTRACTOR_BALANCE[idx];
+        const rateSummary = COLONY_EXTRACTOR_RATE_SUMMARY[idx];
         slot.innerHTML = '';
-        if (!balance || !Array.isArray(balance.extractors) || balance.extractors.length !== 2) return;
 
-        const ok = (balance.diff_pct ?? 999) <= threshold;
-        const iconClass = ok ? 'bi bi-check-circle-fill' : 'bi bi-exclamation-circle-fill';
-        const color = ok ? '#2dc653' : '#e74c3c';
+        if (balance && Array.isArray(balance.extractors) && balance.extractors.length === 2) {
+            const ok = (balance.diff_pct ?? 999) <= threshold;
+            const iconClass = ok ? 'bi bi-check-circle-fill' : 'bi bi-exclamation-circle-fill';
+            const color = ok ? '#2dc653' : '#e74c3c';
 
-        slot.innerHTML = `
-            <span class="eve-hover-wrap">
-                <span style="color:${color};display:inline-flex;align-items:center;cursor:default;">
-                    <i class="${iconClass}"></i>
-                </span>
-                <div class="eve-hover-card eve-hover-card-right" style="white-space:normal;min-width:320px;">
-                    ${buildExtractorBalanceCard(balance)}
-                    <div style="margin-top:8px;color:${color};font-weight:700;">
-                        Δ ${(balance.diff_pct ?? 0).toFixed(1)}% / Limit ${threshold.toFixed(1)}%
+            slot.innerHTML = `
+                <span class="eve-hover-wrap">
+                    <span style="color:${color};display:inline-flex;align-items:center;cursor:default;">
+                        <i class="${iconClass}"></i>
+                    </span>
+                    <div class="eve-hover-card eve-hover-card-right" style="white-space:normal;min-width:320px;">
+                        ${buildExtractorBalanceCard(balance)}
+                        <div style="margin-top:8px;color:${color};font-weight:700;">
+                            Δ ${(balance.diff_pct ?? 0).toFixed(1)}% / Limit ${threshold.toFixed(1)}%
+                        </div>
                     </div>
-                </div>
-            </span>`;
-        slot.querySelectorAll('.eve-hover-wrap').forEach(wrap => { wrap.dataset.hoverBound = '0'; });
+                </span>`;
+            slot.querySelectorAll('.eve-hover-wrap').forEach(wrap => { wrap.dataset.hoverBound = '0'; });
+            return;
+        }
+
+        if (
+            rateThreshold > 0 &&
+            rateSummary &&
+            Array.isArray(rateSummary.extractors) &&
+            rateSummary.extractors.length === 1 &&
+            Number.isFinite(rateSummary.min_avg_per_hour) &&
+            rateSummary.min_avg_per_hour < rateThreshold
+        ) {
+            slot.innerHTML = `
+                <span class="eve-hover-wrap">
+                    <span style="color:#e74c3c;display:inline-flex;align-items:center;cursor:default;">
+                        <i class="bi bi-exclamation-circle-fill"></i>
+                    </span>
+                    <div class="eve-hover-card eve-hover-card-right" style="white-space:normal;min-width:320px;">
+                        ${buildSingleExtractorRateCard(rateSummary)}
+                        <div style="margin-top:8px;color:#e74c3c;font-weight:700;">
+                            ${BALANCE_LABELS.averagePerHour}: ${(rateSummary.min_avg_per_hour ?? 0).toFixed(1)} ${BALANCE_LABELS.unitsPerHour}
+                        </div>
+                    </div>
+                </span>`;
+            slot.querySelectorAll('.eve-hover-wrap').forEach(wrap => { wrap.dataset.hoverBound = '0'; });
+        }
     });
     initGlobalHoverCards();
 }

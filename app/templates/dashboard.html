@@ -169,6 +169,19 @@
                 <div class="d-flex align-items-center gap-2">
                     <i class="bi bi-globe2 eve-accent"></i>
                     <span class="fw-medium">PI Kolonien</span>
+                    {% if colonies %}
+                    <div class="d-flex align-items-center gap-2 flex-wrap ms-2">
+                        <span class="badge" style="background:rgba(45,198,83,0.12);color:#2dc653;border:1px solid rgba(45,198,83,0.35);font-size:.82rem;font-weight:500;padding:.42rem .72rem;">
+                            {{ active_colony_count }} Aktiv
+                        </span>
+                        <span class="badge" style="background:rgba(231,76,60,0.12);color:#e74c3c;border:1px solid rgba(231,76,60,0.35);font-size:.82rem;font-weight:500;padding:.42rem .72rem;">
+                            {{ expired_colony_count }} Abgelaufen
+                        </span>
+                        <span class="badge" style="background:rgba(244,163,0,0.12);color:#f4a300;border:1px solid rgba(244,163,0,0.35);font-size:.82rem;font-weight:500;padding:.42rem .72rem;">
+                            {{ stalled_colony_count }} Stalled
+                        </span>
+                    </div>
+                    {% endif %}
                 </div>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     {% if colonies %}

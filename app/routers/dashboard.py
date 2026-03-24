@@ -848,6 +848,12 @@ def dashboard(
             or (colony.get("expiry_hours") is None and colony.get("is_stalled") is True)
         )
     )
+    active_colony_count = sum(1 for colony in colonies if colony.get("is_active") is True)
+    stalled_colony_count = sum(
+        1
+        for colony in colonies
+        if colony.get("expiry_hours") is None and colony.get("is_stalled") is True
+    )
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "account": account,
@@ -861,7 +867,9 @@ def dashboard(
         "next_expiry": next_expiry_dt,
         "next_expiry_hours": next_expiry_hours,
         "next_expiry_char": next_expiry_char,
+        "active_colony_count": active_colony_count,
         "expired_colony_count": expired_colony_count,
+        "stalled_colony_count": stalled_colony_count,
         "cache_age_sec": cache_age_sec,
         "cooldown_remaining": cooldown_remaining,
         "isk_history": isk_history,

@@ -241,6 +241,63 @@ def bootstrap_pi_type_translations() -> int:
     return inserted
 
 
+def bootstrap_static_planets() -> int:
+    if not _translation_table_exists():
+        # translation table check is a convenient DB availability guard,
+        # but static planet bootstrap should still depend on actual model table existence.
+        pass
+
+    try:
+        from sqlalchemy import inspect
+        from app.database import engine
+        if not inspect(engine).has_table("static_planets"):
+            return 0
+    except Exception:
+        return 0
+
+    from app import sde
+    from app.models import StaticPlanet
+
+    planets = sde.get_static_planets()
+    if not planets:
+        return 0
+
+    inserted = 0
+    updated = 0
+    with SessionLocal() as db:
+        existing = {
+            row.planet_id: row
+            for row in db.query(StaticPlanet).all()
+        }
+        for planet_id, planet in planets.items():
+            row = existing.get(int(planet_id))
+            if row is None:
+                db.add(StaticPlanet(
+                    planet_id=int(planet_id),
+                    system_id=int(planet.get("system_id") or 0),
+                    planet_name=planet.get("planet_name") or f"Planet {planet_id}",
+                    planet_number=str(planet.get("planet_number") or ""),
+                    radius=int(planet.get("radius")) if planet.get("radius") is not None else None,
+                ))
+                inserted += 1
+                continue
+            changed = False
+            for attr, value in (
+                ("system_id", int(planet.get("system_id") or 0)),
+                ("planet_name", planet.get("planet_name") or f"Planet {planet_id}"),
+                ("planet_number", str(planet.get("planet_number") or "")),
+                ("radius", int(planet.get("radius")) if planet.get("radius") is not None else None),
+            ):
+                if getattr(row, attr) != value:
+                    setattr(row, attr, value)
+                    changed = True
+            if changed:
+                updated += 1
+        if inserted or updated:
+            db.commit()
+    return inserted + updated
+
+
 @pass_context
 def t(context, key: str, **params) -> str:
     request = context.get("request")

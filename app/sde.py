@@ -27,6 +27,7 @@ UPDATE_INTERVAL_DAYS = 7
 FUZZWORK_SYSTEMS_URL = "https://www.fuzzwork.co.uk/dump/latest/mapSolarSystems.sql.bz2"
 FUZZWORK_REGIONS_URL = "https://www.fuzzwork.co.uk/dump/latest/mapRegions.sql.bz2"
 FUZZWORK_CONSTELLATIONS_URL = "https://www.fuzzwork.co.uk/dump/latest/mapConstellations.sql.bz2"
+FUZZWORK_DENORMALIZE_URL = "https://www.fuzzwork.co.uk/dump/latest/mapDenormalize.sql.bz2"
 SYSTEMS_UPDATE_DAYS = 30
 
 # In-memory stores
@@ -39,6 +40,7 @@ _systems_by_id: dict[int, dict] = {}                # system_id -> {name, securi
 _regions: dict[int, str] = {}                       # region_id -> region_name
 _constellations: dict[int, dict] = {}               # constellation_id -> {name, region_id}
 _constellations_by_name: dict[str, dict] = {}       # name_lower -> {id, name, region_id}
+_static_planets: dict[int, dict] = {}               # planet_id -> {system_id, planet_name, planet_number, radius}
 
 
 # ─── Version & Update-Check ───────────────────────────────────────────────────
@@ -338,6 +340,70 @@ def _load_constellations() -> None:
         logger.error(f"Fehler beim Laden von mapConstellations: {e}")
 
 
+def _denormalize_path() -> Path:
+    return DATA_DIR / "mapDenormalize.sql.bz2"
+
+
+def _is_denormalize_update_needed() -> bool:
+    path = _denormalize_path()
+    if not path.exists():
+        return True
+    return time.time() - path.stat().st_mtime > SYSTEMS_UPDATE_DAYS * 86400
+
+
+def _download_denormalize() -> bool:
+    logger.info(f"Lade Fuzzwork mapDenormalize von {FUZZWORK_DENORMALIZE_URL} ...")
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        resp = requests.get(FUZZWORK_DENORMALIZE_URL, timeout=120, stream=True)
+        resp.raise_for_status()
+        tmp = DATA_DIR / "mapDenormalize.sql.bz2.tmp"
+        tmp.write_bytes(resp.content)
+        tmp.replace(_denormalize_path())
+        logger.info("mapDenormalize.sql.bz2 heruntergeladen.")
+        return True
+    except Exception as e:
+        logger.error(f"Fuzzwork mapDenormalize Download fehlgeschlagen: {e}")
+        return False
+
+
+def _load_static_planets() -> None:
+    global _static_planets
+    path = _denormalize_path()
+    if not path.exists():
+        logger.warning("mapDenormalize.sql.bz2 nicht gefunden - statische Planetendaten unbekannt.")
+        return
+    try:
+        pattern = re.compile(
+            r"\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(NULL|\d+),"
+            r"(-?[\d.eE+\-]+),(-?[\d.eE+\-]+),(-?[\d.eE+\-]+),"
+            r"(-?[\d.eE+\-]+),'([^']+)',(-?[\d.eE+\-]+|NULL),(NULL|\d+),(NULL|\d+)\)"
+        )
+        result: dict[int, dict] = {}
+        with bz2.open(str(path), "rt", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                for m in pattern.finditer(line):
+                    item_id = int(m.group(1))
+                    system_id = int(m.group(4))
+                    radius = int(float(m.group(11)))
+                    item_name = m.group(12)
+                    celestial_index = m.group(14)
+                    orbit_index = m.group(15)
+                    if celestial_index == "NULL" or orbit_index != "NULL":
+                        continue
+                    result[item_id] = {
+                        "planet_id": item_id,
+                        "system_id": system_id,
+                        "planet_name": item_name,
+                        "planet_number": celestial_index,
+                        "radius": radius,
+                    }
+        _static_planets = result
+        logger.info(f"SDE: {len(_static_planets)} statische Planeten geladen.")
+    except Exception as e:
+        logger.error(f"Fehler beim Laden von mapDenormalize: {e}")
+
+
 # ─── Öffentliche API ──────────────────────────────────────────────────────────
 
 def init():
@@ -362,6 +428,10 @@ def init():
     if _is_constellations_update_needed():
         _download_constellations()
     _load_constellations()
+
+    if _is_denormalize_update_needed():
+        _download_denormalize()
+    _load_static_planets()
 
 
 def find_system(query: str) -> dict | None:
@@ -512,3 +582,7 @@ def get_constellation_systems_local(constellation_id: int) -> list[dict]:
         })
     result.sort(key=lambda item: item["name"])
     return result
+
+
+def get_static_planets() -> dict[int, dict]:
+    return dict(_static_planets)

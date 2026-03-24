@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from app.database import SessionLocal
 from app.dependencies import require_account
 from app.esi import get_system_info, get_planet_info
 from app.i18n import get_language_from_request, translate, translate_type_name
 from app.market import get_prices_by_names, get_market_trends, PI_TYPE_IDS
+from app.models import StaticPlanet
 from app.pi_analyzer import analyze_system
 from app.pi_data import PLANET_TYPE_COLORS, PLANET_RESOURCES, P0_TO_P1, P1_TO_P2, P2_TO_P3, P3_TO_P4
 from app import sde
@@ -24,6 +26,26 @@ PLANET_TYPE_MAP = {
     "lava": "Lava",
     "storm": "Storm",
     "plasma": "Plasma",
+}
+
+
+ROMAN_NUMERALS = {
+    "I": 1,
+    "II": 2,
+    "III": 3,
+    "IV": 4,
+    "V": 5,
+    "VI": 6,
+    "VII": 7,
+    "VIII": 8,
+    "IX": 9,
+    "X": 10,
+    "XI": 11,
+    "XII": 12,
+    "XIII": 13,
+    "XIV": 14,
+    "XV": 15,
+    "XVI": 16,
 }
 
 
@@ -53,6 +75,22 @@ def _build_planet_type_labels(lang: str) -> dict[str, str]:
     }
 
 
+def _extract_planet_number(planet_name: str, system_name: str | None = None) -> str | None:
+    if not planet_name:
+        return None
+    cleaned = planet_name.strip()
+    if system_name and cleaned.lower().startswith(system_name.lower()):
+        cleaned = cleaned[len(system_name):].strip()
+    token = cleaned.split()[-1] if cleaned.split() else ""
+    return token if token in ROMAN_NUMERALS else None
+
+
+def _get_static_planet_rows(system_id: int) -> dict[int, StaticPlanet]:
+    with SessionLocal() as db:
+        rows = db.query(StaticPlanet).filter(StaticPlanet.system_id == system_id).all()
+        return {int(row.planet_id): row for row in rows}
+
+
 def _load_system_planets(system_id: int) -> list[dict]:
     cached = _system_planet_cache.get(system_id)
     if cached is not None:
@@ -68,10 +106,12 @@ def _load_system_planets(system_id: int) -> list[dict]:
 
     planet_ids = system_info.get("planets", [])
     planet_ids = [p.get("planet_id") if isinstance(p, dict) else p for p in planet_ids]
+    static_rows = _get_static_planet_rows(system_id)
 
     planets = []
     for pid in planet_ids[:16]:
         pinfo = get_planet_info(pid)
+        static_row = static_rows.get(int(pid))
         type_id = pinfo.get("type_id")
         raw_type = ""
         if type_id:
@@ -82,8 +122,13 @@ def _load_system_planets(system_id: int) -> list[dict]:
         if mapped:
             planets.append({
                 "planet_id": pid,
-                "planet_name": pinfo.get("name", f"Planet {pid}"),
+                "planet_name": (static_row.planet_name if static_row else None) or pinfo.get("name", f"Planet {pid}"),
                 "planet_type": mapped,
+                "planet_number": (static_row.planet_number if static_row else None) or _extract_planet_number(
+                    (static_row.planet_name if static_row else None) or pinfo.get("name", f"Planet {pid}"),
+                    system_name or system_info.get("name"),
+                ),
+                "radius": static_row.radius if static_row else pinfo.get("radius"),
                 "system_id": system_id,
                 "system_name": system_name or system_info.get("name") or f"System {system_id}",
                 "region_name": region_name,
@@ -196,6 +241,7 @@ def analyze(system_id: int, account=Depends(require_account)):
             return JSONResponse(content={"error": "System nicht gefunden"}, status_code=404)
         planet_ids = system_info.get("planets", [])
         planet_ids = [p.get("planet_id") if isinstance(p, dict) else p for p in planet_ids]
+        static_rows = _get_static_planet_rows(system_id)
 
         planet_types = []
         planet_details = []
@@ -203,6 +249,7 @@ def analyze(system_id: int, account=Depends(require_account)):
         type_resources: dict = {}
         for pid in planet_ids[:16]:  # Max 16 Planeten
             pinfo = get_planet_info(pid)
+            static_row = static_rows.get(int(pid))
             # ESI returns type_id (int) → resolve via SDE types
             type_id = pinfo.get("type_id")
             raw_type = ""
@@ -213,11 +260,14 @@ def analyze(system_id: int, account=Depends(require_account)):
             mapped = PLANET_TYPE_MAP.get(raw_type)
             if mapped:
                 planet_types.append(mapped)
+                planet_name = (static_row.planet_name if static_row else None) or pinfo.get("name", f"Planet {pid}")
                 planet_details.append({
                     "id": pid,
-                    "name": pinfo.get("name", f"Planet {pid}"),
+                    "name": planet_name,
                     "type": mapped,
                     "color": PLANET_TYPE_COLORS.get(mapped, "#586e75"),
+                    "number": (static_row.planet_number if static_row else None) or _extract_planet_number(planet_name, system_name),
+                    "radius": static_row.radius if static_row else pinfo.get("radius"),
                 })
                 type_count[mapped] = type_count.get(mapped, 0) + 1
                 if mapped not in type_resources:

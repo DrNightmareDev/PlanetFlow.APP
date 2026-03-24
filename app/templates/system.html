@@ -76,6 +76,15 @@
                     <span style="color:#1a3a5a;">|</span>
                     <span class="text-muted small">{{ t('common.planets') }}:</span>
                     <span id="planetCount" class="fw-semibold small eve-accent"></span>
+                    <button type="button"
+                            id="planetDetailsToggle"
+                            class="btn btn-sm d-none"
+                            title="{{ t('system.planet_details_toggle', default='Planetendetails anzeigen') }}"
+                            aria-label="{{ t('system.planet_details_toggle', default='Planetendetails anzeigen') }}"
+                            onclick="togglePlanetDetails()"
+                            style="border:1px solid #00b4d840;background:#00b4d812;color:#00b4d8;border-radius:999px;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;line-height:1;padding:0;">
+                        <i id="planetDetailsToggleIcon" class="bi bi-plus-lg" style="font-size:.9rem;"></i>
+                    </button>
                 </div>
                 <div class="d-flex flex-wrap gap-2 align-items-center">
                     <div id="planetTypeBadges" class="d-flex flex-wrap gap-2 align-items-center"></div>
@@ -84,6 +93,34 @@
                     </button>
                     <span id="compareToast" class="text-muted small d-none"></span>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="planetDetailsCard" class="eve-card card border-0 mb-4 d-none">
+        <div class="card-header eve-card-header d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-list-ul eve-accent"></i>
+                <span class="fw-medium">{{ t('system.planet_details_title', default='Planetendetails') }}</span>
+            </div>
+            <span id="planetDetailsSummary" class="text-muted small"></span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table eve-table mb-0">
+                    <thead>
+                        <tr>
+                            <th>{{ t('system.planet_number', default='Nr.') }}</th>
+                            <th>{{ t('common.planet', default='Planet') }}</th>
+                            <th>{{ t('common.type', default='Typ') }}</th>
+                            <th>{{ t('system.planet_radius', default='Radius') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody id="planetDetailsBody"></tbody>
+                </table>
+            </div>
+            <div id="planetDetailsEmpty" class="text-center py-4 text-muted d-none">
+                <i class="bi bi-dash-circle me-2"></i>{{ t('system.no_planet_details', default='Keine Planetendetails vorhanden.') }}
             </div>
         </div>
     </div>
@@ -231,6 +268,8 @@ let activeFilters = new Set(); // enthält Planetentypen, P0-Ressourcen UND Inpu
 let sortState = { col: 'isk_sell', asc: false };
 let resourceToPlanet = {}; // P0-Ressource → [Planetentypen die sie produzieren]
 
+let planetDetailsExpanded = false;
+
 {% if preset_system %}
 // Direktlink: System vorauswählen und Analyse sofort starten
 window.addEventListener('DOMContentLoaded', () => {
@@ -292,6 +331,54 @@ function selectSystem(sys) {
     searchInput.value = sys.name;
     searchResults.classList.add('d-none');
     analyzeBtn.disabled = false;
+}
+
+function formatPlanetRadius(radius) {
+    if (radius == null || radius === '' || Number.isNaN(Number(radius))) return '\u2014';
+    const km = Number(radius) / 1000;
+    return `${new Intl.NumberFormat().format(Math.round(km))} km`;
+}
+
+function togglePlanetDetails(force) {
+    if (typeof force === 'boolean') {
+        planetDetailsExpanded = force;
+    } else {
+        planetDetailsExpanded = !planetDetailsExpanded;
+    }
+    const card = document.getElementById('planetDetailsCard');
+    const icon = document.getElementById('planetDetailsToggleIcon');
+    if (!card || !icon) return;
+    card.classList.toggle('d-none', !planetDetailsExpanded);
+    icon.className = planetDetailsExpanded ? 'bi bi-dash-circle' : 'bi bi-plus-circle';
+}
+
+function renderPlanetDetails(planets) {
+    const body = document.getElementById('planetDetailsBody');
+    const empty = document.getElementById('planetDetailsEmpty');
+    const summary = document.getElementById('planetDetailsSummary');
+    if (!body || !empty || !summary) return;
+
+    body.innerHTML = '';
+    summary.textContent = planets.length ? `${planets.length}` : '';
+
+    if (!planets.length) {
+        empty.classList.remove('d-none');
+        togglePlanetDetails(false);
+        return;
+    }
+
+    empty.classList.add('d-none');
+    planets.forEach((planet, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="small fw-semibold eve-accent">${planet.number || idx + 1}</td>
+            <td class="small">${planet.name || '\u2014'}</td>
+            <td class="small">${planetBadge(planet.type)}</td>
+            <td class="small text-muted">${formatPlanetRadius(planet.radius)}</td>
+        `;
+        body.appendChild(tr);
+    });
+    togglePlanetDetails(false);
 }
 
 document.addEventListener('click', function(e) {
@@ -545,6 +632,7 @@ function renderAnalysis(data) {
     // System Header
     document.getElementById('systemName').textContent    = data.system_name || '\u2014';
     document.getElementById('planetCount').textContent   = (data.planets || []).length;
+    document.getElementById('planetDetailsToggle').classList.toggle('d-none', !(data.planets || []).length);
     document.getElementById('systemRegion').textContent  = data.region || '\u2014';
 
     const sec = data.security;
@@ -564,6 +652,8 @@ function renderAnalysis(data) {
         badge.innerHTML = `${planetTypeLabel(pt.type)}<span style="opacity:0.65;font-size:0.7rem;margin-left:3px;">×${pt.count}</span>`;
         ptBadges.appendChild(badge);
     });
+
+    renderPlanetDetails(data.planets || []);
 
     // Ressourcen-Kacheln (klickbar)
     const resGrid = document.getElementById('resourceGrid');

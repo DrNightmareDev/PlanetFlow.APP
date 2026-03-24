@@ -191,3 +191,15 @@ class TranslationEntry(Base):
     text = Column(Text, nullable=False, default="")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class StaticPlanet(Base):
+    __tablename__ = "static_planets"
+
+    planet_id = Column(BigInteger, primary_key=True, index=True)
+    system_id = Column(BigInteger, nullable=False, index=True)
+    planet_name = Column(String(255), nullable=False)
+    planet_number = Column(String(16), nullable=True)
+    radius = Column(BigInteger, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

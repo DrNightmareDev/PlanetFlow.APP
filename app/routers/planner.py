@@ -35,7 +35,10 @@ def _build_product_labels(lang: str) -> dict[str, str]:
 
 
 def _build_planet_type_labels(lang: str) -> dict[str, str]:
-    return {name: translate(f"planet_type.{name}", lang=lang, default=name) for name in PLANET_TYPE_COLORS}
+    return {
+        name: translate(f"planet_type.{name.lower()}", lang=lang, default=name)
+        for name in PLANET_TYPE_COLORS
+    }
 
 
 @router.get("", response_class=HTMLResponse)

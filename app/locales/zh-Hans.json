@@ -105,6 +105,8 @@
   "planner.favorite_remove": "移除收藏",
   "planner.graph_active": "已启用",
   "planner.graph_click_to_filter": "点击筛选",
+  "planner.system_all_available": "全部可用",
+  "planner.system_missing_planet_types": "缺少 {count} 个行星类型",
   "planner.open_in_planner": "在 PI 规划器中打开",
   "planner.filter_prefix": "筛选",
   "planner.supports_top_tiers": "支持所有 P1-P4 产品。",

@@ -324,7 +324,8 @@ function productLabel(name) {
 }
 
 function planetTypeLabel(name) {
-    return PLANET_TYPE_LABELS[name] || name;
+    if (!name) return '';
+    return PLANET_TYPE_LABELS[name] || PLANET_TYPE_LABELS[String(name).toLowerCase()] || name;
 }
 
 function productDisplay(product) {
@@ -1039,12 +1040,13 @@ function applySystemCheck() {
 
     const divider = `<span style="color:#1a3a5a;font-size:1rem;">|</span>`;
 
+const missingPlanetTypesText = {{ t('planner.system_missing_planet_types') | tojson }};
     const verdictHtml = canProduce
         ? `<span style="color:#2dc653;font-size:.78rem;font-weight:600;white-space:nowrap;">
-               <i class="bi bi-check-circle-fill me-1"></i>Alles verfÃƒÆ’Ã‚Â¼gbar
+               <i class="bi bi-check-circle-fill me-1"></i>{{ t('planner.system_all_available') }}
            </span>`
         : `<span style="color:#e74c3c;font-size:.78rem;font-weight:600;white-space:nowrap;">
-               <i class="bi bi-x-circle-fill me-1"></i>${neededMissing.size} Planetentyp(en) fehlen
+               <i class="bi bi-x-circle-fill me-1"></i>${missingPlanetTypesText.replace('{count}', neededMissing.size)}
            </span>`;
 
     const badgesHtml = showTypes.map(pt => {
@@ -1057,8 +1059,8 @@ function applySystemCheck() {
                              border:1px solid ${c}${has ? '55' : '18'};
                              font-size:.72rem;padding:.3rem .55rem;">
             <i class="bi bi-${has ? 'check2' : 'x'} me-1"
-               style="color:${has ? '#2dc653' : '#e74c3c'};"></i>${pt}${has
-            ? `<span style="opacity:.5;font-size:.63rem;margin-left:2px;">ÃƒÆ’Ã¢â‚¬â€${cnt}</span>` : ''}
+               style="color:${has ? '#2dc653' : '#e74c3c'};"></i>${escapeHtml(planetTypeLabel(pt))}${has
+            ? `<span style="opacity:.5;font-size:.63rem;margin-left:2px;">x${cnt}</span>` : ''}
         </span>`;
     }).join('');
 

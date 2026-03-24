@@ -784,7 +784,7 @@ function setCurrentLanguage(lang) {
     localStorage.setItem(EVE_LANG_KEY, next);
     document.cookie = `eve_lang=${encodeURIComponent(next)}; path=/; max-age=${60 * 60 * 24 * 365}`;
     document.documentElement.setAttribute('lang', next);
-    applyTranslations();
+    window.location.reload();
 }
 
 function initLanguageSelector() {

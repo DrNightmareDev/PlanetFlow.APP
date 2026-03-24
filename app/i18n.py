@@ -91,7 +91,8 @@ def translate(key: str, lang: str | None = None, **params) -> str:
     catalogs = load_translations()
     current_lang = normalize_language(lang)
     catalog = catalogs.get(current_lang, {})
-    text = catalog.get(key) or catalogs.get(DEFAULT_LANGUAGE, {}).get(key) or key
+    default_text = params.pop("default", key)
+    text = catalog.get(key) or catalogs.get(DEFAULT_LANGUAGE, {}).get(key) or default_text
     if params:
         try:
             return text.format(**params)

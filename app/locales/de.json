@@ -105,6 +105,8 @@
   "planner.favorite_remove": "Favorit entfernen",
   "planner.graph_active": "aktiv",
   "planner.graph_click_to_filter": "klicken zum Filtern",
+  "planner.system_all_available": "Alles verfuegbar",
+  "planner.system_missing_planet_types": "{count} Planetentyp(en) fehlen",
   "planner.open_in_planner": "Im PI Planner oeffnen",
   "planner.filter_prefix": "Filter",
   "planner.supports_top_tiers": "Alle P1-P4 Produkte werden unterstuetzt.",

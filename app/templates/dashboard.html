@@ -185,7 +185,7 @@
                         </div>
                         <div class="d-flex align-items-center gap-2 ms-1" title="Zeige nur Planeten mit mindestens einem laufenden Extraktor unter diesem Wert pro Stunde">
                             <span class="small text-muted" style="font-size:.78rem;">{{ t('dashboard.extractor_rate_threshold') }}</span>
-                            <input id="extractorRateThresholdRange" type="range" min="0" max="100000" step="500" value="0"
+                            <input id="extractorRateThresholdRange" type="range" min="0" max="50000" step="500" value="0"
                                    style="width:110px;" oninput="updateExtractorRateThreshold(this.value)">
                             <span id="extractorRateThresholdValue" class="small" style="min-width:60px;color:#c9d1d9;">0</span>
                         </div>
@@ -1348,7 +1348,7 @@ function updateBalanceThreshold(value) {
 window.updateBalanceThreshold = updateBalanceThreshold;
 
 function updateExtractorRateThreshold(value) {
-    const numeric = Math.max(0, Math.min(100000, parseFloat(value) || 0));
+    const numeric = Math.max(0, Math.min(50000, parseFloat(value) || 0));
     localStorage.setItem(EXTRACTOR_RATE_THRESHOLD_KEY, String(numeric));
     const range = document.getElementById('extractorRateThresholdRange');
     const label = document.getElementById('extractorRateThresholdValue');

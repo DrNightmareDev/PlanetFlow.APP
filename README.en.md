@@ -17,6 +17,18 @@ If this project helps you, Ingame-ISK donations to `DrNightmare` are welcome.
 - Corporation overview, System Analyzer, Compare, System Mix, and PI Chain Planner
 - Manager panel and DB-backed GUI translations for German, English, and Simplified Chinese
 
+## UI Pages
+
+- `Dashboard`: Shows all PI colonies, daily ISK value, expiry timers, storage state, skyhook context, and filters for active, expired, stalled, balanced, unbalanced, and extractor-rate thresholds.
+- `Skyhooks`: Lets you edit and save skyhook inventories per planet, including history and cached value calculations.
+- `Characters`: Shows all linked characters, main/alt assignments, token state, and PI skills in card and list views.
+- `Corporation`: Summarizes PI data for your corporation and shows mains, colonies, PI types, and product search across corporation colonies.
+- `Jita Market`: Displays buy/sell prices, spreads, trends, and trade volume for PI products from the cached Jita/The Forge market data.
+- `PI Chain Planner`: Builds full production chains for P1-P4 items and shows required planet types, P0 resources, and suitable systems.
+- `System Analyzer`: Analyzes a single system and shows available planet types, P0 resources, and derived PI recommendations.
+- `System Mix`: Combines multiple systems or constellations and shows which PI products are possible with the shared planet mix.
+- `Compare`: Places multiple systems side by side to compare planet types and PI recommendations directly.
+
 ## Required ESI scopes
 
 - `esi-planets.manage_planets.v1`

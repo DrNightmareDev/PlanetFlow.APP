@@ -17,6 +17,18 @@ Wenn dir das Projekt hilft, freue ich mich ueber Ingame-ISK-Spenden an `DrNightm
 - Corporation-Uebersicht, System Analyzer, Vergleich, System Mix und PI Chain Planner
 - Manager Panel und DB-basierte GUI-Uebersetzungen fuer Deutsch, Englisch und vereinfachtes Chinesisch
 
+## Seiten im UI
+
+- `Dashboard`: Zeigt alle PI-Kolonien, den taeglichen ISK-Wert, Ablaufzeiten, Storage-Staende, Skyhook-Bezug und Filter fuer Aktiv, Abgelaufen, Stalled, Balanced, Unbalanced und Extraktor-Raten.
+- `Skyhooks`: Erlaubt das Bearbeiten und Speichern von Skyhook-Bestaenden pro Planet inklusive Verlaufsansicht und Wertberechnung.
+- `Characters`: Zeigt alle verknuepften Charaktere, Main/Alt-Zuordnung, Token-Status und PI-Skills in Karten- und Listenansicht.
+- `Corporation`: Fasst die PI-Daten der eigenen Corporation zusammen, zeigt Main-Charaktere, Kolonien, PI-Typen und Produktsuche ueber alle Corp-Kolonien.
+- `Jita Markt`: Zeigt Kauf-/Verkaufspreise, Spreads, Trends und Handelsvolumen fuer PI-Produkte aus dem Jita-/The-Forge-Marktcache.
+- `PI Chain Planner`: Baut Produktionsketten fuer P1-P4 auf, zeigt benoetigte Planetentypen, P0-Rohstoffe und passende Systeme fuer ein Produkt.
+- `System Analyzer`: Analysiert ein einzelnes System, zeigt verfuegbare Planetentypen, P0-Ressourcen und daraus abgeleitete PI-Empfehlungen.
+- `System Mix`: Kombiniert mehrere Systeme oder Konstellationen und zeigt, welche PI-Produkte mit den gemeinsamen Planetentypen moeglich sind.
+- `Vergleich`: Vergleicht mehrere Systeme direkt nebeneinander, inklusive Planetentypen und PI-Empfehlungen.
+
 ## Benoetigte ESI-Scopes
 
 - `esi-planets.manage_planets.v1`

@@ -20,6 +20,18 @@ If this project helps you, Ingame-ISK donations to `DrNightmare` are welcome.
 - GUI languages: German, English, and Simplified Chinese
 - Linux, Docker Compose, and native Windows setup/update scripts
 
+## Page Guides
+
+- `Dashboard`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
+- `Skyhooks`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
+- `Characters`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
+- `Corporation`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
+- `Jita Market`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
+- `PI Chain Planner`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
+- `System Analyzer`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
+- `System Mix`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
+- `Compare`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
+
 ## Update Scripts
 
 - Linux native: `bash scripts/update_linux.sh`

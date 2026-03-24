@@ -1,17 +1,17 @@
 {% extends "base.html" %}
-{% block title %}System Vergleich - EVE PI Manager{% endblock %}
+{% block title %}{{ t('compare.title') }} - {{ t('app.name') }}{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
     <h2 class="eve-page-title mb-0">
-        <i class="bi bi-layout-split me-2 eve-accent"></i>System Vergleich
+        <i class="bi bi-layout-split me-2 eve-accent"></i>{{ t('compare.title') }}
     </h2>
     <div class="d-flex gap-2">
         <a href="/system" class="btn btn-sm eve-btn-outline">
-            <i class="bi bi-plus-circle me-1"></i>System hinzufuegen
+            <i class="bi bi-plus-circle me-1"></i>{{ t('compare.add_system') }}
         </a>
         <button class="btn btn-sm eve-btn-outline text-danger" onclick="clearAll()" id="clearAllBtn" style="display:none;">
-            <i class="bi bi-trash me-1"></i>Alle entfernen
+            <i class="bi bi-trash me-1"></i>{{ t('compare.clear_all') }}
         </button>
     </div>
 </div>
@@ -24,9 +24,9 @@
 
 <div id="emptyState" class="text-center py-5 d-none">
     <i class="bi bi-layout-split fs-1 text-muted d-block mb-3"></i>
-    <h5>Keine Systeme zum Vergleich</h5>
-    <p class="text-muted">Analysiere ein System im <a href="/system" class="eve-link">System Analyzer</a> und klicke dort auf "Vergleich".</p>
-    <p class="text-muted small">Es koennen bis zu 4 Systeme gleichzeitig verglichen werden.</p>
+    <h5>{{ t('compare.empty_title') }}</h5>
+    <p class="text-muted">{{ t('compare.empty_text_prefix') }} <a href="/system" class="eve-link">{{ t('compare.empty_text_link') }}</a> {{ t('compare.empty_text_suffix') }}</p>
+    <p class="text-muted small">{{ t('compare.empty_hint') }}</p>
 </div>
 
 <div id="compareContent" class="d-none">
@@ -35,7 +35,7 @@
     <div class="eve-card card border-0 mb-4">
         <div class="card-header eve-card-header d-flex align-items-center gap-2">
             <i class="bi bi-globe2 eve-accent"></i>
-            <span class="fw-medium">Planetentypen im Vergleich</span>
+            <span class="fw-medium">{{ t('compare.planet_types') }}</span>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -47,7 +47,7 @@
     <div class="eve-card card border-0">
         <div class="card-header eve-card-header d-flex align-items-center gap-2">
             <i class="bi bi-star eve-accent"></i>
-            <span class="fw-medium">Top PI Empfehlungen (Top 5 nach Jita Sell)</span>
+            <span class="fw-medium">{{ t('compare.top_recommendations') }}</span>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -86,10 +86,20 @@
 </style>
 <script>
 const PLANET_COLORS = {{ planet_type_colors | tojson }};
+const PRODUCT_LABELS = {{ product_labels | tojson }};
+const PLANET_TYPE_LABELS = {{ planet_type_labels | tojson }};
 const TIER_COLORS = {P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
 const ALL_PLANET_TYPES = ['Barren','Gas','Ice','Lava','Oceanic','Plasma','Storm','Temperate'];
 const FAV_KEY = 'pi_fav_systems';
 const COMPARE_KEY = 'pi_compare_systems';
+
+function productLabel(name) {
+    return PRODUCT_LABELS[name] || name;
+}
+
+function planetTypeLabel(name) {
+    return PLANET_TYPE_LABELS[name] || name;
+}
 
 function formatIsk(val) {
     if (!val || val === 0) return '&mdash;';
@@ -211,7 +221,7 @@ function renderCards(systems) {
             : '<i class="bi bi-star" style="font-size:1rem;"></i>';
         const topPt = (s.planet_types || []).slice(0, 4).map(pt => {
             const c = PLANET_COLORS[pt.type] || '#586e75';
-            return `<span class="badge me-1" style="background:${c}18;color:${c};border:1px solid ${c}30;font-size:0.72rem;">${pt.type} x${pt.count}</span>`;
+            return `<span class="badge me-1" style="background:${c}18;color:${c};border:1px solid ${c}30;font-size:0.72rem;">${planetTypeLabel(pt.type)} x${pt.count}</span>`;
         }).join('');
         return `<div class="col-md-6 col-xl-3">
             <div class="eve-card card border-0 h-100">
@@ -219,11 +229,11 @@ function renderCards(systems) {
                     <div class="d-flex justify-content-between align-items-start mb-2 gap-2">
                         <div class="d-flex align-items-center gap-2">
                             <h6 class="fw-bold mb-0">${escapeHtml(s.system_name)}</h6>
-                            <button class="btn btn-sm eve-btn-ghost p-0" onclick="toggleSystemFavById(${s.system_id})" title="Als Favorit speichern">
+                            <button class="btn btn-sm eve-btn-ghost p-0" onclick="toggleSystemFavById(${s.system_id})" title="{{ t('system.save_favorite') }}">
                                 ${favoriteIcon}
                             </button>
                         </div>
-                        <button class="btn btn-sm p-0 text-muted" onclick="removeSystem(${s.system_id})" title="Entfernen" style="font-size:0.8rem;">
+                        <button class="btn btn-sm p-0 text-muted" onclick="removeSystem(${s.system_id})" title="{{ t('compare.remove') }}" style="font-size:0.8rem;">
                             <i class="bi bi-x-circle"></i>
                         </button>
                     </div>
@@ -234,7 +244,7 @@ function renderCards(systems) {
                     <div class="d-flex flex-wrap gap-1">${topPt}</div>
                     <div class="mt-2">
                         <a href="/system/${s.system_id}" class="btn btn-sm eve-btn-outline w-100" style="font-size:0.75rem;">
-                            <i class="bi bi-search me-1"></i>Analysieren
+                            <i class="bi bi-search me-1"></i>{{ t('compare.open_analyzer') }}
                         </a>
                     </div>
                 </div>
@@ -251,12 +261,12 @@ function toggleSystemFavById(systemId) {
 
 function renderPlanetTable(systems) {
     const table = document.getElementById('planetTable');
-    let html = '<thead><tr><th>Planetentyp</th>';
+    let html = '<thead><tr><th>{{ t('compare.planet_types') }}</th>';
     systems.forEach(s => html += `<th class="text-center">${escapeHtml(s.system_name)}</th>`);
     html += '</tr></thead><tbody>';
     ALL_PLANET_TYPES.forEach(pt => {
         const c = PLANET_COLORS[pt] || '#586e75';
-        html += `<tr><td><span class="badge" style="background:${c}18;color:${c};border:1px solid ${c}30;">${pt}</span></td>`;
+        html += `<tr><td><span class="badge" style="background:${c}18;color:${c};border:1px solid ${c}30;">${planetTypeLabel(pt)}</span></td>`;
         systems.forEach(s => {
             const found = (s.planet_types || []).find(p => p.type === pt);
             html += found
@@ -274,7 +284,7 @@ function renderRecTable(systems) {
     systems.forEach(s => (s.recommendations || []).forEach(r => allNames.add(r.name)));
 
     const table = document.getElementById('recTable');
-    let html = '<thead><tr><th>Produkt</th><th>Tier</th>';
+    let html = '<thead><tr><th>{{ t('common.product') }}</th><th>{{ t('common.tier') }}</th>';
     systems.forEach(s => html += `<th class="text-center">${escapeHtml(s.system_name)}<br><span class="text-muted small">Jita Sell</span></th>`);
     html += '</tr></thead><tbody>';
 
@@ -294,7 +304,7 @@ function renderRecTable(systems) {
             }
         }
         const tc = TIER_COLORS[tier] || '#c9d1d9';
-        html += `<tr><td class="fw-medium">${escapeHtml(name)}</td>
+            html += `<tr><td class="fw-medium">${escapeHtml(productLabel(name))}</td>
             <td><span class="badge" style="background:${tc}1a;color:${tc};border:1px solid ${tc}3a;">${tier}</span></td>`;
         systems.forEach(s => {
             const rec = (s.recommendations || []).find(r => r.name === name);

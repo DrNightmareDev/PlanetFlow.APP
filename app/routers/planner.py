@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import require_account
-from app.i18n import get_language_from_request, translate_type_name
+from app.i18n import get_language_from_request, translate, translate_type_name
 from app.market import PI_TYPE_IDS
 from app.models import PiFavorite
 from app.pi_data import (
@@ -34,11 +34,16 @@ def _build_product_labels(lang: str) -> dict[str, str]:
     return labels
 
 
+def _build_planet_type_labels(lang: str) -> dict[str, str]:
+    return {name: translate(f"planet_type.{name}", lang=lang, default=name) for name in PLANET_TYPE_COLORS}
+
+
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
 def planner_page(request: Request, account=Depends(require_account)):
     lang = get_language_from_request(request)
     product_labels = _build_product_labels(lang)
+    planet_type_labels = _build_planet_type_labels(lang)
 
     def build_tier(names, tier):
         products = []
@@ -68,6 +73,7 @@ def planner_page(request: Request, account=Depends(require_account)):
         "planet_type_colors": PLANET_TYPE_COLORS,
         "all_products": all_products,
         "product_labels": product_labels,
+        "planet_type_labels": planet_type_labels,
     })
 
 

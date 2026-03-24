@@ -3,9 +3,10 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.dependencies import require_account
 from app.esi import get_system_info, get_planet_info
+from app.i18n import get_language_from_request, translate, translate_type_name
 from app.market import get_prices_by_names, get_market_trends, PI_TYPE_IDS
 from app.pi_analyzer import analyze_system
-from app.pi_data import PLANET_TYPE_COLORS, PLANET_RESOURCES, P0_TO_P1
+from app.pi_data import PLANET_TYPE_COLORS, PLANET_RESOURCES, P0_TO_P1, P1_TO_P2, P2_TO_P3, P3_TO_P4
 from app import sde
 from app.sde import search_systems_local, search_constellations_local, get_constellation_systems_local
 from app.templates_env import templates
@@ -24,6 +25,32 @@ PLANET_TYPE_MAP = {
     "storm": "Storm",
     "plasma": "Plasma",
 }
+
+
+def _resolve_type_id(name: str) -> int | None:
+    return PI_TYPE_IDS.get(name) or sde.find_type_id_by_name(name)
+
+
+def _all_pi_names() -> set[str]:
+    names = set(P0_TO_P1.keys()) | set(P0_TO_P1.values()) | set(P1_TO_P2.keys()) | set(P2_TO_P3.keys()) | set(P3_TO_P4.keys())
+    names |= {item for values in P1_TO_P2.values() for item in values}
+    names |= {item for values in P2_TO_P3.values() for item in values}
+    names |= {item for values in P3_TO_P4.values() for item in values}
+    return names
+
+
+def _build_product_labels(lang: str) -> dict[str, str]:
+    return {
+        name: translate_type_name(_resolve_type_id(name), fallback=name, lang=lang)
+        for name in _all_pi_names()
+    }
+
+
+def _build_planet_type_labels(lang: str) -> dict[str, str]:
+    return {
+        name: translate(f"planet_type.{name.lower()}", lang)
+        for name in PLANET_TYPE_COLORS.keys()
+    }
 
 
 def _load_system_planets(system_id: int) -> list[dict]:
@@ -101,12 +128,15 @@ def system_analyzer(
     request: Request,
     account=Depends(require_account),
 ):
+    lang = get_language_from_request(request)
     return templates.TemplateResponse("system.html", {
         "request": request,
         "account": account,
         "planet_type_colors": PLANET_TYPE_COLORS,
         "planet_resources": PLANET_RESOURCES,
         "p0_to_p1": P0_TO_P1,
+        "product_labels": _build_product_labels(lang),
+        "planet_type_labels": _build_planet_type_labels(lang),
     })
 
 
@@ -259,10 +289,13 @@ def compare_page(
     request: Request,
     account=Depends(require_account),
 ):
+    lang = get_language_from_request(request)
     return templates.TemplateResponse("compare.html", {
         "request": request,
         "account": account,
         "planet_type_colors": PLANET_TYPE_COLORS,
+        "product_labels": _build_product_labels(lang),
+        "planet_type_labels": _build_planet_type_labels(lang),
     })
 
 

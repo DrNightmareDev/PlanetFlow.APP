@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import require_account, require_admin
+from app.i18n import get_language_from_request, translate_type_name
 from app.market import (
     PI_TYPE_IDS, PI_TYPE_NAMES, PI_TIERS,
     get_jita_prices, get_market_last_updated,
@@ -20,7 +21,7 @@ router = APIRouter(prefix="/market", tags=["market"])
 TIER_COLORS = {"P1": "#586e75", "P2": "#00b4d8", "P3": "#f4a300", "P4": "#e63946"}
 
 
-def _build_market_rows(db: Session) -> list[dict]:
+def _build_market_rows(db: Session, lang: str) -> list[dict]:
     """Baut die Marktdatenliste aus dem DB-Cache auf."""
     id_to_name = PI_TYPE_NAMES
     caches = {c.type_id: c for c in db.query(MarketCache).all()}
@@ -37,6 +38,7 @@ def _build_market_rows(db: Session) -> list[dict]:
         rows.append({
             "type_id": type_id,
             "name": name,
+            "display_name": translate_type_name(type_id, fallback=name, lang=lang),
             "tier": PI_TIERS.get(name, "P1"),
             "buy": buy,
             "sell": sell,
@@ -54,7 +56,8 @@ def market_overview(
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
-    rows = _build_market_rows(db)
+    lang = get_language_from_request(request)
+    rows = _build_market_rows(db, lang)
     last_updated = get_market_last_updated(db)
 
     can_refresh, cooldown_remaining = can_force_market_refresh()

@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Jita Markt - EVE PI Manager{% endblock %}
+{% block title %}{{ t('market.title') }} - {{ t('app.name') }}{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
     <h2 class="eve-page-title mb-0">
-        <i class="bi bi-graph-up-arrow me-2 eve-accent"></i>Jita 4-4 Marktpreise
+        <i class="bi bi-graph-up-arrow me-2 eve-accent"></i>{{ t('market.title') }}
     </h2>
     <div class="d-flex align-items-center gap-3 flex-wrap">
         {% if account and account.is_admin %}
         <button id="refreshBtn" class="btn btn-sm eve-btn-outline" onclick="forceRefresh()">
             <i class="bi bi-arrow-clockwise me-1"></i>
-            <span id="refreshBtnText">Aktualisieren</span>
+            <span id="refreshBtnText">{{ t('market.refresh') }}</span>
         </button>
         {% endif %}
     </div>
@@ -24,12 +24,12 @@
                 <div class="input-group input-group-sm">
                     <span class="input-group-text eve-input-prefix"><i class="bi bi-search"></i></span>
                     <input type="text" id="marketSearch" class="form-control eve-input"
-                           placeholder="Produkt suchen...">
+                           placeholder="{{ t('market.search_placeholder') }}">
                 </div>
             </div>
             <div class="col-md-5">
                 <div id="tierFilter" class="d-flex gap-1 flex-wrap">
-                    <button class="btn btn-sm eve-tier-filter-btn active" data-tier="">Alle</button>
+                    <button class="btn btn-sm eve-tier-filter-btn active" data-tier="">{{ t('common.all') }}</button>
                     <button class="btn btn-sm eve-tier-filter-btn" data-tier="P4" style="color:#e63946;">P4</button>
                     <button class="btn btn-sm eve-tier-filter-btn" data-tier="P3" style="color:#f4a300;">P3</button>
                     <button class="btn btn-sm eve-tier-filter-btn" data-tier="P2" style="color:#00b4d8;">P2</button>
@@ -37,7 +37,7 @@
                 </div>
             </div>
             <div class="col-md-2 text-end">
-                <span class="text-muted small"><span id="rowCount">{{ rows | length }}</span> Produkte</span>
+                <span class="text-muted small"><span id="rowCount">{{ rows | length }}</span> {{ t('market.products_count') }}</span>
             </div>
         </div>
     </div>
@@ -51,10 +51,10 @@
                 <thead>
                     <tr>
                         <th class="eve-sortable" data-sort="name" style="cursor:pointer;">
-                            Produkt <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                            {{ t('common.product') }} <i class="bi bi-chevron-expand eve-sort-icon"></i>
                         </th>
                         <th class="eve-sortable" data-sort="tier" style="cursor:pointer;">
-                            Tier <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                            {{ t('common.tier') }} <i class="bi bi-chevron-expand eve-sort-icon"></i>
                         </th>
                         <th class="eve-sortable text-end" data-sort="sell" style="cursor:pointer;">
                             Jita Sell <i class="bi bi-chevron-down eve-sort-icon"></i>
@@ -63,26 +63,27 @@
                             Jita Buy <i class="bi bi-chevron-expand eve-sort-icon"></i>
                         </th>
                         <th class="eve-sortable text-end" data-sort="spread" style="cursor:pointer;">
-                            Spread <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                            {{ t('market.spread') }} <i class="bi bi-chevron-expand eve-sort-icon"></i>
                         </th>
                         <th class="eve-sortable text-end" data-sort="trend1d" style="cursor:pointer;">
-                            Trend 24h <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                            {{ t('market.trend_24h') }} <i class="bi bi-chevron-expand eve-sort-icon"></i>
                         </th>
                         <th class="eve-sortable text-end" data-sort="volume1d" style="cursor:pointer;">
-                            Handel / Tag <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                            {{ t('market.trade_day') }} <i class="bi bi-chevron-expand eve-sort-icon"></i>
                         </th>
                         <th class="eve-sortable text-end" data-sort="trend7d" style="cursor:pointer;">
-                            Trend 7T <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                            {{ t('market.trend_7d') }} <i class="bi bi-chevron-expand eve-sort-icon"></i>
                         </th>
                         <th class="eve-sortable text-end" data-sort="volume7d" style="cursor:pointer;">
-                            Handel / 7T <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                            {{ t('market.trade_7d') }} <i class="bi bi-chevron-expand eve-sort-icon"></i>
                         </th>
                     </tr>
                 </thead>
                 <tbody id="marketBody">
                     {% for row in rows %}
                     <tr class="market-row"
-                        data-name="{{ row.name | lower }}"
+                        data-name="{{ row.display_name | lower }}"
+                        data-raw-name="{{ row.name }}"
                         data-tier="{{ row.tier }}"
                         data-sell="{{ row.sell }}"
                         data-buy="{{ row.buy }}"
@@ -91,7 +92,7 @@
                         data-volume1d="{{ row.avg_volume }}"
                         data-trend7d=""
                         data-volume7d="{{ row.avg_volume_7d }}">
-                        <td class="fw-medium">{{ row.name }}</td>
+                        <td class="fw-medium">{{ row.display_name }}</td>
                         <td>
                             {% set tc = tier_colors.get(row.tier, '#586e75') %}
                             <span class="badge" style="background:{{ tc }}1a;color:{{ tc }};border:1px solid {{ tc }}3a;">{{ row.tier }}</span>
@@ -131,7 +132,7 @@
             </table>
         </div>
         <div id="marketEmpty" class="text-center py-4 text-muted d-none">
-            <i class="bi bi-search me-2"></i>Keine Produkte für diesen Filter.
+            <i class="bi bi-search me-2"></i>{{ t('market.no_products') }}
         </div>
     </div>
 </div>
@@ -279,7 +280,7 @@ startCooldownUI({{ cooldown_remaining }});
 async function forceRefresh() {
     const btn = document.getElementById('refreshBtn');
     btn.disabled = true;
-    document.getElementById('refreshBtnText').textContent = 'Laedt...';
+    document.getElementById('refreshBtnText').textContent = {{ t('market.loading') | tojson }};
     try {
         const res = await fetch('/market/refresh', {method: 'POST'});
         const data = await res.json();
@@ -290,12 +291,12 @@ async function forceRefresh() {
             startCooldownUI(data.cooldown_remaining);
         } else {
             btn.disabled = false;
-            document.getElementById('refreshBtnText').textContent = 'Aktualisieren';
-            alert('Fehler beim Aktualisieren: ' + (data.error || 'Unbekannter Fehler'));
+            document.getElementById('refreshBtnText').textContent = {{ t('market.refresh') | tojson }};
+            alert({{ t('market.refresh_error') | tojson }} + ': ' + (data.error || {{ t('market.unknown_error') | tojson }}));
         }
     } catch(e) {
         btn.disabled = false;
-        document.getElementById('refreshBtnText').textContent = 'Aktualisieren';
+        document.getElementById('refreshBtnText').textContent = {{ t('market.refresh') | tojson }};
     }
 }
 
@@ -308,7 +309,7 @@ function startCooldownUI(seconds) {
         const m = Math.floor(remaining / 60);
         const s = remaining % 60;
         document.getElementById('refreshBtnText').textContent =
-            m > 0 ? `Sperre ${m}:${String(s).padStart(2,'0')}` : `Sperre ${s}s`;
+            m > 0 ? {{ t('market.lock_prefix') | tojson }} + ' ' + `${m}:${String(s).padStart(2,'0')}` : {{ t('market.lock_prefix') | tojson }} + ' ' + `${s}s`;
     };
     updateText();
     cooldownInterval = setInterval(() => {
@@ -317,7 +318,7 @@ function startCooldownUI(seconds) {
             clearInterval(cooldownInterval);
             cooldownInterval = null;
             btn.disabled = false;
-            document.getElementById('refreshBtnText').textContent = 'Aktualisieren';
+            document.getElementById('refreshBtnText').textContent = {{ t('market.refresh') | tojson }};
         } else {
             updateText();
         }

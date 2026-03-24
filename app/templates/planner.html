@@ -189,6 +189,7 @@ const PLANET_RESOURCES = {{ planet_resources | tojson }};
 const PLANET_COLORS  = {{ planet_type_colors | tojson }};
 const ALL_PRODUCTS   = {{ all_products | tojson }};
 const PRODUCT_LABELS = {{ product_labels | tojson }};
+const PLANET_TYPE_LABELS = {{ planet_type_labels | tojson }};
 
 const TIER_COLORS = {P0:'#7a9a6a', P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
 const TIER_ORDER  = ['P1', 'P2', 'P3', 'P4'];
@@ -322,6 +323,10 @@ function productLabel(name) {
     return PRODUCT_LABELS[name] || name;
 }
 
+function planetTypeLabel(name) {
+    return PLANET_TYPE_LABELS[name] || name;
+}
+
 function productDisplay(product) {
     if (!product) return '';
     return product.display_name || productLabel(product.name);
@@ -426,7 +431,7 @@ function renderFavoritesBlock() {
             <button onclick="removeFavorite('${safe}')"
                     class="btn btn-sm border-0 py-1 px-1"
                     style="background:transparent;color:${tc};opacity:.45;font-size:.75rem;line-height:1;"
-                    title="Favorit entfernen"
+                    title="{{ t('planner.favorite_remove') }}"
                     onmouseenter="this.style.opacity='1'"
                     onmouseleave="this.style.opacity='.45'">&times;</button>
         </div>`;
@@ -658,7 +663,7 @@ function renderGraph(product) {
         const cw = colW(tier);
         const isPlanet = tier === 'PLANET';
         const tc = isPlanet ? '#4a7a5a' : (TIER_COLORS[tier] || '#586e75');
-        const label = isPlanet ? 'PLANETS' : (tier === 'P0' ? 'RAW' : tier);
+        const label = isPlanet ? {{ t('planner.graph_planets') | tojson }} : (tier === 'P0' ? {{ t('planner.graph_raw') | tojson }} : tier);
         s += `<rect x="${r(cx - cw/2 - 8)}" y="0" width="${cw + 16}" height="${svgH}"
                     fill="${tc}" fill-opacity="${isPlanet ? 0.05 : 0.03}" rx="6"/>
               <line x1="${r(cx - cw/2 - 8)}" y1="${TIER_H}" x2="${r(cx + cw/2 + 8)}" y2="${TIER_H}"
@@ -719,7 +724,7 @@ function renderGraph(product) {
             const fc = dim ? '#586e75' : p0c;
             const srcPlanets = Object.entries(PLANET_RESOURCES).filter(([,r]) => r.includes(node.name)).map(([pt]) => pt);
             s += `<g>
-              <title>${productLabel(node.name)}\n\u26cf ${srcPlanets.join(', ')}</title>
+              <title>${productLabel(node.name)}\n\u26cf ${srcPlanets.map(planetTypeLabel).join(', ')}</title>
               <rect x="${nx}" y="${ny}" width="${NODE_W}" height="${NODE_H}" rx="4"
                     fill="${fc}" fill-opacity="${dim ? 0.03 : 0.09}"
                     stroke="${fc}" stroke-opacity="${dim ? 0.12 : 0.45}"
@@ -739,7 +744,7 @@ function renderGraph(product) {
             const dimmed = isFiltering && !planetSel;
             const safePN = node.name.replace(/'/g, "\\'");
             s += `<g style="cursor:pointer;" onclick="togglePlanetFilter('${safePN}')">
-              <title>${productLabel(node.name)}${planetSel ? ' \u2713 aktiv' : ' \u2013 klicken zum Filtern'}</title>
+              <title>${planetTypeLabel(node.name)}${planetSel ? ' \u2713 ' + {{ t('planner.graph_active') | tojson }} : ' \u2013 ' + {{ t('planner.graph_click_to_filter') | tojson }}}</title>
               <rect x="${nx}" y="${ny}" width="${nw}" height="${NODE_H}" rx="${NODE_H/2}"
                     fill="${tc}" fill-opacity="${planetSel ? 0.32 : (dimmed ? 0.04 : 0.1)}"
                     stroke="${tc}" stroke-opacity="${planetSel ? 1 : (dimmed ? 0.18 : 0.5)}"
@@ -748,7 +753,7 @@ function renderGraph(product) {
               <text x="${r(node.x)}" y="${r(ny + NODE_H * 0.645)}" text-anchor="middle"
                     fill="${tc}" fill-opacity="${planetSel ? 1 : (dimmed ? 0.3 : 0.9)}"
                     font-size="10" font-weight="${planetSel ? 700 : 500}"
-                    font-family="system-ui,-apple-system,sans-serif" pointer-events="none">${escapeHtml(productLabel(node.name))}</text>
+                    font-family="system-ui,-apple-system,sans-serif" pointer-events="none">${escapeHtml(planetTypeLabel(node.name))}</text>
             </g>`;
             continue;
         }
@@ -764,7 +769,7 @@ function renderGraph(product) {
             : `style="cursor:pointer;" onclick="selectProduct({name:'${safeN}',tier:'${node.tier}'})"`;
 
         s += `<g ${clickAttr} ${sel ? 'filter="url(#glow-sel)"' : ''}>
-          <title>${productLabel(node.name)} \u00b7 ${node.tier}${dimNode ? ' (nicht verfuegbar)' : ''}</title>
+          <title>${productLabel(node.name)} \u00b7 ${node.tier}${dimNode ? ' (' + {{ t('planner.not_producible') | tojson }} + ')' : ''}</title>
           <rect x="${nx}" y="${ny}" width="${nw}" height="${NODE_H}" rx="5"
                 fill="${dimTC}" fill-opacity="${sel ? 0.22 : (dimNode ? 0.03 : 0.07)}"
                 stroke="${dimTC}" stroke-opacity="${sel ? 1 : (dimNode ? 0.15 : 0.3)}"
@@ -820,7 +825,7 @@ function renderChain(product) {
         [...planetSet].map(pt => {
             const c = PLANET_COLORS[pt] || '#586e75';
             return `<span class="badge me-1 mb-1"
-                         style="background:${c}18;color:${c};border:1px solid ${c}30;font-size:0.8rem;padding:.4rem .7rem;">${escapeHtml(pt)}</span>`;
+                         style="background:${c}18;color:${c};border:1px solid ${c}30;font-size:0.8rem;padding:.4rem .7rem;">${escapeHtml(planetTypeLabel(pt))}</span>`;
         }).join('') || '<span class="text-muted small">ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â</span>';
 
     document.getElementById('chainP0').innerHTML =
@@ -830,7 +835,7 @@ function renderChain(product) {
             const primaryColor = planets.length ? (PLANET_COLORS[planets[0]] || '#586e75') : '#586e75';
             const planetBadges = planets.map(pt => {
                 const c = PLANET_COLORS[pt] || '#586e75';
-                return `<span style="background:${c}18;color:${c};border:1px solid ${c}35;font-size:0.62rem;padding:1px 6px;border-radius:3px;white-space:nowrap;">${escapeHtml(pt)}</span>`;
+                return `<span style="background:${c}18;color:${c};border:1px solid ${c}35;font-size:0.62rem;padding:1px 6px;border-radius:3px;white-space:nowrap;">${escapeHtml(planetTypeLabel(pt))}</span>`;
             }).join('');
             return `<div class="d-flex align-items-center gap-2 p-2 mb-1"
                          style="border-left:3px solid ${primaryColor};background:${primaryColor}0d;border-radius:0 4px 4px 0;">

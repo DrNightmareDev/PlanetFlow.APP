@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}System Analyzer - EVE PI Manager{% endblock %}
+{% block title %}{{ t('system.title') }} - {{ t('app.name') }}{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
     <h2 class="eve-page-title mb-0">
-        <i class="bi bi-globe2 me-2 eve-accent"></i>System Analyzer
+        <i class="bi bi-globe2 me-2 eve-accent"></i>{{ t('system.title') }}
     </h2>
-    <div class="text-muted small">PI-Potential eines Systems analysieren</div>
+    <div class="text-muted small">{{ t('system.subtitle') }}</div>
 </div>
 
 {% if preset_error %}
@@ -21,18 +21,18 @@
     <div class="card-body p-3">
         <div class="row g-3 align-items-end">
             <div class="col-md-8">
-                <label class="form-label text-muted small">System suchen</label>
+                <label class="form-label text-muted small">{{ t('system.search') }}</label>
                 <div class="position-relative">
                     <input type="text" id="systemSearch"
                            class="form-control eve-input"
-                           placeholder="z.B. Jita, Amarr, Dodixie..."
+                           placeholder="{{ t('system.search_placeholder') }}"
                            autocomplete="off">
                     <div id="searchResults" class="eve-search-dropdown position-absolute w-100 d-none"></div>
                 </div>
             </div>
             <div class="col-md-4">
                 <button id="analyzeBtn" class="btn eve-btn-primary w-100" disabled>
-                    <i class="bi bi-search me-1"></i>Analysieren
+                    <i class="bi bi-search me-1"></i>{{ t('system.analyze') }}
                 </button>
             </div>
         </div>
@@ -63,24 +63,24 @@
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <h4 class="mb-0 fw-bold" id="systemName">&mdash;</h4>
-                    <button class="btn btn-sm eve-btn-ghost p-0" id="favBtn" onclick="toggleFav()" title="Als Favorit speichern">
+                    <button class="btn btn-sm eve-btn-ghost p-0" id="favBtn" onclick="toggleFav()" title="{{ t('system.save_favorite') }}">
                         <i class="bi bi-star" id="favIcon" style="font-size:1.1rem;"></i>
                     </button>
                     <span style="color:#1a3a5a;">|</span>
-                    <span class="text-muted small">Region:</span>
+                    <span class="text-muted small">{{ t('system.region') }}:</span>
                     <span id="systemRegion" class="fw-semibold small"></span>
                     <span style="color:#1a3a5a;">|</span>
-                    <span class="text-muted small">Security:</span>
+                    <span class="text-muted small">{{ t('system.security') }}:</span>
                     <span id="systemSecurity" class="fw-semibold small"></span>
                     <span id="systemTrueSec" class="text-muted small"></span>
                     <span style="color:#1a3a5a;">|</span>
-                    <span class="text-muted small">Planeten:</span>
+                    <span class="text-muted small">{{ t('common.planets') }}:</span>
                     <span id="planetCount" class="fw-semibold small eve-accent"></span>
                 </div>
                 <div class="d-flex flex-wrap gap-2 align-items-center">
                     <div id="planetTypeBadges" class="d-flex flex-wrap gap-2 align-items-center"></div>
-                    <button class="btn btn-sm eve-btn-outline" id="addCompareBtn" onclick="addToCompare()" title="System zum Vergleich hinzufügen (max. 4)">
-                        <i class="bi bi-layout-split me-1"></i>Vergleich hinzufügen
+                    <button class="btn btn-sm eve-btn-outline" id="addCompareBtn" onclick="addToCompare()" title="{{ t('system.add_to_compare') }} (max. 4)">
+                        <i class="bi bi-layout-split me-1"></i>{{ t('system.add_to_compare') }}
                     </button>
                     <span id="compareToast" class="text-muted small d-none"></span>
                 </div>
@@ -93,11 +93,11 @@
         <div class="card-header eve-card-header d-flex align-items-center justify-content-between">
             <div class="d-flex align-items-center gap-2">
                 <i class="bi bi-layers eve-accent"></i>
-                <span class="fw-medium">Verfügbare P0 Ressourcen</span>
-                <span class="text-muted small" style="font-size:0.72rem;">&mdash; Kacheln anklicken zum Filtern</span>
+                <span class="fw-medium">{{ t('system.available_p0') }}</span>
+                <span class="text-muted small" style="font-size:0.72rem;">&mdash; {{ t('system.click_tiles_filter') }}</span>
             </div>
             <button id="clearPlanetFilter" class="btn btn-sm eve-tier-filter-btn d-none" onclick="clearFilters()">
-                <i class="bi bi-x-circle me-1"></i>Filter löschen
+                <i class="bi bi-x-circle me-1"></i>{{ t('system.clear_filter') }}
             </button>
         </div>
         <div class="card-body p-3">
@@ -110,18 +110,18 @@
         <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
             <div class="d-flex align-items-center gap-2">
                 <i class="bi bi-star eve-accent"></i>
-                <span class="fw-medium">PI Empfehlungen</span>
+                <span class="fw-medium">{{ t('system.pi_recommendations') }}</span>
                 <span class="badge eve-badge-count" id="recCount"></span>
             </div>
             <div class="d-flex flex-wrap gap-2 align-items-center">
                 <div id="trendPeriodFilter" class="d-flex align-items-center gap-1">
-                    <span class="text-muted small">Trend:</span>
+                    <span class="text-muted small">{{ t('system.trend') }}:</span>
                     <button class="btn eve-tier-filter-btn active" data-period="trend_1d">24h</button>
                     <button class="btn eve-tier-filter-btn" data-period="trend_7d">7T</button>
                     <button class="btn eve-tier-filter-btn" data-period="trend_30d">30T</button>
                 </div>
                 <div id="tierFilter" class="d-flex gap-1">
-                    <button class="btn eve-tier-filter-btn active" data-tier="">Alle</button>
+                    <button class="btn eve-tier-filter-btn active" data-tier="">{{ t('common.all') }}</button>
                     <button class="btn eve-tier-filter-btn" data-tier="P4">P4</button>
                     <button class="btn eve-tier-filter-btn" data-tier="P3">P3</button>
                     <button class="btn eve-tier-filter-btn" data-tier="P2">P2</button>
@@ -134,21 +134,21 @@
                 <table class="table eve-table mb-0" id="recTable">
                     <thead>
                         <tr>
-                            <th class="eve-sortable" data-sort-col="name" style="cursor:pointer;white-space:nowrap;">Produkt <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
-                            <th class="eve-sortable" data-sort-col="tier" style="cursor:pointer;white-space:nowrap;">Tier <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                            <th class="eve-sortable" data-sort-col="name" style="cursor:pointer;white-space:nowrap;">{{ t('common.product') }} <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                            <th class="eve-sortable" data-sort-col="tier" style="cursor:pointer;white-space:nowrap;">{{ t('common.tier') }} <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
                             <th class="eve-sortable" data-sort-col="isk_sell" style="cursor:pointer;white-space:nowrap;">Jita Sell <i class="bi bi-chevron-down eve-sort-icon"></i></th>
                             <th class="eve-sortable" data-sort-col="isk_buy" style="cursor:pointer;white-space:nowrap;">Jita Buy <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
-                            <th class="eve-sortable" data-sort-col="supply" style="cursor:pointer;white-space:nowrap;" title="Sell-Orders in Jita 4-4">Angebot <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
-                            <th class="eve-sortable" data-sort-col="trend" style="cursor:pointer;white-space:nowrap;">Trend <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
-                            <th>Inputs</th>
-                            <th>Planeten</th>
+                            <th class="eve-sortable" data-sort-col="supply" style="cursor:pointer;white-space:nowrap;" title="Sell-Orders in Jita 4-4">{{ t('system.supply') }} <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                            <th class="eve-sortable" data-sort-col="trend" style="cursor:pointer;white-space:nowrap;">{{ t('system.trend') }} <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                            <th>{{ t('system.inputs') }}</th>
+                            <th>{{ t('common.planets') }}</th>
                         </tr>
                     </thead>
                     <tbody id="recommendationBody"></tbody>
                 </table>
             </div>
             <div id="recEmpty" class="text-center py-4 text-muted d-none">
-                <i class="bi bi-x-circle me-2"></i>Keine Produkte für diesen Filter verfügbar.
+                <i class="bi bi-x-circle me-2"></i>{{ t('system.no_products_for_filter') }}
             </div>
         </div>
     </div>
@@ -186,6 +186,18 @@
 const PLANET_COLORS   = {{ planet_type_colors | tojson }};
 const P0_TO_P1        = {{ p0_to_p1 | tojson }};
 const PLANET_RESOURCES = {{ planet_resources | tojson }};
+const PRODUCT_LABELS = {{ product_labels | tojson }};
+const PLANET_TYPE_LABELS = {{ planet_type_labels | tojson }};
+const SYSTEM_I18N = {
+    errorPrefix: {{ t('system.error_prefix') | tojson }},
+    connectionErrorPrefix: {{ t('system.connection_error_prefix') | tojson }},
+    lowSupply: {{ t('system.low_supply') | tojson }},
+    mediumSupply: {{ t('system.medium_supply') | tojson }},
+    highSupply: {{ t('system.high_supply') | tojson }},
+    filterPrefix: {{ t('planner.filter_prefix') | tojson }},
+    compareAdded: {{ t('system.compare_added') | tojson }},
+    openInPlanner: {{ t('planner.open_in_planner') | tojson }}
+};
 
 // Lookup: P1-Name → P0-Name (Umkehrung von P0_TO_P1)
 const P1_TO_P0 = Object.fromEntries(Object.entries(P0_TO_P1).map(([p0, p1]) => [p1, p0]));
@@ -201,6 +213,14 @@ const INPUT_COLORS = {
     P3: '#00b4d8', // P2-Produkte
     P4: '#f4a300', // P3-Produkte
 };
+
+function productLabel(name) {
+    return PRODUCT_LABELS[name] || name;
+}
+
+function planetTypeLabel(name) {
+    return PLANET_TYPE_LABELS[name] || name;
+}
 
 let selectedSystemId = null;
 let searchTimeout = null;
@@ -291,10 +311,10 @@ async function analyzeSystem() {
     try {
         const res = await fetch(`/system/analyze/${selectedSystemId}`);
         const data = await res.json();
-        if (data.error) { alert('Fehler: ' + data.error); return; }
+        if (data.error) { alert(`${SYSTEM_I18N.errorPrefix}: ${data.error}`); return; }
         renderAnalysis(data);
     } catch(e) {
-        alert('Verbindungsfehler: ' + e.message);
+        alert(`${SYSTEM_I18N.connectionErrorPrefix}: ${e.message}`);
     } finally {
         loadingState.classList.add('d-none');
         analyzeBtn.disabled = false;
@@ -314,9 +334,9 @@ function formatIsk(val) {
 function supplyHtml(level) {
     if (!level || level === 'none') return '<span class="text-muted">&mdash;</span>';
     const cfg = {
-        green:  { color: '#2dc653', label: 'Wenig Angebot' },
-        yellow: { color: '#f4a300', label: 'Mittleres Angebot' },
-        red:    { color: '#e63946', label: 'Viel Angebot' },
+        green:  { color: '#2dc653', label: SYSTEM_I18N.lowSupply },
+        yellow: { color: '#f4a300', label: SYSTEM_I18N.mediumSupply },
+        red:    { color: '#e63946', label: SYSTEM_I18N.highSupply },
     };
     const c = cfg[level] || { color: '#586e75', label: '&mdash;' };
     return `<span style="color:${c.color};font-size:1.1rem;" title="${c.label}">●</span>`;
@@ -339,7 +359,7 @@ function inputBadge(text, tier) {
     return `<span class="badge me-1 mb-1 eve-filter-badge"
                   data-filter="${text}"
                   style="cursor:pointer;background:${bg};color:${c};border:1px solid ${bdr};font-size:0.7rem;transition:all 0.12s;"
-                  title="Filter: ${text}">${text}</span>`;
+                  title="${SYSTEM_I18N.filterPrefix}: ${productLabel(text)}">${productLabel(text)}</span>`;
 }
 
 function planetBadge(text) {
@@ -350,7 +370,7 @@ function planetBadge(text) {
     return `<span class="badge me-1 mb-1 eve-filter-badge"
                   data-filter="${text}"
                   style="cursor:pointer;background:${bg};color:${c};border:1px solid ${bdr};font-size:0.7rem;transition:all 0.12s;"
-                  title="Filter: ${text}">${text}</span>`;
+                  title="${SYSTEM_I18N.filterPrefix}: ${planetTypeLabel(text)}">${planetTypeLabel(text)}</span>`;
 }
 
 // ── Filter ─────────────────────────────────────────────────────────────────
@@ -410,7 +430,7 @@ const SUPPLY_ORDER = { none: 0, green: 1, yellow: 2, red: 3 };
 const TIER_ORDER   = { P1: 1, P2: 2, P3: 3, P4: 4 };
 
 const SORT_FNS = {
-    name:    (a, b) => a.name.localeCompare(b.name),
+    name:    (a, b) => productLabel(a.name).localeCompare(productLabel(b.name)),
     tier:    (a, b) => (TIER_ORDER[a.tier] || 0) - (TIER_ORDER[b.tier] || 0),
     isk_sell:(a, b) => (a.isk_sell || 0) - (b.isk_sell || 0),
     isk_buy: (a, b) => (a.isk_buy  || 0) - (b.isk_buy  || 0),
@@ -488,7 +508,9 @@ function addToCompare() {
     list.push(data);
     localStorage.setItem('pi_compare_systems', JSON.stringify(list));
     const toast = document.getElementById('compareToast');
-    toast.textContent = `✓ ${data.system_name} hinzugefügt (${list.length}/4)`;
+    toast.textContent = SYSTEM_I18N.compareAdded
+        .replace('{system}', data.system_name)
+        .replace('{count}', String(list.length));
     toast.classList.remove('d-none');
     setTimeout(() => toast.classList.add('d-none'), 3000);
 }
@@ -539,7 +561,7 @@ function renderAnalysis(data) {
         const badge = document.createElement('span');
         badge.className = 'badge d-flex align-items-center gap-1';
         badge.style.cssText = `background-color:${pt.color}20;color:${pt.color};border:1px solid ${pt.color}40;font-size:0.78rem;padding:0.35rem 0.65rem;`;
-        badge.innerHTML = `${pt.type}<span style="opacity:0.65;font-size:0.7rem;margin-left:3px;">×${pt.count}</span>`;
+        badge.innerHTML = `${planetTypeLabel(pt.type)}<span style="opacity:0.65;font-size:0.7rem;margin-left:3px;">×${pt.count}</span>`;
         ptBadges.appendChild(badge);
     });
 
@@ -553,7 +575,7 @@ function renderAnalysis(data) {
             `<span class="badge me-1 mb-1 eve-filter-badge"
                    data-filter="${r}"
                    style="cursor:pointer;background:${pt.color}12;color:${pt.color};border:1px solid ${pt.color}28;font-size:0.72rem;transition:all 0.12s;"
-                   title="Filter: ${r}">${r}</span>`
+                   title="${SYSTEM_I18N.filterPrefix}: ${productLabel(r)}">${productLabel(r)}</span>`
         ).join('');
         col.innerHTML = `
             <div class="p-2 rounded h-100 eve-planet-tile"
@@ -561,8 +583,8 @@ function renderAnalysis(data) {
                  data-resources="${(pt.resources || []).join(',')}"
                  style="border:1px solid ${pt.color}28;background:${pt.color}06;cursor:pointer;transition:all 0.15s;">
                 <div class="d-flex align-items-center gap-2 mb-2">
-                    <span class="badge fw-semibold" style="background:${pt.color}22;color:${pt.color};border:1px solid ${pt.color}3a;">${pt.type}</span>
-                    <span class="text-muted small">×${pt.count} Planeten</span>
+                    <span class="badge fw-semibold" style="background:${pt.color}22;color:${pt.color};border:1px solid ${pt.color}3a;">${planetTypeLabel(pt.type)}</span>
+                    <span class="text-muted small">×${pt.count} {{ t('common.planets') }}</span>
                 </div>
                 <div>${resources || '<span class="text-muted small">&mdash;</span>'}</div>
             </div>`;
@@ -732,7 +754,7 @@ function renderRecs() {
         tr.innerHTML = `
             <td class="fw-medium">
                 <a href="/planner?product=${encodeURIComponent(rec.name)}"
-                   class="eve-link fw-medium" title="Im PI Planner öffnen">${rec.name}</a>
+                   class="eve-link fw-medium" title="${SYSTEM_I18N.openInPlanner}">${productLabel(rec.name)}</a>
             </td>
             <td><span class="badge" style="background:${tc}1a;color:${tc};border:1px solid ${tc}3a;">${rec.tier}</span></td>
             <td class="small">${iskSellDisplay}</td>

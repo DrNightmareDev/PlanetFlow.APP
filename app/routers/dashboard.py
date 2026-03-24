@@ -53,6 +53,7 @@ _bg_refresh_done: dict[int, bool] = {}    # account_id -> True wenn gerade ferti
 
 _corp_load_running: dict[int, dict] = {}  # corp_id -> lock/status
 _CORP_LOAD_LOCK_TTL = 60 * 30
+_CORP_RECENT_CACHE_SECONDS = 60 * 10
 
 
 def _get_corp_load_lock(corp_id: int | None) -> dict | None:
@@ -909,8 +910,17 @@ def dashboard(
             ("extractor_balance" not in colony)
             or ("extractor_rate_summary" not in colony)
             or (
+                colony.get("extractor_rate_summary") is not None
+                and "extractors" not in (colony.get("extractor_rate_summary") or {})
+            )
+            or (
                 colony.get("extractor_balance") is None
                 and int((colony.get("extractor_status") or {}).get("total") or 0) == 2
+                and int((colony.get("extractor_status") or {}).get("expired") or 0) == 0
+            )
+            or (
+                colony.get("extractor_rate_summary") is None
+                and int((colony.get("extractor_status") or {}).get("total") or 0) == 1
                 and int((colony.get("extractor_status") or {}).get("expired") or 0) == 0
             )
             for colony in colonies
@@ -1311,10 +1321,18 @@ def corp_accounts_api(
             continue
         main = db.query(Character).filter(Character.id == acc.main_character_id).first() \
                if acc.main_character_id else None
+        cached = _load_colony_cache(acc_id, db)
+        fetched_at = float(cached.get("fetched_at") or 0.0) if cached else 0.0
+        age_seconds = max(0, int(_time.time() - fetched_at)) if fetched_at else None
+        is_recent_cached = bool(
+            cached and fetched_at and age_seconds is not None and age_seconds < _CORP_RECENT_CACHE_SECONDS
+        )
         result.append({
             "account_id": acc_id,
             "main_name": main.character_name if main else f"Account #{acc_id}",
-            "is_cached": _load_colony_cache(acc_id, db) is not None,
+            "is_cached": cached is not None,
+            "is_recent_cached": is_recent_cached,
+            "cache_age_seconds": age_seconds,
         })
     return JSONResponse({"accounts": result})
 

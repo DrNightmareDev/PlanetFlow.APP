@@ -1365,12 +1365,12 @@ function renderExtractorBalanceIndicators() {
         ) {
             slot.innerHTML = `
                 <span class="eve-hover-wrap">
-                    <span style="color:#e74c3c;display:inline-flex;align-items:center;cursor:default;">
+                    <span style="color:#f4a300;display:inline-flex;align-items:center;cursor:default;">
                         <i class="bi bi-exclamation-circle-fill"></i>
                     </span>
                     <div class="eve-hover-card eve-hover-card-right" style="white-space:normal;min-width:320px;">
                         ${buildSingleExtractorRateCard(rateSummary)}
-                        <div style="margin-top:8px;color:#e74c3c;font-weight:700;">
+                        <div style="margin-top:8px;color:#f4a300;font-weight:700;">
                             ${BALANCE_LABELS.averagePerHour}: ${(rateSummary.min_avg_per_hour ?? 0).toFixed(1)} ${BALANCE_LABELS.unitsPerHour}
                         </div>
                     </div>

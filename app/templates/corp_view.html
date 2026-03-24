@@ -427,6 +427,13 @@ const corpId = {{ corp_id or 'null' }};
 let forceLoadAccounts = [];
 let forceLoadRunning = false;
 
+function formatCacheAge(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return '';
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+    return `${Math.floor(seconds / 3600)}h`;
+}
+
 async function openForceLoad() {
     if (!corpId) return;
     const modal = new bootstrap.Modal(document.getElementById('forceLoadModal'));
@@ -437,7 +444,7 @@ async function openForceLoad() {
     const data = await accountsRes.json();
     const statusData = await statusRes.json();
     const accounts = data.accounts || [];
-    forceLoadAccounts = accounts;
+    forceLoadAccounts = accounts.filter(acc => !acc.is_recent_cached);
     forceLoadRunning = !!statusData.running;
 
     const list = document.getElementById('forceLoadList');
@@ -450,28 +457,38 @@ async function openForceLoad() {
         list.insertAdjacentHTML('beforeend', '<div class="text-muted small py-2">Keine Accounts gefunden.</div>');
     }
     accounts.forEach(acc => {
+        const skipped = !!acc.is_recent_cached;
         list.insertAdjacentHTML('beforeend', `
         <div class="d-flex align-items-center gap-2 py-1 border-bottom" style="border-color:var(--eve-card-border)!important;">
             <span id="spin_${acc.account_id}" class="d-inline-flex" style="width:1rem;text-align:center;">
-                <i class="bi bi-hourglass" style="color:var(--eve-text-muted);"></i>
+                ${skipped
+                    ? '<i class="bi bi-skip-forward-fill" style="color:#7a8a9a;"></i>'
+                    : '<i class="bi bi-hourglass" style="color:var(--eve-text-muted);"></i>'}
             </span>
             <span class="flex-grow-1">${acc.main_name}</span>
-            <span id="status_${acc.account_id}" class="small text-muted ms-auto">${acc.is_cached ? 'wird neu geladen' : 'ausstehend'}</span>
+            <span id="status_${acc.account_id}" class="small text-muted ms-auto">${
+                skipped
+                    ? `uebersprungen (${formatCacheAge(acc.cache_age_seconds)} alt)`
+                    : (acc.is_cached ? 'wird neu geladen' : 'ausstehend')
+            }</span>
         </div>`);
     });
 
-    document.getElementById('forceLoadRemaining').textContent = accounts.length;
+    document.getElementById('forceLoadRemaining').textContent = forceLoadAccounts.length;
     doneBtn.classList.add('d-none');
     startBtn.classList.remove('d-none');
     spinner.style.display = 'none';
     if (!accounts.length) {
-        info.textContent = 'Keine Accounts zum Laden gefunden.';
+        info.textContent = 'Keine Accounts gefunden.';
+        startBtn.disabled = true;
+    } else if (!forceLoadAccounts.length) {
+        info.textContent = 'Alle Accounts wurden in den letzten 10 Minuten bereits geladen. Ein neuer Durchgang ist nicht noetig.';
         startBtn.disabled = true;
     } else if (forceLoadRunning) {
         info.textContent = 'Es laeuft bereits ein Ladevorgang. Ein neuer Durchgang kann momentan nicht gestartet werden.';
         startBtn.disabled = true;
     } else {
-        info.textContent = 'Die Liste ist vorbereitet. Starte den Ladevorgang manuell.';
+        info.textContent = `${forceLoadAccounts.length} Account(s) muessen geladen werden. Frische Caches der letzten 10 Minuten werden uebersprungen.`;
         startBtn.disabled = false;
     }
     modal.show();

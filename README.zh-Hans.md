@@ -93,6 +93,12 @@ docker compose up -d
 docker compose exec app alembic upgrade head
 ```
 
+也可以直接使用项目自带的更新脚本：
+
+```bash
+bash scripts/update_linux.sh --compose
+```
+
 如果你直接基于本地工作目录更新，通常下面这样就够了：
 
 ```bash
@@ -136,6 +142,11 @@ bash scripts/setup_linux.sh
 bash ~/PI_Manager/scripts/update_linux.sh
 ```
 
+可选：
+
+- 使用 `--branch <name>` 从其他分支更新
+- 使用 `--compose` 将同一脚本用于 Docker Compose 部署
+
 ## Windows 原生运行
 
 可以，系统可以原生运行在 Windows 上。
@@ -157,6 +168,16 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\update_windows.ps1
 ```
+
+Windows 上的 Docker Compose 更新：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\update_windows.ps1 -Compose
+```
+
+可选：
+
+- 使用 `-Branch <name>` 从其他分支更新
 
 说明：
 

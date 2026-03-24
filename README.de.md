@@ -106,6 +106,12 @@ docker compose up -d
 docker compose exec app alembic upgrade head
 ```
 
+Alternativ direkt mit dem mitgelieferten Update-Skript:
+
+```bash
+bash scripts/update_linux.sh --compose
+```
+
 Falls du direkt aus dem lokalen Working Tree aktualisierst, reicht meist:
 
 ```bash
@@ -149,6 +155,11 @@ Update:
 bash ~/PI_Manager/scripts/update_linux.sh
 ```
 
+Optional:
+
+- mit `--branch <name>` von einem anderen Branch aktualisieren
+- mit `--compose` denselben Script fuer ein Docker-Compose-Deployment nutzen
+
 ## Windows nativ
 
 Ja, das System kann auch nativ unter Windows laufen.
@@ -170,6 +181,16 @@ Update:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\update_windows.ps1
 ```
+
+Docker Compose unter Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\update_windows.ps1 -Compose
+```
+
+Optional:
+
+- mit `-Branch <name>` von einem anderen Branch aktualisieren
 
 Hinweis:
 

@@ -10,6 +10,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.config import get_settings
 from app.database import engine, SessionLocal
+from app.i18n import bootstrap_pi_type_translations, bootstrap_translations
 from app.models import SSOState
 from app.routers import auth, dashboard, admin, pi, market, system, planner, skyhook
 from app.templates_env import templates
@@ -62,6 +63,12 @@ async def lifespan(app: FastAPI):
     logger.info("EVE PI Manager startet...")
     from app import sde
     sde.init()
+    inserted_translations = bootstrap_translations()
+    if inserted_translations:
+        logger.info("I18N: %s Uebersetzungen in DB gebootstrapped.", inserted_translations)
+    inserted_type_translations = bootstrap_pi_type_translations()
+    if inserted_type_translations:
+        logger.info("I18N: %s PI-Type-Uebersetzungen aus SDE in DB gebootstrapped.", inserted_type_translations)
     cleanup_old_sso_states()
     scheduler.start()
     logger.info("APScheduler gestartet (15-min Marktpreis-Refresh).")

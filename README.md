@@ -17,6 +17,8 @@ Wenn dir das Projekt hilft, freue ich mich ueber Ingame-ISK-Spenden an `DrNightm
 - System Analyzer, System Vergleich und PI Chain Planner
 - Seitenuebergreifende System-Favoriten in System Analyzer, Vergleich, System Mix und PI Chain Planner
 - Manager Panel und Zugangspolitik
+- DB-basierte GUI-Uebersetzungen fuer Deutsch, Englisch und vereinfachtes Chinesisch
+- Manager-Uebersetzungstabelle mit Filter fuer Website-Texte und gesperrten API-/SDE-Eintraegen
 - Globales Storage-Icon fuer letzte Preisaktualisierung
 
 ## Benoetigte ESI-Scopes
@@ -37,7 +39,7 @@ cp .env.example .env
 nano .env
 ```
 
-Danach entweder Docker Compose oder das LXC-Setup verwenden.
+Danach entweder Docker Compose, das Linux-Setup oder das native Windows-Setup verwenden.
 
 ### Docker Compose
 
@@ -55,12 +57,42 @@ docker compose exec app python /app/scripts/remove_administrator.py --name "Char
 docker compose exec app python /app/scripts/remove_administrator.py --eve-id 123456789
 ```
 
-### Proxmox LXC
+### Linux
+
+Fuer Debian/Ubuntu-aehnliche Hosts oder Linux-Container:
 
 ```bash
-chmod +x scripts/setup_lxc.sh
-bash scripts/setup_lxc.sh
+chmod +x scripts/setup_linux.sh
+bash scripts/setup_linux.sh
 ```
+
+### Windows nativ
+
+Ja, das System kann auch nativ unter Windows laufen.
+
+Voraussetzungen:
+
+- Python 3.11+
+- PostgreSQL lokal oder extern
+- eine ausgefuellte `.env`
+
+Setup:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
+```
+
+Update:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\update_windows.ps1
+```
+
+Hinweis:
+
+- Die Anwendung selbst laeuft nativ unter Windows.
+- Die Linux-Komfortteile wie `systemd`, `nginx` und die Linux-Host-Skripte sind naturgemaess nur fuer Linux gedacht.
+- Fuer Produktion bleibt Linux oder Docker die robustere Empfehlung.
 
 ## Wichtige `.env` Eintraege
 
@@ -74,10 +106,10 @@ DATABASE_URL=postgresql://evepi:PASSWORT@localhost/evepi
 DB_PASSWORD=PASSWORT
 ```
 
-## Update (LXC)
+## Update (Linux)
 
 ```bash
-bash ~/PI_Manager/scripts/update_lxc.sh
+bash ~/PI_Manager/scripts/update_linux.sh
 ```
 
 Das Script zieht `main`, installiert Abhaengigkeiten, fuehrt Migrationen aus und startet den Service neu.
@@ -107,6 +139,13 @@ Wirkung:
 - Produktive oder persistente Updates sollen anschliessend ueber das vorhandene Update-Script eingespielt werden.
 - Nach Template-Aenderungen immer kurz Service-Status und Logs pruefen.
 
+## Setup-Skripte
+
+- `scripts/setup_linux.sh`: Vollstaendiges Setup fuer Linux-Hosts oder Linux-Container
+- `scripts/update_linux.sh`: Update-Skript fuer bestehende Linux-Installationen
+- `scripts/setup_windows.ps1`: Basis-Setup fuer nativen Windows-Betrieb
+- `scripts/update_windows.ps1`: Update-Skript fuer nativen Windows-Betrieb
+
 ## Service-Verwaltung
 
 ```bash
@@ -120,6 +159,14 @@ systemctl restart eve-pi-manager
 - `market_cache`
 - `dashboard_cache_db`
 - `skyhook_value_cache`
+
+## Uebersetzungen
+
+- GUI-Uebersetzungen werden aus `translation_entries` in der Datenbank geladen.
+- Seed-Dateien unter `app/locales/` liefern den Bootstrap-Bestand.
+- Offizielle PI-Produktnamen werden aus der EVE SDE (`types.json`) in die DB uebernommen.
+- API-/SDE-basierte Eintraege wie `type.<id>.name` sind im Manager absichtlich schreibgeschuetzt.
+- Nur Website-eigene Texte sollen im Manager-Editor bearbeitet werden.
 
 ## Hinweise
 

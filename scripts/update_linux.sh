@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
-# EVE PI Manager - Update-Skript (LXC)
+# EVE PI Manager - Update-Skript (Linux)
 # Aktualisiert App-Dateien, Abhängigkeiten und Datenbank-Migrationen.
 # .env bleibt vollständig erhalten.
-# Verwendung: bash scripts/update_lxc.sh  (als root im LXC)
+# Verwendung: bash scripts/update_linux.sh  (als root auf Linux)
 # =============================================================================
 
 set -euo pipefail
@@ -26,7 +26,7 @@ SERVICE_NAME="eve-pi-manager"
 
 echo ""
 echo -e "${BLUE}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║        EVE PI Manager - Update LXC           ║${NC}"
+echo -e "${BLUE}║       EVE PI Manager - Update Linux          ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -38,7 +38,7 @@ fi
 
 # App-Verzeichnis prüfen
 if [[ ! -d "${APP_DIR}" ]]; then
-    log_error "${APP_DIR} nicht gefunden. Bitte zuerst setup_lxc.sh ausführen."
+    log_error "${APP_DIR} nicht gefunden. Bitte zuerst setup_linux.sh ausführen."
     exit 1
 fi
 

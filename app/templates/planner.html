@@ -188,6 +188,7 @@ const P3_TO_P4       = {{ p3_to_p4 | tojson }};
 const PLANET_RESOURCES = {{ planet_resources | tojson }};
 const PLANET_COLORS  = {{ planet_type_colors | tojson }};
 const ALL_PRODUCTS   = {{ all_products | tojson }};
+const PRODUCT_LABELS = {{ product_labels | tojson }};
 
 const TIER_COLORS = {P0:'#7a9a6a', P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
 const TIER_ORDER  = ['P1', 'P2', 'P3', 'P4'];
@@ -317,6 +318,25 @@ function escapeHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
+function productLabel(name) {
+    return PRODUCT_LABELS[name] || name;
+}
+
+function productDisplay(product) {
+    if (!product) return '';
+    return product.display_name || productLabel(product.name);
+}
+
+function normalizeProduct(product) {
+    if (!product) return null;
+    const base = ALL_PRODUCTS.find((item) => item.name === product.name);
+    return {
+        ...product,
+        ...(base || {}),
+        display_name: (base && base.display_name) || product.display_name || productLabel(product.name),
+    };
+}
+
 // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Favoriten ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 let favorites = new Set();
 
@@ -385,9 +405,9 @@ function renderFavoritesBlock() {
     const favList = [...favorites]
         .map(name => {
             const p = ALL_PRODUCTS.find(x => x.name === name);
-            return p || {name, tier: getTier(name) || 'P1'};
+            return normalizeProduct(p || {name, tier: getTier(name) || 'P1'});
         })
-        .sort((a, b) => (TIER_SORT[b.tier] - TIER_SORT[a.tier]) || a.name.localeCompare(b.name));
+        .sort((a, b) => (TIER_SORT[b.tier] - TIER_SORT[a.tier]) || productDisplay(a).localeCompare(productDisplay(b)));
 
     pills.innerHTML = favList.map(p => {
         const tc   = TIER_COLORS[p.tier] || '#586e75';
@@ -401,7 +421,7 @@ function renderFavoritesBlock() {
             <button onclick="selectProduct({name:'${safe}',tier:'${p.tier}'})"
                     class="btn btn-sm border-0 py-1 px-2"
                     style="background:transparent;color:${tc};font-size:0.8rem;">
-                <span style="opacity:.7;font-size:.7rem;">${p.tier}</span>&nbsp;${p.name}
+                <span style="opacity:.7;font-size:.7rem;">${p.tier}</span>&nbsp;${escapeHtml(productDisplay(p))}
             </button>
             <button onclick="removeFavorite('${safe}')"
                     class="btn btn-sm border-0 py-1 px-1"
@@ -453,13 +473,18 @@ function showDropdown(q) {
     } else if (activeTierFilter) {
         filtered = filtered.filter(p => p.tier === activeTierFilter);
     }
-    if (q) filtered = filtered.filter(p => p.name.toLowerCase().includes(q));
+    if (q) {
+        filtered = filtered.filter(p =>
+            p.name.toLowerCase().includes(q) ||
+            productDisplay(p).toLowerCase().includes(q)
+        );
+    }
 
     // Favoriten nach oben sortieren, dann alphabetisch
     filtered = [...filtered].sort((a, b) => {
         const af = favorites.has(a.name), bf = favorites.has(b.name);
         if (af !== bf) return bf - af;
-        return a.name.localeCompare(b.name);
+        return productDisplay(a).localeCompare(productDisplay(b));
     }).slice(0, 20);
 
     dropdown.innerHTML = '';
@@ -471,7 +496,7 @@ function showDropdown(q) {
         item.className = 'eve-search-item d-flex justify-content-between align-items-center';
         item.innerHTML = `<span class="fw-medium d-flex align-items-center gap-1">
                 ${isFav ? '<span style="color:#f4a300;font-size:0.8rem;">&#9733;</span>' : ''}
-                ${p.name}
+                ${escapeHtml(productDisplay(p))}
             </span>
             <span class="badge" style="background:${tc}18;color:${tc};border:1px solid ${tc}30;">${p.tier}</span>`;
         item.addEventListener('click', () => selectProduct(p));
@@ -481,13 +506,13 @@ function showDropdown(q) {
 }
 
 function selectProduct(p) {
-    selectedProduct = p;
-    searchInput.value = p.name;
+    selectedProduct = normalizeProduct(p);
+    searchInput.value = productDisplay(selectedProduct);
     dropdown.classList.add('d-none');
     selectedPlanets.clear();
     updatePlanetFilterUI();
-    history.replaceState(null, '', '/planner?product=' + encodeURIComponent(p.name));
-    renderChain(p);
+    history.replaceState(null, '', '/planner?product=' + encodeURIComponent(selectedProduct.name));
+    renderChain(selectedProduct);
     updateFavBtn();
     renderFavoritesBlock();
 }
@@ -694,7 +719,7 @@ function renderGraph(product) {
             const fc = dim ? '#586e75' : p0c;
             const srcPlanets = Object.entries(PLANET_RESOURCES).filter(([,r]) => r.includes(node.name)).map(([pt]) => pt);
             s += `<g>
-              <title>${node.name}\n\u26cf ${srcPlanets.join(', ')}</title>
+              <title>${productLabel(node.name)}\n\u26cf ${srcPlanets.join(', ')}</title>
               <rect x="${nx}" y="${ny}" width="${NODE_W}" height="${NODE_H}" rx="4"
                     fill="${fc}" fill-opacity="${dim ? 0.03 : 0.09}"
                     stroke="${fc}" stroke-opacity="${dim ? 0.12 : 0.45}"
@@ -702,7 +727,7 @@ function renderGraph(product) {
               <text x="${r(node.x)}" y="${r(ny + NODE_H * 0.645)}" text-anchor="middle"
                     fill="${fc}" fill-opacity="${dim ? 0.25 : 0.9}"
                     font-size="10" font-weight="400"
-                    font-family="system-ui,-apple-system,sans-serif" pointer-events="none">${node.name}</text>
+                    font-family="system-ui,-apple-system,sans-serif" pointer-events="none">${escapeHtml(productLabel(node.name))}</text>
             </g>`;
             continue;
         }
@@ -714,7 +739,7 @@ function renderGraph(product) {
             const dimmed = isFiltering && !planetSel;
             const safePN = node.name.replace(/'/g, "\\'");
             s += `<g style="cursor:pointer;" onclick="togglePlanetFilter('${safePN}')">
-              <title>${node.name}${planetSel ? ' \u2713 aktiv' : ' \u2013 klicken zum Filtern'}</title>
+              <title>${productLabel(node.name)}${planetSel ? ' \u2713 aktiv' : ' \u2013 klicken zum Filtern'}</title>
               <rect x="${nx}" y="${ny}" width="${nw}" height="${NODE_H}" rx="${NODE_H/2}"
                     fill="${tc}" fill-opacity="${planetSel ? 0.32 : (dimmed ? 0.04 : 0.1)}"
                     stroke="${tc}" stroke-opacity="${planetSel ? 1 : (dimmed ? 0.18 : 0.5)}"
@@ -723,7 +748,7 @@ function renderGraph(product) {
               <text x="${r(node.x)}" y="${r(ny + NODE_H * 0.645)}" text-anchor="middle"
                     fill="${tc}" fill-opacity="${planetSel ? 1 : (dimmed ? 0.3 : 0.9)}"
                     font-size="10" font-weight="${planetSel ? 700 : 500}"
-                    font-family="system-ui,-apple-system,sans-serif" pointer-events="none">${node.name}</text>
+                    font-family="system-ui,-apple-system,sans-serif" pointer-events="none">${escapeHtml(productLabel(node.name))}</text>
             </g>`;
             continue;
         }
@@ -731,14 +756,15 @@ function renderGraph(product) {
         const nodeAvail = avail.get(node.name) !== false;
         const dimNode = !nodeAvail;
         const dimTC = dimNode ? '#586e75' : tc;
-        const label  = node.name.length > 18 ? node.name.slice(0, 16) + '\u2026' : node.name;
+        const displayName = productLabel(node.name);
+        const label  = displayName.length > 18 ? displayName.slice(0, 16) + '\u2026' : displayName;
         const safeN  = node.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const clickAttr = sel
             ? `style="cursor:default;"`
             : `style="cursor:pointer;" onclick="selectProduct({name:'${safeN}',tier:'${node.tier}'})"`;
 
         s += `<g ${clickAttr} ${sel ? 'filter="url(#glow-sel)"' : ''}>
-          <title>${node.name} \u00b7 ${node.tier}${dimNode ? ' (nicht verfuegbar)' : ''}</title>
+          <title>${productLabel(node.name)} \u00b7 ${node.tier}${dimNode ? ' (nicht verfuegbar)' : ''}</title>
           <rect x="${nx}" y="${ny}" width="${nw}" height="${NODE_H}" rx="5"
                 fill="${dimTC}" fill-opacity="${sel ? 0.22 : (dimNode ? 0.03 : 0.07)}"
                 stroke="${dimTC}" stroke-opacity="${sel ? 1 : (dimNode ? 0.15 : 0.3)}"
@@ -781,7 +807,7 @@ function renderChain(product) {
     document.getElementById('chainResult').classList.remove('d-none');
 
     const tc = TIER_COLORS[product.tier] || '#c9d1d9';
-    document.getElementById('chainProductName').textContent = product.name;
+    document.getElementById('chainProductName').textContent = productLabel(product.name);
     document.getElementById('chainTierBadge').innerHTML =
         `<span class="badge fs-6" style="background:${tc}1a;color:${tc};border:1px solid ${tc}3a;">${product.tier}</span>`;
 
@@ -794,7 +820,7 @@ function renderChain(product) {
         [...planetSet].map(pt => {
             const c = PLANET_COLORS[pt] || '#586e75';
             return `<span class="badge me-1 mb-1"
-                         style="background:${c}18;color:${c};border:1px solid ${c}30;font-size:0.8rem;padding:.4rem .7rem;">${pt}</span>`;
+                         style="background:${c}18;color:${c};border:1px solid ${c}30;font-size:0.8rem;padding:.4rem .7rem;">${escapeHtml(pt)}</span>`;
         }).join('') || '<span class="text-muted small">ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â</span>';
 
     document.getElementById('chainP0').innerHTML =
@@ -804,16 +830,16 @@ function renderChain(product) {
             const primaryColor = planets.length ? (PLANET_COLORS[planets[0]] || '#586e75') : '#586e75';
             const planetBadges = planets.map(pt => {
                 const c = PLANET_COLORS[pt] || '#586e75';
-                return `<span style="background:${c}18;color:${c};border:1px solid ${c}35;font-size:0.62rem;padding:1px 6px;border-radius:3px;white-space:nowrap;">${pt}</span>`;
+                return `<span style="background:${c}18;color:${c};border:1px solid ${c}35;font-size:0.62rem;padding:1px 6px;border-radius:3px;white-space:nowrap;">${escapeHtml(pt)}</span>`;
             }).join('');
             return `<div class="d-flex align-items-center gap-2 p-2 mb-1"
                          style="border-left:3px solid ${primaryColor};background:${primaryColor}0d;border-radius:0 4px 4px 0;">
                 <div class="flex-grow-1" style="min-width:0;">
-                    <div class="small fw-medium">${p0}</div>
+                    <div class="small fw-medium">${escapeHtml(productLabel(p0))}</div>
                     <div class="d-flex flex-wrap gap-1 mt-1">${planetBadges}</div>
                 </div>
                 <div style="font-size:0.7rem;color:var(--eve-text-muted);white-space:nowrap;">
-                    ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ <span style="color:${TIER_COLORS['P1']};">${p1}</span>
+                    ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ <span style="color:${TIER_COLORS['P1']};">${escapeHtml(productLabel(p1))}</span>
                 </div>
             </div>`;
         }).join('') || '<span class="text-muted small">ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â</span>';

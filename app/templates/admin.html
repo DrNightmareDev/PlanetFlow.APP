@@ -278,6 +278,7 @@
         </div>
         {% endif %}
         </div><!-- #accountList -->
+        <div id="accountListPagination"></div>
 
         <div id="accEmpty" class="text-center py-4 text-muted d-none">
             <i class="bi bi-search me-2"></i>Keine Accounts für diesen Filter.
@@ -451,11 +452,16 @@
     <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-translate eve-accent me-1"></i>
-            <span class="fw-medium">Übersetzungen</span>
+            <span class="fw-medium">{{ t('manager.i18n.title') }}</span>
             <span class="badge eve-badge-count" id="i18nCount">{{ translation_rows | length }}</span>
         </div>
         <div class="d-flex align-items-center gap-2 flex-wrap">
-            <input type="text" id="i18nSearch" class="form-control form-control-sm eve-input" style="width:240px;" placeholder="Schlüssel oder Text suchen...">
+            <input type="text" id="i18nSearch" class="form-control form-control-sm eve-input" style="width:240px;" placeholder="{{ t('manager.i18n.search_placeholder') }}">
+            <select id="i18nScopeFilter" class="form-select form-select-sm eve-input" style="width:180px;">
+                <option value="all">{{ t('manager.i18n.filter_all') }}</option>
+                <option value="ui">{{ t('manager.i18n.filter_ui') }}</option>
+                <option value="readonly">{{ t('manager.i18n.filter_readonly') }}</option>
+            </select>
             <select id="i18nLangSelect" class="form-select form-select-sm eve-input" style="width:180px;">
                 {% for lang in translation_languages %}
                 <option value="{{ lang }}" {% if lang == 'zh-Hans' %}selected{% endif %}>
@@ -470,9 +476,10 @@
             <table class="table eve-table-sm align-middle mb-0">
                 <thead style="position:sticky;top:0;background:var(--eve-bg-2);z-index:2;">
                     <tr>
-                        <th style="min-width:300px;">English</th>
-                        <th style="min-width:300px;">Deutsch</th>
+                        <th style="min-width:300px;">{{ t('manager.i18n.col_en') }}</th>
+                        <th style="min-width:300px;">{{ t('manager.i18n.col_de') }}</th>
                         <th style="min-width:300px;" id="i18nDynamicHeader">zh-Hans</th>
+                        <th style="width:140px;">{{ t('manager.i18n.col_source') }}</th>
                         <th style="width:120px;"></th>
                     </tr>
                 </thead>
@@ -489,11 +496,118 @@
 let adminFilterActive = false;
 let sortAsc = true;
 let entries = [...document.querySelectorAll('.acc-entry')];
+let accountPage = 1;
+let accountPageSize = 15;
+const ACCOUNT_PAGE_SIZES = [15, 25, 50, 0];
+const ACCOUNT_PAGINATION_KEY = 'eve_manager_accounts_page_size';
 const translationRows = {{ translation_rows | tojson }};
 const translationLanguages = {{ translation_languages | tojson }};
 const translationLanguageLabels = {
     'zh-Hans': 'Chinese (Simplified)'
 };
+const translationSourceLabels = {
+    ui: '{{ t("manager.i18n.source_ui") }}',
+    sde: '{{ t("manager.i18n.source_sde") }}'
+};
+const translationUiText = {
+    save: '{{ t("common.save") }}',
+    locked: '{{ t("manager.i18n.locked") }}',
+    saved: '{{ t("manager.i18n.saved") }}',
+    saveError: '{{ t("manager.i18n.save_error") }}'
+};
+
+try {
+    const savedPageSize = parseInt(localStorage.getItem(ACCOUNT_PAGINATION_KEY) || '', 10);
+    if (!Number.isNaN(savedPageSize) && ACCOUNT_PAGE_SIZES.includes(savedPageSize)) {
+        accountPageSize = savedPageSize;
+    }
+} catch (_) {}
+
+function renderAccountPagination(total) {
+    const container = document.getElementById('accountListPagination');
+    if (!container) return;
+    if (total <= 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const pageSize = accountPageSize <= 0 ? Math.max(total, 1) : accountPageSize;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    if (accountPage > totalPages) accountPage = 1;
+    const start = (accountPage - 1) * pageSize;
+    const end = Math.min(start + pageSize, total);
+    const allLabel = (window.EVE_I18N && window.EVE_I18N.catalog && window.EVE_I18N.catalog['common.all']) || 'All';
+
+    let html = `<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 px-1 pt-3" style="border-top:1px solid #1a2d3d;">`;
+    html += `<span class="small text-muted">${Math.min(start + 1, total)}-${end} ${allLabel.toLowerCase() === 'alle' ? 'von' : 'of'} ${total}</span>`;
+
+    if (totalPages > 1) {
+        html += `<div class="d-flex align-items-center gap-1">`;
+        html += `<button class="btn btn-sm eve-btn-ghost px-2" onclick="changeAccountPage(-1)" ${accountPage <= 1 ? 'disabled' : ''}>&lsaquo;</button>`;
+        const first = Math.max(1, accountPage - 2);
+        const last = Math.min(totalPages, first + 4);
+        for (let i = first; i <= last; i++) {
+            html += `<button class="btn btn-sm px-2 ${i === accountPage ? 'eve-btn-primary' : 'eve-btn-ghost'}" onclick="goToAccountPage(${i})">${i}</button>`;
+        }
+        html += `<button class="btn btn-sm eve-btn-ghost px-2" onclick="changeAccountPage(1)" ${accountPage >= totalPages ? 'disabled' : ''}>&rsaquo;</button>`;
+        html += `</div>`;
+    } else {
+        html += `<div></div>`;
+    }
+
+    html += `<div class="d-flex align-items-center gap-1">`;
+    ACCOUNT_PAGE_SIZES.forEach(size => {
+        const label = size === 0 ? allLabel : String(size);
+        html += `<button class="btn btn-sm px-2 ${accountPageSize === size ? 'eve-btn-primary' : 'eve-btn-ghost'}" onclick="setAccountPageSize(${size})">${label}</button>`;
+    });
+    html += `</div></div>`;
+    container.innerHTML = html;
+}
+
+function renderAccountPage() {
+    const matched = entries.filter(el => el.dataset.accMatch !== '0');
+    const total = matched.length;
+    const pageSize = accountPageSize <= 0 ? Math.max(total, 1) : accountPageSize;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    if (accountPage > totalPages) accountPage = 1;
+    const start = (accountPage - 1) * pageSize;
+    const end = start + pageSize;
+
+    entries.forEach(el => {
+        if (el.dataset.accMatch === '0') {
+            el.classList.add('d-none');
+            return;
+        }
+        const visibleIndex = matched.indexOf(el);
+        const show = accountPageSize === 0 || (visibleIndex >= start && visibleIndex < end);
+        el.classList.toggle('d-none', !show);
+    });
+
+    document.getElementById('accCount').textContent = total;
+    document.getElementById('accEmpty').classList.toggle('d-none', total > 0);
+    renderAccountPagination(total);
+}
+
+function goToAccountPage(page) {
+    accountPage = page;
+    renderAccountPage();
+}
+
+function changeAccountPage(delta) {
+    accountPage += delta;
+    renderAccountPage();
+}
+
+function setAccountPageSize(size) {
+    accountPageSize = size;
+    accountPage = 1;
+    try { localStorage.setItem(ACCOUNT_PAGINATION_KEY, String(size)); } catch (_) {}
+    renderAccountPage();
+}
+
+window.goToAccountPage = goToAccountPage;
+window.changeAccountPage = changeAccountPage;
+window.setAccountPageSize = setAccountPageSize;
 
 function applyFilters() {
     const q = document.getElementById('charSearch').value.trim().toLowerCase();
@@ -505,11 +619,11 @@ function applyFilters() {
         const nameMatch = !q || main.includes(q) || allChars.includes(q);
         const adminMatch = !adminFilterActive || isAdmin;
         const show = nameMatch && adminMatch;
-        el.classList.toggle('d-none', !show);
+        el.dataset.accMatch = show ? '1' : '0';
         if (show) visible++;
     });
-    document.getElementById('accCount').textContent = visible;
-    document.getElementById('accEmpty').classList.toggle('d-none', visible > 0);
+    accountPage = 1;
+    renderAccountPage();
 }
 
 document.getElementById('charSearch').addEventListener('input', applyFilters);
@@ -532,6 +646,7 @@ function toggleSort() {
         return sortAsc ? na.localeCompare(nb) : nb.localeCompare(na);
     });
     entries.forEach(el => list.appendChild(el));
+    renderAccountPage();
 }
 
 // ── Access Policy Suche ────────────────────────────────────────────────────
@@ -603,9 +718,12 @@ function getActiveTranslationLang() {
 function getFilteredTranslationRows() {
     const query = (document.getElementById('i18nSearch')?.value || '').trim().toLowerCase();
     const activeLang = getActiveTranslationLang();
+    const scope = document.getElementById('i18nScopeFilter')?.value || 'all';
     return translationRows.filter(row => {
+        if (scope === 'ui' && !row.editable) return false;
+        if (scope === 'readonly' && row.editable) return false;
         if (!query) return true;
-        return [row.key, row.en, row.de, row[activeLang] || ''].some(v => String(v || '').toLowerCase().includes(query));
+        return [row.key, row.en, row.de, row[activeLang] || '', row.source || ''].some(v => String(v || '').toLowerCase().includes(query));
     });
 }
 
@@ -620,18 +738,27 @@ function renderTranslationRows() {
         <tr>
             <td>
                 <div class="small text-muted mb-1">${escapeHtml(row.key)}</div>
-                <textarea class="form-control form-control-sm eve-input i18n-input" data-locale="en" rows="3">${escapeHtml(row.en || '')}</textarea>
+                <textarea class="form-control form-control-sm eve-input i18n-input" data-locale="en" rows="3" ${row.editable ? '' : 'readonly disabled'}>${escapeHtml(row.en || '')}</textarea>
             </td>
             <td>
-                <textarea class="form-control form-control-sm eve-input i18n-input" data-locale="de" rows="3">${escapeHtml(row.de || '')}</textarea>
+                <textarea class="form-control form-control-sm eve-input i18n-input" data-locale="de" rows="3" ${row.editable ? '' : 'readonly disabled'}>${escapeHtml(row.de || '')}</textarea>
             </td>
             <td>
-                <textarea class="form-control form-control-sm eve-input i18n-input" data-locale="${escapeHtml(activeLang)}" rows="3">${escapeHtml(row[activeLang] || '')}</textarea>
+                <textarea class="form-control form-control-sm eve-input i18n-input" data-locale="${escapeHtml(activeLang)}" rows="3" ${row.editable ? '' : 'readonly disabled'}>${escapeHtml(row[activeLang] || '')}</textarea>
+            </td>
+            <td>
+                <span class="badge ${row.editable ? 'eve-badge-admin' : ''}" style="${row.editable ? '' : 'background:#586e7520;color:#93a1aa;border:1px solid #586e7540;'}">
+                    ${escapeHtml(translationSourceLabels[row.source] || row.source || 'Website')}
+                </span>
             </td>
             <td class="text-end">
+                ${row.editable ? `
                 <button type="button" class="btn btn-sm eve-btn-gold" onclick="saveTranslationRow(${idx})">
-                    <i class="bi bi-floppy me-1"></i>Save
-                </button>
+                    <i class="bi bi-floppy me-1"></i>${escapeHtml(translationUiText.save)}
+                </button>` : `
+                <span class="btn btn-sm eve-btn-outline disabled">
+                    <i class="bi bi-lock me-1"></i>${escapeHtml(translationUiText.locked)}
+                </span>`}
             </td>
         </tr>
     `).join('');
@@ -640,7 +767,7 @@ function renderTranslationRows() {
 async function saveTranslationRow(idx) {
     const rows = getFilteredTranslationRows();
     const row = rows[idx];
-    if (!row) return;
+    if (!row || !row.editable) return;
     const tr = document.querySelectorAll('#i18nRows tr')[idx];
     if (!tr) return;
     const updates = {};
@@ -663,6 +790,9 @@ async function saveTranslationRow(idx) {
 
 document.getElementById('i18nSearch')?.addEventListener('input', renderTranslationRows);
 document.getElementById('i18nLangSelect')?.addEventListener('change', renderTranslationRows);
+document.getElementById('i18nScopeFilter')?.addEventListener('change', renderTranslationRows);
 renderTranslationRows();
+entries.forEach(el => { el.dataset.accMatch = '1'; });
+renderAccountPage();
 </script>
 {% endblock %}

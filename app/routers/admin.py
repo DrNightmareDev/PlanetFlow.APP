@@ -96,7 +96,10 @@ async def update_translation(
     for locale, value in updates.items():
         if locale not in SUPPORTED_LANGUAGES:
             raise HTTPException(status_code=400, detail=f"unsupported locale: {locale}")
-        save_translation(locale, key, str(value or ""))
+        try:
+            save_translation(locale, key, str(value or ""))
+        except RuntimeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
     return JSONResponse({"ok": True})
 
 

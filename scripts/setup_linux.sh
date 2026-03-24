@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
-# EVE PI Manager - Vollständiges LXC Installations-Skript
+# EVE PI Manager - Vollständiges Linux Installations-Skript
 # Getestet auf: Debian 12 (Bookworm)
-# Verwendung: Dieses Skript als root im LXC Container ausführen
+# Verwendung: Dieses Skript als root auf einem Linux-Host oder in einem Linux-Container ausführen
 # =============================================================================
 
 set -euo pipefail
@@ -27,7 +27,7 @@ SERVICE_NAME="eve-pi-manager"
 
 echo ""
 echo -e "${BLUE}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║        EVE PI Manager - Setup LXC            ║${NC}"
+echo -e "${BLUE}║       EVE PI Manager - Setup Linux           ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════╝${NC}"
 echo ""
 

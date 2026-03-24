@@ -31,7 +31,8 @@ SYSTEMS_UPDATE_DAYS = 30
 
 # In-memory stores
 _schematics: dict[int, dict] = {}   # schematic_id -> normalized schematic
-_types: dict[int, str] = {}         # type_id -> name (en)
+_types: dict[int, dict[str, str]] = {}         # type_id -> localized names
+_type_ids_by_name_en: dict[str, int] = {}      # english_name_lower -> type_id
 _build_time: str | None = None
 _systems: dict[str, tuple[int, str, float]] = {}    # name_lower -> (system_id, name, security)
 _systems_by_id: dict[int, dict] = {}                # system_id -> {name, security, region_id, constellation_id}
@@ -141,18 +142,30 @@ def _load_schematics():
 
 
 def _load_types():
-    global _types
+    global _types, _type_ids_by_name_en
     path = DATA_DIR / "types.json"
     if not path.exists():
         logger.warning("types.json nicht gefunden.")
         return
     try:
         raw = json.loads(path.read_text())
-        _types = {
-            int(k): v.get("name", {}).get("en", "")
-            for k, v in raw.items()
-            if v.get("name", {}).get("en")
-        }
+        types: dict[int, dict[str, str]] = {}
+        ids_by_name_en: dict[str, int] = {}
+        for k, v in raw.items():
+            names = {
+                str(lang): str(text)
+                for lang, text in (v.get("name") or {}).items()
+                if text
+            }
+            if not names:
+                continue
+            type_id = int(k)
+            types[type_id] = names
+            en_name = names.get("en")
+            if en_name:
+                ids_by_name_en[en_name.lower()] = type_id
+        _types = types
+        _type_ids_by_name_en = ids_by_name_en
         logger.info(f"SDE: {len(_types)} Types geladen.")
     except Exception as e:
         logger.error(f"Fehler beim Laden von types.json: {e}")
@@ -394,6 +407,25 @@ def get_schematic(schematic_id: int) -> dict | None:
 def get_type_name(type_id: int) -> str | None:
     """Gibt den englischen Typnamen zurück oder None."""
     return _types.get(type_id)
+
+
+def get_type_name(type_id: int, lang: str = "en") -> str | None:
+    """Gibt den Typnamen in der gewünschten Sprache oder englisch zurück."""
+    names = _types.get(type_id) or {}
+    lookup_lang = "zh" if lang == "zh-Hans" else lang
+    return names.get(lookup_lang) or names.get("en")
+
+
+def get_type_translations(type_id: int) -> dict[str, str]:
+    """Gibt alle verfügbaren Übersetzungen eines Typs zurück."""
+    return dict(_types.get(type_id) or {})
+
+
+def find_type_id_by_name(name: str) -> int | None:
+    """Sucht eine Type-ID anhand des englischen SDE-Namens."""
+    if not name:
+        return None
+    return _type_ids_by_name_en.get(name.lower())
 
 
 def get_system_local(system_id: int) -> dict | None:

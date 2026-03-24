@@ -169,13 +169,13 @@
                     {% if colonies %}
                     <div class="d-flex align-items-center gap-2 flex-wrap ms-2">
                         <span class="badge" style="background:rgba(45,198,83,0.12);color:#2dc653;border:1px solid rgba(45,198,83,0.35);font-size:.82rem;font-weight:500;padding:.42rem .72rem;">
-                            {{ active_colony_count }} Aktiv
+                            {{ active_colony_count }} {{ t('common.active') }}
                         </span>
                         <span class="badge" style="background:rgba(231,76,60,0.12);color:#e74c3c;border:1px solid rgba(231,76,60,0.35);font-size:.82rem;font-weight:500;padding:.42rem .72rem;">
-                            {{ expired_colony_count }} Abgelaufen
+                            {{ expired_colony_count }} {{ t('common.expired') }}
                         </span>
                         <span class="badge" style="background:rgba(244,163,0,0.12);color:#f4a300;border:1px solid rgba(244,163,0,0.35);font-size:.82rem;font-weight:500;padding:.42rem .72rem;">
-                            {{ stalled_colony_count }} Stalled
+                            {{ stalled_colony_count }} {{ t('common.stalled') }}
                         </span>
                     </div>
                     {% endif %}
@@ -183,13 +183,13 @@
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     {% if colonies %}
                     <button id="activeFilter" class="eve-state-toggle eve-state-toggle-active" onclick="toggleActiveFilter()">
-                        <i class="bi bi-play-circle"></i>Aktiv
+                        <i class="bi bi-play-circle"></i>{{ t('common.active') }}
                     </button>
                     <button id="expiredFilter" class="eve-state-toggle eve-state-toggle-inactive" onclick="toggleExpiredFilter()">
-                        <i class="bi bi-exclamation-circle"></i>Abgelaufen
+                        <i class="bi bi-exclamation-circle"></i>{{ t('common.expired') }}
                     </button>
                     <button id="stalledFilter" class="eve-state-toggle eve-state-toggle-stalled" onclick="toggleStalledFilter()">
-                        <i class="bi bi-pause-circle"></i>Stalled
+                        <i class="bi bi-pause-circle"></i>{{ t('common.stalled') }}
                     </button>
                     {% endif %}
                     {% if colonies and char_count > 1 %}
@@ -342,7 +342,7 @@
                                         {% endif %}
                                     {% elif colony.is_stalled == true %}
                                         <span class="eve-expiry-warn">
-                                            <i class="bi bi-pause-circle me-1"></i>Stalled
+                                            <i class="bi bi-pause-circle me-1"></i>{{ t('common.stalled') }}
                                         </span>
                                     {% elif colony.is_stalled == false %}
                                         <span class="eve-expiry-ok">

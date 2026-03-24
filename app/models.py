@@ -1,6 +1,6 @@
 from sqlalchemy import (
     BigInteger, Boolean, Column, DateTime, ForeignKey,
-    Integer, String, Text, func
+    Integer, String, Text, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -177,3 +177,17 @@ class AccessPolicyEntry(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     policy = relationship("AccessPolicy", back_populates="entries")
+
+
+class TranslationEntry(Base):
+    __tablename__ = "translation_entries"
+    __table_args__ = (
+        UniqueConstraint("locale", "key", name="uq_translation_entries_locale_key"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    locale = Column(String(20), nullable=False, index=True)
+    key = Column(String(255), nullable=False, index=True)
+    text = Column(Text, nullable=False, default="")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

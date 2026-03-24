@@ -83,6 +83,37 @@ DB_PASSWORD=
 docker compose up -d
 ```
 
+更新：
+
+```bash
+git pull origin main
+docker compose pull
+docker compose build
+docker compose up -d
+docker compose exec app alembic upgrade head
+```
+
+如果你直接基于本地工作目录更新，通常下面这样就够了：
+
+```bash
+docker compose up -d --build
+docker compose exec app alembic upgrade head
+```
+
+推荐顺序：
+
+- 拉取最新代码
+- 拉取或重新构建镜像
+- 重启容器
+- 使用 `alembic upgrade head` 执行迁移
+- 然后简单检查日志
+
+日志检查：
+
+```bash
+docker compose logs -n 100 app
+```
+
 Compose 中的管理员脚本：
 
 ```bash

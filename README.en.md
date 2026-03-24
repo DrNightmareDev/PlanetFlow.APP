@@ -96,6 +96,37 @@ DEBUG=false
 docker compose up -d
 ```
 
+Update:
+
+```bash
+git pull origin main
+docker compose pull
+docker compose build
+docker compose up -d
+docker compose exec app alembic upgrade head
+```
+
+If you update directly from the local working tree, this is usually enough:
+
+```bash
+docker compose up -d --build
+docker compose exec app alembic upgrade head
+```
+
+Recommended order:
+
+- fetch the new code
+- pull or rebuild images
+- restart the containers
+- run migrations with `alembic upgrade head`
+- then check the logs
+
+Log check:
+
+```bash
+docker compose logs -n 100 app
+```
+
 Administrator scripts in Compose:
 
 ```bash

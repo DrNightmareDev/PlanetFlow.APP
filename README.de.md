@@ -96,6 +96,37 @@ DEBUG=false
 docker compose up -d
 ```
 
+Update:
+
+```bash
+git pull origin main
+docker compose pull
+docker compose build
+docker compose up -d
+docker compose exec app alembic upgrade head
+```
+
+Falls du direkt aus dem lokalen Working Tree aktualisierst, reicht meist:
+
+```bash
+docker compose up -d --build
+docker compose exec app alembic upgrade head
+```
+
+Empfohlene Reihenfolge:
+
+- neuen Code holen
+- Images neu bauen oder ziehen
+- Container neu starten
+- Migrationen mit `alembic upgrade head` ausfuehren
+- danach kurz Logs pruefen
+
+Log-Check:
+
+```bash
+docker compose logs -n 100 app
+```
+
 Administrator-Skripte im Compose-Setup:
 
 ```bash

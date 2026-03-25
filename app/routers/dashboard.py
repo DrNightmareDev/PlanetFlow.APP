@@ -756,20 +756,119 @@ def _record_isk_snapshot(account_id: int, isk_day: float, colony_count: int, db:
             pass
 
 
+def _update_character_colony_sync_status(
+    characters: list[Character],
+    fetch_results: dict[int, dict],
+    db: Session,
+) -> None:
+    """Merkt sich den letzten bekannten Koloniestand pro Charakter und markiert Ausleseprobleme."""
+    dirty = False
+    now_utc = datetime.now(timezone.utc)
+
+    for char in characters:
+        result = fetch_results.get(char.id) or {"status": "not_processed", "count": 0}
+        status = result.get("status")
+        count = int(result.get("count") or 0)
+        previous_count = int(getattr(char, "last_known_colony_count", 0) or 0)
+
+        if status == "ok":
+            if count == 0 and previous_count > 0:
+                char.colony_sync_issue = True
+                char.colony_sync_issue_note = "previous_colonies_missing"
+            else:
+                char.last_known_colony_count = count
+                char.colony_sync_issue = False
+                char.colony_sync_issue_note = None
+        elif previous_count > 0 and status in {"error", "token_missing"}:
+            char.colony_sync_issue = True
+            char.colony_sync_issue_note = "fetch_failed" if status == "error" else "token_missing"
+
+        char.last_colony_sync_at = now_utc
+        dirty = True
+
+    if not dirty:
+        return
+
+    try:
+        db.commit()
+    except Exception as e:
+        logger.warning(f"Charakter-Kolonie-Syncstatus fehlgeschlagen: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
+def _backfill_character_colony_sync_status_from_cache(
+    account_id: int,
+    characters: list[Character],
+    db: Session,
+) -> None:
+    """Leitet einen letzten bekannten erfolgreichen Sync aus dem Dashboard-Cache ab."""
+    if not characters:
+        return
+
+    cached = _load_colony_cache(account_id, db)
+    if not cached:
+        return
+
+    colonies = cached.get("colonies") or []
+    colony_counts: dict[str, int] = {}
+    for colony in colonies:
+        char_name = colony.get("character_name")
+        if not char_name:
+            continue
+        colony_counts[char_name] = colony_counts.get(char_name, 0) + 1
+
+    dirty = False
+    now_utc = datetime.now(timezone.utc)
+    for char in characters:
+        if getattr(char, "last_colony_sync_at", None):
+            continue
+        count = int(colony_counts.get(char.character_name, 0) or 0)
+        char.last_known_colony_count = count
+        char.colony_sync_issue = False
+        char.colony_sync_issue_note = None
+        char.last_colony_sync_at = now_utc
+        dirty = True
+
+    if not dirty:
+        return
+
+    try:
+        db.commit()
+    except Exception as e:
+        logger.warning(f"Character colony cache backfill fehlgeschlagen: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
 def _build_dashboard_payload(account, characters: list, db: Session, price_mode: str = "sell") -> dict:
     """Holt alle ESI/Markt-Daten frisch und gibt den vollständigen Payload zurück."""
 
     # Schritt 1: Alle (char, colony, access_token) sammeln
     char_colony_token: list[tuple] = []
+    char_fetch_results: dict[int, dict] = {}
     for char in characters:
         access_token = ensure_valid_token(char, db)
         if not access_token:
             logger.warning(f"Kein gültiges Token für Char {char.character_name} ({char.eve_character_id}) – übersprungen")
+            char_fetch_results[char.id] = {"status": "token_missing", "count": 0}
             continue
-        raw_colonies = get_character_planets(char.eve_character_id, access_token)
+        try:
+            raw_colonies = get_character_planets(char.eve_character_id, access_token)
+        except Exception as e:
+            logger.warning(f"Kolonien konnten für Char {char.character_name} ({char.eve_character_id}) nicht geladen werden: {e}")
+            char_fetch_results[char.id] = {"status": "error", "count": 0}
+            continue
+        char_fetch_results[char.id] = {"status": "ok", "count": len(raw_colonies)}
         logger.debug(f"ESI Kolonien für {char.character_name}: {len(raw_colonies)}")
         for colony in raw_colonies:
             char_colony_token.append((char, colony, access_token))
+
+    _update_character_colony_sync_status(characters, char_fetch_results, db)
 
     # Schritt 2: planet_info + planet_detail parallel abrufen
     def _fetch_planet(args):
@@ -1465,6 +1564,8 @@ def characters_page(
     db: Session = Depends(get_db),
 ):
     db.refresh(account)
+    characters = db.query(Character).filter(Character.account_id == account.id).all()
+    _backfill_character_colony_sync_status_from_cache(account.id, characters, db)
     characters = db.query(Character).filter(Character.account_id == account.id).all()
     _attach_pi_skills(characters, db)
     return templates.TemplateResponse("characters.html", {

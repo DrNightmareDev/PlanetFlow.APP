@@ -49,6 +49,10 @@ class Character(Base):
     portrait_64 = Column(String(512), nullable=True)
     portrait_128 = Column(String(512), nullable=True)
     portrait_256 = Column(String(512), nullable=True)
+    last_known_colony_count = Column(Integer, nullable=False, default=0, server_default="0")
+    colony_sync_issue = Column(Boolean, nullable=False, default=False, server_default="false")
+    colony_sync_issue_note = Column(String(255), nullable=True)
+    last_colony_sync_at = Column(DateTime(timezone=True), nullable=True)
 
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)

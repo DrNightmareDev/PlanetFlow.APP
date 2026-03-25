@@ -7,6 +7,7 @@ from app.database import get_db
 from app.dependencies import require_admin, require_account
 from app.i18n import get_translation_rows, save_translation, SUPPORTED_LANGUAGES
 from app.models import Account, Character, IskSnapshot, AccessPolicy, AccessPolicyEntry
+from app.esi import ensure_valid_token, get_character_roles, get_corporation_info
 from app.session import create_session, create_impersonate_session, read_session
 from app.templates_env import templates
 
@@ -31,6 +32,44 @@ def _colony_count_per_account(db: Session) -> dict[int, int]:
     return {r.account_id: r.colony_count for r in rows}
 
 
+def _account_corp_role_flags(main: Character | None, db: Session) -> dict:
+    if not main or not main.corporation_id:
+        return {
+            "is_ceo": False,
+            "is_director": False,
+            "roles_scope_missing": False,
+        }
+
+    is_ceo = False
+    is_director = False
+    roles_scope_missing = False
+
+    try:
+        corp_info = get_corporation_info(main.corporation_id)
+        is_ceo = corp_info.get("ceo_id") == main.eve_character_id
+    except Exception:
+        pass
+
+    scopes = set((main.scopes or "").split())
+    if "esi-characters.read_corporation_roles.v1" in scopes:
+        access_token = ensure_valid_token(main, db)
+        if access_token:
+            try:
+                roles_data = get_character_roles(main.eve_character_id, access_token)
+                roles = roles_data.get("roles", []) if isinstance(roles_data, dict) else []
+                is_director = "Director" in roles
+            except Exception:
+                pass
+    else:
+        roles_scope_missing = True
+
+    return {
+        "is_ceo": is_ceo,
+        "is_director": is_director,
+        "roles_scope_missing": roles_scope_missing,
+    }
+
+
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
 def admin_panel(
@@ -52,12 +91,16 @@ def admin_panel(
         main = None
         if acc.main_character_id:
             main = db.query(Character).filter(Character.id == acc.main_character_id).first()
+        role_flags = _account_corp_role_flags(main, db)
         accounts_data.append({
             "account": acc,
             "characters": chars,
             "main": main,
             "char_count": len(chars),
             "colony_count": colony_counts.get(acc.id, 0),
+            "is_ceo": role_flags["is_ceo"],
+            "is_director": role_flags["is_director"],
+            "roles_scope_missing": role_flags["roles_scope_missing"],
         })
 
     policy = db.get(AccessPolicy, 1)

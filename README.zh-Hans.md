@@ -154,6 +154,15 @@ bash scripts/setup_linux.sh
 bash ~/PI_Manager/scripts/update_linux.sh
 ```
 
+Linux 原生更新现在直接基于 `/opt/eve-pi-manager` 中的 Git 工作副本执行：
+- `git fetch`
+- `git checkout/reset` 到目标分支
+- 更新 Python 依赖
+- 执行 Alembic 迁移
+- 重启 `eve-pi-manager`
+
+`.env`、`data/` 和 `venv/` 会被保留。
+
 可选：
 
 - 使用 `--branch <name>` 从其他分支更新

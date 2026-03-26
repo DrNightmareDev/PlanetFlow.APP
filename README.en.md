@@ -167,6 +167,15 @@ Update:
 bash ~/PI_Manager/scripts/update_linux.sh
 ```
 
+The native Linux update flow now operates directly on the Git checkout in `/opt/eve-pi-manager`:
+- `git fetch`
+- `git checkout/reset` to the target branch
+- refresh Python dependencies
+- run Alembic migrations
+- restart `eve-pi-manager`
+
+`.env`, `data/`, and `venv/` are preserved.
+
 Optional:
 
 - use `--branch <name>` to update from another branch

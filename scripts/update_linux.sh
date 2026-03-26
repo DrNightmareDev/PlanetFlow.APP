@@ -3,7 +3,7 @@
 # EVE PI Manager - Linux update script
 #
 # Supported modes:
-#   native  - updates a systemd/venv installation in /opt/eve-pi-manager
+#   native  - updates a systemd/venv installation from the git checkout in /opt/eve-pi-manager
 #   compose - updates a Docker Compose installation from the current checkout
 #
 # Usage:
@@ -125,37 +125,27 @@ if [[ ! -d "${APP_DIR}" ]]; then
     exit 1
 fi
 
-if ! command -v rsync &>/dev/null; then
-    log_info "Installing rsync..."
-    apt-get update -qq
-    apt-get install -y -qq rsync
-fi
-
 if [[ ! -f "${APP_DIR}/.env" ]]; then
     log_error "Missing ${APP_DIR}/.env"
     exit 1
 fi
 
-log_info "Backing up .env..."
-ENV_BACKUP="$(mktemp /tmp/eve-pi-env-backup.XXXXXX)"
-cp "${APP_DIR}/.env" "${ENV_BACKUP}"
-log_ok ".env backed up to ${ENV_BACKUP}"
+if [[ ! -d "${APP_DIR}/.git" ]]; then
+    log_error "${APP_DIR} is not a git checkout. Re-run setup_linux.sh or clone the repository first."
+    exit 1
+fi
 
-log_info "Syncing application files to ${APP_DIR}..."
-rsync -a \
-    --exclude='.env' \
-    --exclude='venv/' \
-    --exclude='data/' \
-    --exclude='__pycache__/' \
-    --exclude='*.pyc' \
-    --exclude='.git/' \
-    "${PROJECT_DIR}/" "${APP_DIR}/"
-log_ok "Application files updated"
-
-cp "${ENV_BACKUP}" "${APP_DIR}/.env"
-chmod 600 "${APP_DIR}/.env"
-rm -f "${ENV_BACKUP}"
-log_ok ".env restored"
+log_info "Updating git checkout in ${APP_DIR} to origin/${BRANCH}..."
+cd "${APP_DIR}"
+git fetch origin "${BRANCH}"
+git checkout "${BRANCH}"
+git reset --hard "origin/${BRANCH}"
+git clean -fd \
+    -e .env \
+    -e data/ \
+    -e venv/ \
+    -e .cache/
+log_ok "Git checkout updated"
 
 log_info "Setting ownership and file permissions..."
 chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"

@@ -15,21 +15,13 @@ router = APIRouter(prefix="/manager", tags=["manager"])
 
 
 def _colony_count_per_account(db: Session) -> dict[int, int]:
-    """Ermittelt die letzte bekannte Kolonienanzahl pro Account aus IskSnapshot."""
-    # Für jeden Account: neuesten IskSnapshot holen
-    from sqlalchemy import desc
-    subq = (
-        db.query(IskSnapshot.account_id, func.max(IskSnapshot.recorded_at).label("latest"))
-        .group_by(IskSnapshot.account_id)
-        .subquery()
-    )
+    """Summe der last_known_colony_count pro Account — schnelle Single-Query-Aggregation."""
     rows = (
-        db.query(IskSnapshot)
-        .join(subq, (IskSnapshot.account_id == subq.c.account_id) &
-                     (IskSnapshot.recorded_at == subq.c.latest))
+        db.query(Character.account_id, func.sum(Character.last_known_colony_count))
+        .group_by(Character.account_id)
         .all()
     )
-    return {r.account_id: r.colony_count for r in rows}
+    return {acc_id: int(count or 0) for acc_id, count in rows}
 
 
 def _account_corp_role_flags(main: Character | None, db: Session) -> dict:
@@ -81,16 +73,25 @@ def admin_panel(
     colony_counts = _colony_count_per_account(db)
 
     total_accounts = len(accounts)
-    total_chars = db.query(Character).count()
     total_admins = sum(1 for a in accounts if a.is_admin)
     total_colonies = sum(colony_counts.values())
 
+    # Batch-load all characters (replaces N queries, one per account)
+    all_chars = db.query(Character).all()
+    total_chars = len(all_chars)
+    chars_by_account: dict[int, list] = {}
+    for char in all_chars:
+        chars_by_account.setdefault(char.account_id, []).append(char)
+    # Batch-load all main chars
+    _main_ids = [acc.main_character_id for acc in accounts if acc.main_character_id]
+    _mains_by_id = {
+        c.id: c for c in db.query(Character).filter(Character.id.in_(_main_ids)).all()
+    } if _main_ids else {}
+
     accounts_data = []
     for acc in accounts:
-        chars = db.query(Character).filter(Character.account_id == acc.id).all()
-        main = None
-        if acc.main_character_id:
-            main = db.query(Character).filter(Character.id == acc.main_character_id).first()
+        chars = chars_by_account.get(acc.id, [])
+        main = _mains_by_id.get(acc.main_character_id) if acc.main_character_id else None
         role_flags = _account_corp_role_flags(main, db)
         accounts_data.append({
             "account": acc,
@@ -417,3 +418,27 @@ def search_access_policy_entity(
             add_alliance(aid)
 
     return JSONResponse({"corporations": corps[:10], "alliances": alliances[:10]})
+
+
+@router.post("/reload-account/{target_account_id}")
+def admin_reload_account(
+    target_account_id: int,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Admin: force-refresh colony cache for any account (no corp restriction)."""
+    from app.routers.dashboard import _build_dashboard_payload, _save_colony_cache, _dashboard_cache
+    import logging as _logging
+    _logger = _logging.getLogger(__name__)
+    target = db.query(Account).filter(Account.id == target_account_id).first()
+    if not target:
+        raise HTTPException(status_code=404)
+    chars = db.query(Character).filter(Character.account_id == target_account_id).all()
+    try:
+        payload = _build_dashboard_payload(target, chars, db, price_mode=getattr(target, "price_mode", "sell"))
+        _save_colony_cache(target_account_id, payload, db)
+        _dashboard_cache[target_account_id] = payload
+        return JSONResponse({"ok": True, "colony_count": payload["colony_count"]})
+    except Exception as e:
+        _logger.warning(f"admin_reload_account {target_account_id}: {e}")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)

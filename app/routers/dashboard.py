@@ -55,6 +55,9 @@ _corp_load_running: dict[int, dict] = {}  # corp_id -> lock/status
 _CORP_LOAD_LOCK_TTL = 60 * 30
 _CORP_RECENT_CACHE_SECONDS = 60 * 10
 
+_corp_view_cache: dict[int, tuple[float, dict]] = {}  # corp_id -> (timestamp, data)
+_CORP_VIEW_CACHE_TTL = 300.0  # 5 minutes
+
 
 def _get_corp_load_lock(corp_id: int | None) -> dict | None:
     if not corp_id:
@@ -67,6 +70,16 @@ def _get_corp_load_lock(corp_id: int | None) -> dict | None:
         _corp_load_running.pop(corp_id, None)
         return None
     return lock
+
+
+def _invalidate_corp_view_cache_for_account(account_id: int, db: Session) -> None:
+    """Corp-View-Cache für die Korporation dieses Accounts invalidieren."""
+    try:
+        char = db.query(Character).filter(Character.account_id == account_id).first()
+        if char and char.corporation_id:
+            _corp_view_cache.pop(int(char.corporation_id), None)
+    except Exception:
+        pass
 
 
 def invalidate_dashboard_cache(account_id: int) -> None:
@@ -121,6 +134,7 @@ def _save_colony_cache(account_id: int, payload: dict, db: Session) -> None:
     except Exception as e:
         logger.warning(f"Colony-Cache save error: {e}")
         db.rollback()
+    _invalidate_corp_view_cache_for_account(account_id, db)
 
 
 def _load_colony_cache(account_id: int, db: Session) -> dict | None:
@@ -848,25 +862,45 @@ def _backfill_character_colony_sync_status_from_cache(
 def _build_dashboard_payload(account, characters: list, db: Session, price_mode: str = "sell") -> dict:
     """Holt alle ESI/Markt-Daten frisch und gibt den vollständigen Payload zurück."""
 
-    # Schritt 1: Alle (char, colony, access_token) sammeln
-    char_colony_token: list[tuple] = []
-    char_fetch_results: dict[int, dict] = {}
+    # Schritt 1a: Tokens sequentiell erneuern (DB-safe, schreibt ggf. neuen Token in DB)
+    char_token_map: dict[int, str | None] = {}
     for char in characters:
-        access_token = ensure_valid_token(char, db)
-        if not access_token:
+        token = ensure_valid_token(char, db)
+        if not token:
             logger.warning(f"Kein gültiges Token für Char {char.character_name} ({char.eve_character_id}) – übersprungen")
-            char_fetch_results[char.id] = {"status": "token_missing", "count": 0}
-            continue
+        char_token_map[char.id] = token
+
+    # Schritt 1b: Kolonien parallel abrufen (reine HTTP-Calls, thread-sicher)
+    def _fetch_char_colonies(args: tuple) -> tuple:
+        char, token = args
+        if not token:
+            return char, [], None
         try:
-            raw_colonies = get_character_planets(char.eve_character_id, access_token)
+            cols = get_character_planets(char.eve_character_id, token)
+            logger.debug(f"ESI Kolonien für {char.character_name}: {len(cols)}")
+            return char, cols, token
         except Exception as e:
             logger.warning(f"Kolonien konnten für Char {char.character_name} ({char.eve_character_id}) nicht geladen werden: {e}")
+            return char, [], None
+
+    _n_chars = len(characters)
+    with ThreadPoolExecutor(max_workers=min(_n_chars, 8) if _n_chars else 1) as ex:
+        _colony_results = list(ex.map(
+            _fetch_char_colonies,
+            [(c, char_token_map[c.id]) for c in characters],
+        ))
+
+    char_colony_token: list[tuple] = []
+    char_fetch_results: dict[int, dict] = {}
+    for char, raw_colonies, token in _colony_results:
+        if char_token_map[char.id] is None:
+            char_fetch_results[char.id] = {"status": "token_missing", "count": 0}
+        elif token is None:
             char_fetch_results[char.id] = {"status": "error", "count": 0}
-            continue
-        char_fetch_results[char.id] = {"status": "ok", "count": len(raw_colonies)}
-        logger.debug(f"ESI Kolonien für {char.character_name}: {len(raw_colonies)}")
-        for colony in raw_colonies:
-            char_colony_token.append((char, colony, access_token))
+        else:
+            char_fetch_results[char.id] = {"status": "ok", "count": len(raw_colonies)}
+            for colony in raw_colonies:
+                char_colony_token.append((char, colony, token))
 
     _update_character_colony_sync_status(characters, char_fetch_results, db)
 
@@ -1296,25 +1330,66 @@ def corp_view_page(
     account_ids = sorted(chars_by_account)
     price_mode = getattr(account, "price_mode", "sell")
 
+    # ── Corp view cache (5-minute TTL, invalidated on any account save) ──────
+    _cv_cached = _corp_view_cache.get(active_corp_id) if active_corp_id else None
+    if _cv_cached and (_time.time() - _cv_cached[0]) < _CORP_VIEW_CACHE_TTL:
+        _cv_data = _cv_cached[1]
+        # total_isk_day is price-mode dependent → recompute cheaply from cached colonies
+        _total_isk = sum(
+            c.get("isk_day_modes", {}).get(price_mode, c.get("isk_day", 0))
+            for c in _cv_data["corp_colonies"] if c.get("is_active", True)
+        )
+        return templates.TemplateResponse("corp_view.html", {
+            "request": request,
+            "account": account,
+            **_cv_data,
+            "total_isk_day": _total_isk,
+            "total_characters": len(corp_chars),
+            "is_ceo": access["is_ceo"],
+            "is_director": access["is_director"],
+            "roles_scope_missing": access["roles_scope_missing"],
+            "can_manage_cache": access["can_manage"],
+        })
+
+    # ── Batch-load accounts + mains (replaces N + N separate queries) ────────
+    accounts_map: dict[int, Account] = {
+        acc.id: acc
+        for acc in db.query(Account).filter(Account.id.in_(account_ids)).all()
+    }
+    _main_ids = [acc.main_character_id for acc in accounts_map.values() if acc.main_character_id]
+    mains_map: dict[int, Character] = {
+        c.id: c
+        for c in db.query(Character).filter(Character.id.in_(_main_ids)).all()
+    } if _main_ids else {}
+
     corp_colonies: list[dict] = []
     corp_main_rows: list[dict] = []
-    corp_accounts: list[dict] = []
     corp_product_rows: list[dict] = []
     uncached_count = 0
     for acc_id in account_ids:
-        acc = db.query(Account).filter(Account.id == acc_id).first()
+        acc = accounts_map.get(acc_id)
         if not acc:
             continue
-        main = db.query(Character).filter(Character.id == acc.main_character_id).first() if acc.main_character_id else None
+        main = mains_map.get(acc.main_character_id) if acc.main_character_id else None
         account_char_names = {c.character_name for c in chars_by_account.get(acc_id, [])}
-        cached = _load_colony_cache(acc_id, db)
+
+        # ── Memory-first colony lookup (avoids DB query + JSON parse per account) ─
+        mem = _dashboard_cache.get(acc_id)
+        if mem:
+            colonies: list[dict] | None = mem.get("colonies", [])
+            # is_active already set at cache build time; stale by at most DASHBOARD_CACHE_TTL
+        else:
+            db_cached = _load_colony_cache(acc_id, db)
+            if db_cached:
+                colonies = db_cached.get("colonies", [])
+                _recompute_expiry(colonies)  # update is_active from expiry_iso
+            else:
+                colonies = None
+                uncached_count += 1
+
         colony_count = 0
         planet_type_counts: dict[str, int] = {}
-        if cached:
-            colonies = cached.get("colonies", [])
-            meta = cached.get("meta", {})
-            _recompute_expiry(colonies)
-            colonies, _ = _apply_price_mode(colonies, meta, price_mode)
+        if colonies is not None:
             for colony in colonies:
                 if colony.get("character_name") in account_char_names:
                     colony_count += 1
@@ -1335,14 +1410,7 @@ def corp_view_page(
                     planet_type = colony.get("planet_type")
                     if planet_type:
                         planet_type_counts[planet_type] = planet_type_counts.get(planet_type, 0) + 1
-        else:
-            uncached_count += 1
 
-        corp_accounts.append({
-            "account_id": acc_id,
-            "main_name": main.character_name if main else f"Account #{acc_id}",
-            "is_cached": cached is not None,
-        })
         corp_main_rows.append({
             "account_id": acc_id,
             "main_name": main.character_name if main else f"Account #{acc_id}",
@@ -1365,7 +1433,11 @@ def corp_view_page(
     corp_colonies.sort(key=lambda x: (x.get("character_name", ""), x.get("planet_name", "")))
     corp_main_rows.sort(key=lambda x: (-x["colony_count"], x["main_name"].lower()))
     corp_product_rows.sort(key=lambda x: (x["product_name"].lower(), x["main_name"].lower(), x["planet_name"].lower()))
-    total_isk = sum(c.get("isk_day", 0) for c in corp_colonies if c.get("is_active", True))
+    # ISK uses pre-computed isk_day_modes to avoid _apply_price_mode mutation
+    total_isk = sum(
+        c.get("isk_day_modes", {}).get(price_mode, c.get("isk_day", 0))
+        for c in corp_colonies if c.get("is_active", True)
+    )
     market_last_updated = get_market_last_updated(db)
     market_last_updated_iso = None
     if market_last_updated:
@@ -1378,26 +1450,32 @@ def corp_view_page(
         [{"name": n, "tier": "P4"} for n in sorted(ALL_P4)]
     )
 
-    return templates.TemplateResponse("corp_view.html", {
-        "request": request,
-        "account": account,
+    # ── Store in corp view cache (excluding per-viewer fields) ───────────────
+    _shared_ctx = {
         "corp_name": corp_name,
         "corp_id": active_corp_id,
         "corp_colonies": corp_colonies,
         "corp_main_rows": corp_main_rows,
         "corp_product_rows": corp_product_rows,
-        "corp_accounts": corp_accounts,
         "uncached_count": uncached_count,
         "total_colonies": len(corp_colonies),
-        "total_isk_day": total_isk,
         "total_mains": len(corp_main_rows),
+        "market_last_updated_iso": market_last_updated_iso,
+        "all_products": all_products,
+    }
+    if active_corp_id:
+        _corp_view_cache[active_corp_id] = (_time.time(), _shared_ctx)
+
+    return templates.TemplateResponse("corp_view.html", {
+        "request": request,
+        "account": account,
+        **_shared_ctx,
+        "total_isk_day": total_isk,
         "total_characters": len(corp_chars),
         "is_ceo": access["is_ceo"],
         "is_director": access["is_director"],
         "roles_scope_missing": access["roles_scope_missing"],
         "can_manage_cache": access["can_manage"],
-        "market_last_updated_iso": market_last_updated_iso,
-        "all_products": all_products,
     })
 
 
@@ -1413,17 +1491,21 @@ def corp_accounts_api(
     if not access["can_manage"] or access["corp_id"] != corp_id:
         raise HTTPException(status_code=403)
     corp_chars = db.query(Character).filter(Character.corporation_id == corp_id).all()
-    account_ids = {c.account_id for c in corp_chars if c.account_id is not None}
+    account_ids = sorted({c.account_id for c in corp_chars if c.account_id is not None})
+    # Batch-load accounts + mains
+    accs_map = {a.id: a for a in db.query(Account).filter(Account.id.in_(account_ids)).all()}
+    _mids = [a.main_character_id for a in accs_map.values() if a.main_character_id]
+    mains_map = {c.id: c for c in db.query(Character).filter(Character.id.in_(_mids)).all()} if _mids else {}
     result = []
-    for acc_id in sorted(account_ids):
-        acc = db.query(Account).filter(Account.id == acc_id).first()
+    now = _time.time()
+    for acc_id in account_ids:
+        acc = accs_map.get(acc_id)
         if not acc:
             continue
-        main = db.query(Character).filter(Character.id == acc.main_character_id).first() \
-               if acc.main_character_id else None
+        main = mains_map.get(acc.main_character_id) if acc.main_character_id else None
         cached = _load_colony_cache(acc_id, db)
         fetched_at = float(cached.get("fetched_at") or 0.0) if cached else 0.0
-        age_seconds = max(0, int(_time.time() - fetched_at)) if fetched_at else None
+        age_seconds = max(0, int(now - fetched_at)) if fetched_at else None
         is_recent_cached = bool(
             cached and fetched_at and age_seconds is not None and age_seconds < _CORP_RECENT_CACHE_SECONDS
         )

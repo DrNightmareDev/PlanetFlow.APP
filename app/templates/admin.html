@@ -65,6 +65,11 @@
             <span class="badge eve-badge-count" id="accCount">{{ accounts_data | length }}</span>
         </div>
         <div class="d-flex gap-2 flex-wrap align-items-center">
+            <!-- Reload All -->
+            <button class="btn btn-sm eve-btn-outline" onclick="openAdminReloadAll()"
+                    title="Alle Accounts neu laden">
+                <i class="bi bi-arrow-repeat me-1"></i>Alle neu laden
+            </button>
             <!-- Suche nach Charaktername -->
             <div class="input-group input-group-sm" style="width:220px;">
                 <span class="input-group-text eve-input-prefix"><i class="bi bi-search"></i></span>
@@ -300,6 +305,37 @@
         </div>
     </div>
 </div>
+<!-- ── Reload All Modal ──────────────────────────────────────────────────── -->
+<div class="modal fade" id="adminReloadModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background:var(--eve-bg-2);border:1px solid var(--eve-card-border);">
+            <div class="modal-header" style="border-color:var(--eve-card-border);">
+                <h5 class="modal-title" style="font-size:.95rem;">
+                    <i class="bi bi-arrow-repeat me-2 eve-accent"></i>Alle Accounts neu laden
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <div id="adminReloadSpinner" class="spinner-border spinner-border-sm" style="color:var(--eve-accent);width:1rem;height:1rem;display:none!important;" role="status"></div>
+                    <span class="small text-muted">Fertig: <strong id="adminReloadDone">0</strong> / <strong id="adminReloadTotal">0</strong> &nbsp;|&nbsp; Kolonien: <strong id="adminReloadColonies">0</strong></span>
+                </div>
+                <div id="adminReloadInfo" class="small text-muted mb-3"></div>
+                <div id="adminReloadList" style="font-size:.82rem;max-height:320px;overflow-y:auto;"></div>
+            </div>
+            <div class="modal-footer" style="border-color:var(--eve-card-border);">
+                <button id="adminReloadStartBtn" class="btn eve-btn-primary btn-sm">
+                    <i class="bi bi-play-fill me-1"></i>Starten
+                </button>
+                <button id="adminReloadDoneBtn" class="btn eve-btn-primary btn-sm d-none"
+                        onclick="window.location.reload()">
+                    <i class="bi bi-check-lg me-1"></i>Fertig — Seite neu laden
+                </button>
+                <button class="btn eve-btn-outline btn-sm" data-bs-dismiss="modal">Schliessen</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% if account.is_owner %}
 <!-- ── Zugangspolitik (nur Besitzer) ─────────────────────────────────────── -->
 <div class="eve-card card border-0 mt-4" id="access-policy">
@@ -809,5 +845,92 @@ document.getElementById('i18nScopeFilter')?.addEventListener('change', renderTra
 renderTranslationRows();
 entries.forEach(el => { el.dataset.accMatch = '1'; });
 renderAccountPage();
+
+// ── Admin Reload All ─────────────────────────────────────────────────────
+const ADMIN_RELOAD_ACCOUNTS = [
+    {% for entry in accounts_data %}
+    {"account_id": {{ entry.account.id }}, "main_name": {{ (entry.main.character_name if entry.main else 'Account #' ~ entry.account.id) | tojson }}},
+    {% endfor %}
+];
+
+function openAdminReloadAll() {
+    const modal = new bootstrap.Modal(document.getElementById('adminReloadModal'));
+    const list = document.getElementById('adminReloadList');
+    const info = document.getElementById('adminReloadInfo');
+    const startBtn = document.getElementById('adminReloadStartBtn');
+    const doneBtn = document.getElementById('adminReloadDoneBtn');
+    const spinner = document.getElementById('adminReloadSpinner');
+    const doneNode = document.getElementById('adminReloadDone');
+    const totalNode = document.getElementById('adminReloadTotal');
+    const coloniesNode = document.getElementById('adminReloadColonies');
+
+    list.innerHTML = '';
+    ADMIN_RELOAD_ACCOUNTS.forEach(acc => {
+        list.insertAdjacentHTML('beforeend', `
+        <div class="d-flex align-items-center gap-2 py-1 border-bottom" style="border-color:var(--eve-card-border)!important;">
+            <span id="adminSpin_${acc.account_id}" class="d-inline-flex" style="width:1rem;text-align:center;">
+                <i class="bi bi-hourglass" style="color:var(--eve-text-muted);"></i>
+            </span>
+            <span class="flex-grow-1">${acc.main_name}</span>
+            <span id="adminStatus_${acc.account_id}" class="small text-muted ms-auto">ausstehend</span>
+        </div>`);
+    });
+
+    doneNode.textContent = '0';
+    totalNode.textContent = ADMIN_RELOAD_ACCOUNTS.length;
+    coloniesNode.textContent = '0';
+    info.textContent = `${ADMIN_RELOAD_ACCOUNTS.length} Account(s) werden neu geladen.`;
+    spinner.style.setProperty('display', 'none', 'important');
+    startBtn.classList.remove('d-none');
+    startBtn.disabled = ADMIN_RELOAD_ACCOUNTS.length === 0;
+    doneBtn.classList.add('d-none');
+    modal.show();
+}
+
+document.getElementById('adminReloadStartBtn')?.addEventListener('click', async function() {
+    const startBtn = this;
+    const doneBtn = document.getElementById('adminReloadDoneBtn');
+    const spinner = document.getElementById('adminReloadSpinner');
+    const info = document.getElementById('adminReloadInfo');
+    const doneNode = document.getElementById('adminReloadDone');
+    const coloniesNode = document.getElementById('adminReloadColonies');
+
+    startBtn.disabled = true;
+    spinner.style.setProperty('display', 'inline-block', 'important');
+    doneBtn.classList.add('d-none');
+    info.textContent = 'Ladevorgang läuft…';
+
+    let done = 0;
+    let totalColonies = 0;
+
+    for (const acc of ADMIN_RELOAD_ACCOUNTS) {
+        document.getElementById(`adminSpin_${acc.account_id}`).innerHTML =
+            '<span class="spinner-border spinner-border-sm" style="width:.75rem;height:.75rem;border-width:2px;color:var(--eve-accent);"></span>';
+        document.getElementById(`adminStatus_${acc.account_id}`).textContent = 'lädt…';
+        try {
+            const res = await fetch(`/manager/reload-account/${acc.account_id}`, { method: 'POST' });
+            const data = await res.json();
+            const count = data.colony_count || 0;
+            totalColonies += count;
+            document.getElementById(`adminSpin_${acc.account_id}`).innerHTML =
+                data.ok ? '<i class="bi bi-check-circle-fill" style="color:#2dc653;"></i>'
+                        : '<i class="bi bi-x-circle-fill" style="color:#e63946;"></i>';
+            document.getElementById(`adminStatus_${acc.account_id}`).textContent =
+                data.ok ? `${count} Kolonien` : 'Fehler';
+        } catch {
+            document.getElementById(`adminSpin_${acc.account_id}`).innerHTML =
+                '<i class="bi bi-x-circle-fill" style="color:#e63946;"></i>';
+            document.getElementById(`adminStatus_${acc.account_id}`).textContent = 'Fehler';
+        }
+        done++;
+        doneNode.textContent = done;
+        coloniesNode.textContent = totalColonies;
+    }
+
+    spinner.style.setProperty('display', 'none', 'important');
+    info.textContent = 'Ladevorgang abgeschlossen.';
+    doneBtn.classList.remove('d-none');
+    startBtn.classList.add('d-none');
+});
 </script>
 {% endblock %}

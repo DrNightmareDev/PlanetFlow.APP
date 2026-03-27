@@ -109,7 +109,10 @@
     </div>
     <div class="card-body p-0">
         {% if corp_main_rows %}
-        <div class="table-responsive">
+        <div class="table-responsive position-relative" id="corpMainTableWrap">
+            <div id="corpMainTableOverlay" style="display:none;position:absolute;inset:0;background:rgba(5,13,24,.65);backdrop-filter:blur(2px);z-index:10;align-items:center;justify-content:center;">
+                <div class="spinner-border" style="color:var(--eve-accent);width:2rem;height:2rem;" role="status"></div>
+            </div>
             <table class="table eve-table mb-0" id="corpMainTable">
                 <thead>
                     <tr>
@@ -117,13 +120,15 @@
                         <th class="eve-sortable text-end" data-main-col="colonies">Kolonien <i class="bi bi-chevron-down eve-sort-icon"></i></th>
                         <th class="eve-sortable text-end" data-main-col="chars">Chars <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
                         <th>PI Typen</th>
+                        {% if can_manage_cache %}<th style="width:1%;white-space:nowrap;"></th>{% endif %}
                     </tr>
                 </thead>
                 <tbody>
                 {% for row in corp_main_rows %}
                     <tr data-sort-main="{{ row.main_name | lower }}"
                         data-sort-colonies="{{ row.colony_count }}"
-                        data-sort-chars="{{ row.char_count }}">
+                        data-sort-chars="{{ row.char_count }}"
+                        data-account-id="{{ row.account_id }}">
                         <td>
                             <div class="d-flex align-items-center gap-2">
                                 <img src="{{ row.main_portrait }}" class="eve-portrait-xs rounded-circle"
@@ -148,6 +153,16 @@
                             <span class="text-muted small">-</span>
                             {% endif %}
                         </td>
+                        {% if can_manage_cache %}
+                        <td>
+                            <button class="btn btn-sm eve-btn-ghost py-0 px-2 corp-row-reload-btn"
+                                    data-account-id="{{ row.account_id }}"
+                                    onclick="loadOneAccount({{ row.account_id }}, this)"
+                                    title="Nur diesen Account neu laden">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </td>
+                        {% endif %}
                     </tr>
                 {% endfor %}
                 </tbody>
@@ -555,6 +570,33 @@ async function startForceLoad() {
 }
 
 document.getElementById('forceLoadStartBtn')?.addEventListener('click', startForceLoad);
+
+async function loadOneAccount(accountId, btn) {
+    const overlay = document.getElementById('corpMainTableOverlay');
+    const allBtns = document.querySelectorAll('.corp-row-reload-btn');
+    allBtns.forEach(b => b.disabled = true);
+    if (overlay) overlay.style.display = 'flex';
+
+    const icon = btn.querySelector('i');
+    if (icon) { icon.className = ''; icon.innerHTML = '<span class="spinner-border spinner-border-sm" style="width:.75rem;height:.75rem;border-width:2px;"></span>'; }
+
+    try {
+        const res = await fetch(`/dashboard/corp/load-account/${accountId}`, { method: 'POST' });
+        const data = await res.json();
+        const row = document.querySelector(`tr[data-account-id="${accountId}"]`);
+        if (row && data.ok) {
+            const colonyCell = row.cells[1];
+            if (colonyCell) colonyCell.textContent = data.colony_count;
+        }
+    } catch (_) {}
+
+    if (overlay) overlay.style.display = 'none';
+    allBtns.forEach(b => {
+        b.disabled = false;
+        const i = b.querySelector('i, span');
+        if (i) i.outerHTML = '<i class="bi bi-arrow-clockwise"></i>';
+    });
+}
 {% endif %}
 
 enableMarketAutoReload(MARKET_LAST_UPDATED_ISO);

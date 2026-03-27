@@ -75,6 +75,12 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link {% if request.url.path.startswith('/colony-plan') %}active{% endif %}"
+                       href="/colony-plan">
+                        <i class="bi bi-diagram-2 me-1"></i>{{ t('nav.colony_plan') }}
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link {% if request.url.path.startswith('/system') and not request.url.path.startswith('/system/compare') and not request.url.path.startswith('/system/mix') %}active{% endif %}"
                        href="/system">
                         <i class="bi bi-globe2 me-1"></i>{{ t('nav.system') }}
@@ -229,6 +235,7 @@
                         <li><strong>{{ t('nav.corporation') }}:</strong> {{ t('help.page.corporation') }}</li>
                         <li><strong>{{ t('nav.market') }}:</strong> {{ t('help.page.market') }}</li>
                         <li><strong>{{ t('nav.planner') }}:</strong> {{ t('help.page.planner') }}</li>
+                        <li><strong>{{ t('nav.colony_plan') }}:</strong> {{ t('help.page.colony_plan') }}</li>
                         <li><strong>{{ t('nav.system') }}:</strong> {{ t('help.page.system') }}</li>
                         <li><strong>{{ t('nav.system_mix') }}:</strong> {{ t('help.page.system_mix') }}</li>
                         <li><strong>{{ t('nav.compare') }}:</strong> {{ t('help.page.compare') }}</li>

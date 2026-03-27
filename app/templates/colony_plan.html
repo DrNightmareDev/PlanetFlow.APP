@@ -1,0 +1,998 @@
+{% extends "base.html" %}
+{% block title %}{{ t('colony_plan.title') }} - {{ t('app.name') }}{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── Character cards ─────────────────────────────────────────── */
+.colony-char-card {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 9px 5px 5px; border-radius: 8px;
+    border: 1px solid var(--eve-card-border); background: var(--eve-bg-2);
+    cursor: pointer; transition: border-color .15s, background .15s; user-select: none;
+}
+.colony-char-card:hover { border-color: rgba(0,180,216,.4); }
+.colony-char-card.selected { border-color: var(--eve-accent); background: rgba(0,180,216,.1); }
+.colony-char-card.no-slots { opacity: .65; }
+.colony-char-card.no-slots.selected { border-color: #f4a300; background: rgba(244,163,0,.08); }
+.colony-char-portrait { width: 30px; height: 30px; object-fit: cover; flex-shrink: 0; }
+.colony-char-name { font-size: .8rem; font-weight: 600; line-height: 1.2; white-space: nowrap; }
+.colony-char-slots { font-size: .68rem; line-height: 1.2; }
+
+/* ── Favorites strip ─────────────────────────────────────────── */
+.fav-chip {
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 1px 7px; border-radius: 20px;
+    border: 1px solid var(--eve-card-border); background: var(--eve-bg-2);
+    color: var(--eve-text-muted); font-size: .7rem;
+    cursor: pointer; transition: border-color .12s, color .12s; white-space: nowrap;
+}
+.fav-chip:hover { border-color: var(--eve-accent); color: var(--eve-accent); }
+.fav-chip-remove { opacity: .5; font-size: .65rem; margin-left: 2px; }
+.fav-chip-remove:hover { opacity: 1; color: #f07075; }
+
+/* ── Sort indicators ─────────────────────────────────────────── */
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable:hover { color: var(--eve-accent); }
+th.sort-asc .sort-icon, th.sort-desc .sort-icon { color: var(--eve-accent); }
+
+/* ── Flow cards ──────────────────────────────────────────────── */
+.flow-card {
+    background: var(--eve-bg-2); border: 1px solid var(--eve-card-border);
+    border-radius: 6px; padding: 10px 12px;
+    display: flex; align-items: center; gap: 8px; height: 100%;
+}
+.flow-local   { color: #57cc99; font-size: .65rem; }
+.flow-cross   { color: #f4a300; font-size: .65rem; }
+.flow-customs { color: #59d8f0; font-size: .65rem; }
+
+/* ── Unused chars ────────────────────────────────────────────── */
+.unused-char-row {
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+    border-radius: 6px; background: var(--eve-bg-2); border: 1px solid var(--eve-card-border);
+}
+
+/* ── Collapse header ─────────────────────────────────────────── */
+.eve-collapse-hdr {
+    cursor: pointer; background: transparent;
+    border-bottom: 1px solid var(--eve-card-border);
+    padding: .65rem 1rem; display: flex; align-items: center; justify-content: space-between;
+}
+.eve-collapse-hdr .chevron { transition: transform .2s; color: var(--eve-text-muted); font-size: .85rem; }
+.eve-collapse-hdr[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+
+/* ── System search results ───────────────────────────────────── */
+#systemSearchResults .list-group-item {
+    background: #111c26; color: #c9d8e8; border-color: #1a2d3d;
+    cursor: pointer; font-size: .85rem; padding: .35rem .7rem;
+}
+#systemSearchResults .list-group-item:hover { background: #152433; }
+
+/* ── Fav pills ───────────────────────────────────────────────── */
+.eve-fav-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 8px 3px 7px; border-radius: 20px;
+    background: #0a1520; border: 1px solid #1e3448;
+    font-size: .78rem; cursor: pointer; white-space: nowrap;
+    transition: background .15s, border-color .15s; line-height: 1.4;
+}
+.eve-fav-pill:hover { background: #0f1f30; border-color: #2a5a8a; }
+.eve-fav-region { color: #586e75; font-size: .7rem; }
+.eve-fav-remove { opacity: .5; font-size: .8rem; margin-left: 1px; cursor: pointer; line-height: 1; }
+.eve-fav-remove:hover { opacity: 1; color: #e74c3c; }
+
+/* ── Loading overlay ─────────────────────────────────────────── */
+#planLoadingOverlay {
+    position: fixed; top: var(--eve-navbar-h); left: 0; right: 0; bottom: 0; z-index: 9999;
+    background: rgba(5,13,24,.78); backdrop-filter: blur(2px);
+    display: none; align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+}
+#planLoadingOverlay.active { display: flex; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── Loading overlay ─────────────────────────────────────────── #}
+<div id="planLoadingOverlay">
+    <div class="spinner-border" style="color:var(--eve-accent);width:2.5rem;height:2.5rem;" role="status"></div>
+    <div style="color:#c9d8e8;font-size:.95rem;">Calculating assignment plan…</div>
+</div>
+
+{# ── Page header ─────────────────────────────────────────────── #}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <h2 class="eve-page-title mb-1">
+            <i class="bi bi-diagram-2-fill me-2 eve-accent"></i>{{ t('colony_plan.title') }}
+            <span class="badge ms-2" style="background:rgba(255,193,7,.15);border:1px solid rgba(255,193,7,.4);color:#ffc107;font-size:.55em;vertical-align:middle;">-Testing-</span>
+        </h2>
+        <div class="text-muted small">{{ t('colony_plan.subtitle') }}</div>
+    </div>
+</div>
+
+{# ── Form ────────────────────────────────────────────────────── #}
+<form method="get" action="/colony-plan" class="eve-card card border-0 mb-4" id="colonyPlanForm">
+    <div class="card-body p-3">
+        <div class="row g-3 align-items-start">
+
+            {# ── Product ── #}
+            <div class="col-xl-3 col-md-6">
+                <div id="productFavStrip" class="d-flex flex-wrap gap-1 mb-2 d-none"></div>
+                <div class="d-flex gap-1 align-items-center">
+                    <div class="position-relative flex-grow-1">
+                        <input class="form-control eve-input"
+                               id="productInput"
+                               placeholder="{{ t('colony_plan.product_placeholder') }}"
+                               value="{{ selected_product_display or '' }}"
+                               autocomplete="off"
+                               oninput="searchProducts(this.value)"
+                               onfocus="if(this.value.length>=1) searchProducts(this.value)">
+                        <div id="productDropdown" class="eve-search-dropdown position-absolute w-100 d-none"></div>
+                    </div>
+                    <input type="hidden" name="product" id="productHidden" value="{{ selected_product or '' }}">
+                    <button type="button" class="btn eve-btn-ghost btn-sm px-2"
+                            title="Save as favorite" onclick="toggleProductFav()">
+                        <i class="bi bi-star" id="productFavIcon" style="font-size:.95rem;"></i>
+                    </button>
+                </div>
+            </div>
+
+            {# ── Systems ── #}
+            <div class="col-xl-3 col-md-6">
+                <div id="systemFavStrip" class="d-flex flex-wrap gap-1 mb-2 d-none"></div>
+                <div class="eve-input p-2 position-relative">
+                    <div class="d-flex flex-wrap gap-1 mb-1" id="selectedSystems">
+                        {% for system in selected_systems %}
+                        <span class="badge" style="background:rgba(0,180,216,.15);border:1px solid rgba(0,180,216,.4);color:#59d8f0;font-weight:500;">
+                            {{ system.name }}
+                            <button class="btn btn-sm p-0 ms-1 border-0 bg-transparent" style="color:inherit;"
+                                    type="button" onclick="removeSystem({{ system.id }})">&times;</button>
+                        </span>
+                        {% endfor %}
+                    </div>
+                    <div class="d-flex align-items-center gap-1">
+                        <input type="text" id="systemSearchInput"
+                               class="form-control border-0 bg-transparent px-0 py-0 flex-grow-1"
+                               style="min-height:22px;font-size:.85rem;"
+                               placeholder="{{ t('colony_plan.system_placeholder') }}"
+                               autocomplete="off">
+                        <button type="button" class="btn eve-btn-ghost btn-sm px-1"
+                                title="Save selected systems as favorites"
+                                onclick="saveCurrentSystemsAsFav()">
+                            <i class="bi bi-star" style="font-size:.85rem;"></i>
+                        </button>
+                    </div>
+                    <div id="systemSearchResults" class="list-group mt-1"
+                         style="display:none;position:absolute;left:0;right:0;z-index:200;max-height:200px;overflow:auto;"></div>
+                </div>
+                <input type="hidden" name="system_ids" id="systemIdsInput" value="{{ selected_system_ids | join(',') }}">
+            </div>
+
+            {# ── Characters ── #}
+            <div class="col-xl-4 col-md-8">
+                <label class="d-flex align-items-center gap-2 mb-2 small text-muted" style="cursor:pointer;">
+                    <input class="form-check-input m-0" type="checkbox" id="selectAllToggle"
+                           {% if use_all_characters %}checked{% endif %}
+                           onchange="toggleAllChars(this.checked)">
+                    {{ t('colony_plan.all_characters') }}
+                </label>
+                <div class="d-flex flex-wrap gap-2" id="characterGrid">
+                    {% for char in characters %}
+                    {% set cap = character_capacity_map[char.id] %}
+                    <div class="colony-char-card {% if use_all_characters or char.id in selected_character_ids %}selected{% endif %} {% if cap.remaining_slots <= 0 %}no-slots{% endif %}"
+                         data-char-id="{{ char.id }}"
+                         onclick="toggleChar(this)"
+                         title="{{ char.character_name }}: {{ cap.existing_total }}/{{ cap.max_planets }}{% if cap.remaining_slots <= 0 %} — no free slots{% endif %}">
+                        <img src="{{ char.portrait_url }}" class="rounded-circle colony-char-portrait"
+                             onerror="this.src='/static/img/default_char.svg'">
+                        <div>
+                            <div class="colony-char-name">{{ char.character_name }}</div>
+                            <div class="colony-char-slots {% if cap.remaining_slots <= 0 %}text-warning{% else %}text-success{% endif %}">
+                                {{ cap.existing_total }}/{{ cap.max_planets }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# ── Options + Button ── #}
+            <div class="col-xl-2 col-md-4 d-flex flex-column gap-2">
+                <label class="d-flex align-items-center gap-2 small text-muted" style="cursor:pointer;">
+                    <input class="form-check-input m-0" type="checkbox" name="single_system" value="1"
+                           {% if single_system %}checked{% endif %}>
+                    {{ t('colony_plan.single_system_mode') }}
+                </label>
+                <label class="d-flex align-items-center gap-2 small text-muted" style="cursor:pointer;">
+                    <input class="form-check-input m-0" type="checkbox" name="include_unassigned" value="1"
+                           {% if include_unassigned %}checked{% endif %}>
+                    {{ t('colony_plan.include_unassigned') }}
+                </label>
+                <button class="btn eve-btn-primary mt-1" type="submit" id="generateBtn">
+                    <i class="bi bi-magic me-1"></i>
+                    <span id="generateBtnText">{% if plan %}Update Plan{% elif selected_product and selected_system_ids %}{{ t('colony_plan.generate') }}{% elif selected_product %}Add a system{% elif selected_system_ids %}Select a product{% else %}{{ t('colony_plan.generate') }}{% endif %}</span>
+                </button>
+                {% if selected_product or selected_system_ids %}
+                <button type="button" class="btn eve-btn-ghost btn-sm text-center"
+                        onclick="localStorage.removeItem('pi_colony_plan_systems'); window.location.href='/colony-plan';">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>{{ t('common.reset') }}
+                </button>
+                {% endif %}
+            </div>
+
+        </div>
+    </div>
+</form>
+
+{# ── State messages ───────────────────────────────────────────── #}
+{% if plan_error %}
+<div class="alert d-flex align-items-center gap-2 mb-4" role="alert"
+     style="background:#dc354520;border:1px solid #dc354540;color:#f07075;">
+    <i class="bi bi-exclamation-triangle-fill"></i><span>{{ plan_error }}</span>
+</div>
+{% elif not plan and (selected_product or selected_system_ids) %}
+<div class="eve-card card border-0">
+    <div class="card-body p-3 text-center text-muted py-5">
+        <i class="bi bi-diagram-3 fs-2 d-block mb-3"></i>{{ t('colony_plan.empty_hint') }}
+    </div>
+</div>
+{% elif not plan %}
+<div class="eve-card card border-0">
+    <div class="card-body p-3 text-center text-muted py-5">
+        <i class="bi bi-diagram-3 fs-2 d-block mb-3"></i>{{ t('colony_plan.initial_hint') }}
+    </div>
+</div>
+{% else %}
+
+{# ── Stats ───────────────────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="eve-stat-card card border-0">
+            <div class="card-body text-center p-3">
+                <div class="eve-stat-value">{{ plan.used_systems | length }}</div>
+                <div class="eve-stat-label">{{ t('colony_plan.stat_systems') }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="eve-stat-card card border-0">
+            <div class="card-body text-center p-3">
+                <div class="eve-stat-value">{{ plan.assignments | length }}</div>
+                <div class="eve-stat-label">{{ t('colony_plan.stat_assignments') }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="eve-stat-card card border-0">
+            <div class="card-body text-center p-3">
+                <div class="eve-stat-value {% if plan.missing_planets > 0 %}text-warning{% else %}text-success{% endif %}">{{ plan.missing_planets }}</div>
+                <div class="eve-stat-label">{{ t('colony_plan.stat_missing') }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="eve-stat-card card border-0">
+            <div class="card-body text-center p-3">
+                <div class="eve-stat-value">{{ plan.additional_characters_needed }}</div>
+                <div class="eve-stat-label">{{ t('colony_plan.stat_extra_chars') }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Feasibility ─────────────────────────────────────────────── #}
+{% if plan.feasibility %}
+{% set feas = plan.feasibility %}
+<div class="eve-card card border-0 mb-4">
+    <div class="card-body p-3">
+        <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
+            <div class="fw-semibold">{{ t('colony_plan.feasibility_title') }}</div>
+            {% if feas.feasible %}
+            <span class="badge" style="background:rgba(45,198,83,.15);border:1px solid rgba(45,198,83,.4);color:#2dc653;">
+                <i class="bi bi-check-circle-fill me-1"></i>{{ t('colony_plan.feasible_yes') }}
+            </span>
+            {% else %}
+            <span class="badge" style="background:rgba(230,57,70,.15);border:1px solid rgba(230,57,70,.4);color:#f07075;">
+                <i class="bi bi-x-circle-fill me-1"></i>{{ t('colony_plan.feasible_no') }}
+            </span>
+            {% endif %}
+        </div>
+        <div class="row g-2">
+            <div class="col-md-4">
+                <div class="p-2 rounded" style="background:var(--eve-bg-3);border:1px solid var(--eve-card-border);">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        {% if feas.capacity_ok %}
+                        <i class="bi bi-check-circle-fill" style="color:#2dc653;font-size:.85rem;"></i>
+                        {% else %}
+                        <i class="bi bi-x-circle-fill" style="color:#e63946;font-size:.85rem;"></i>
+                        {% endif %}
+                        <span class="small fw-semibold">{{ t('colony_plan.feasibility_capacity') }}</span>
+                    </div>
+                    <div class="small text-muted">{{ feas.planets_needed }} {{ t('colony_plan.feasibility_needed') }} / {{ feas.total_capacity }} {{ t('colony_plan.feasibility_available') }}</div>
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div class="p-2 rounded" style="background:var(--eve-bg-3);border:1px solid var(--eve-card-border);">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        {% if feas.p0_ok %}
+                        <i class="bi bi-check-circle-fill" style="color:#2dc653;font-size:.85rem;"></i>
+                        {% else %}
+                        <i class="bi bi-exclamation-triangle-fill" style="color:#f4a300;font-size:.85rem;"></i>
+                        {% endif %}
+                        <span class="small fw-semibold">{{ t('colony_plan.feasibility_p0') }}</span>
+                    </div>
+                    <div class="d-flex flex-wrap gap-1 mb-1">
+                        {% for p0 in feas.covered_p0 %}
+                        <span class="badge" style="background:rgba(45,198,83,.1);border:1px solid rgba(45,198,83,.3);color:#2dc653;font-weight:400;font-size:.68rem;">
+                            <i class="bi bi-check2 me-1"></i>{{ p0 }}
+                        </span>
+                        {% endfor %}
+                        {% for item in feas.blocked_p0 %}
+                        <span class="badge" style="background:rgba(244,163,0,.12);border:1px solid rgba(244,163,0,.4);color:#f4a300;font-weight:400;font-size:.68rem;"
+                              title="Blocked by: {{ item.hints | map(attribute='blocked_by') | join(', ') }}">
+                            <i class="bi bi-lock-fill me-1"></i>{{ item.p0 }}
+                        </span>
+                        {% endfor %}
+                        {% for p0 in feas.uncoverable_p0 %}
+                        <span class="badge" style="background:rgba(230,57,70,.12);border:1px solid rgba(230,57,70,.4);color:#f07075;font-weight:400;font-size:.68rem;">
+                            <i class="bi bi-x-lg me-1"></i>{{ p0 }}
+                        </span>
+                        {% endfor %}
+                        {% for p0 in feas.insufficient_p0 %}
+                        <span class="badge" style="background:rgba(230,100,0,.12);border:1px solid rgba(230,100,0,.4);color:#f4a300;font-weight:400;font-size:.68rem;"
+                              title="{{ t('colony_plan.feasibility_insufficient_hint') }}">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ p0 }}
+                        </span>
+                        {% endfor %}
+                    </div>
+                    {% if feas.blocked_p0 %}
+                    {% for item in feas.blocked_p0 %}
+                    <div class="small text-warning mt-1">
+                        <i class="bi bi-lock-fill me-1"></i><strong>{{ item.p0 }}</strong> — {{ t('colony_plan.feasibility_blocked_by') }}:
+                        {% for hint in item.hints %}
+                        <span class="text-muted">{{ hint.planet_name }} ({{ hint.system_name }}) — {{ hint.blocked_by }}</span>{% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                    {% if feas.uncoverable_p0 %}
+                    <div class="small text-danger mt-1">
+                        <i class="bi bi-info-circle me-1"></i>{{ t('colony_plan.feasibility_uncoverable') }}: {{ feas.uncoverable_p0 | join(', ') }}
+                    </div>
+                    {% endif %}
+                    {% if feas.insufficient_p0 %}
+                    <div class="small mt-1" style="color:#f4a300;">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ t('colony_plan.feasibility_insufficient') }}: {{ feas.insufficient_p0 | join(', ') }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% if feas.no_p4_planet %}
+            <div class="col-12">
+                <div class="p-2 rounded" style="background:rgba(230,57,70,.07);border:1px solid rgba(230,57,70,.3);">
+                    <span class="small" style="color:#f07075;">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ t('colony_plan.feasibility_no_p4_planet') }}
+                    </span>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if plan.system_mode.single_system_mode %}
+<div class="eve-card card border-0 mb-4">
+    <div class="card-body p-3">
+        {% if plan.system_mode.viable %}
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge" style="background:rgba(0,180,216,.15);border:1px solid rgba(0,180,216,.4);color:#59d8f0;">{{ t('colony_plan.single_system_mode') }}</span>
+            <span class="text-muted small">{{ t('colony_plan.single_system_selected') }} <strong>{{ plan.system_mode.chosen_system.name }}</strong></span>
+        </div>
+        {% else %}
+        <div class="text-danger small"><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ t('colony_plan.single_system_unavailable') }}</div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{# ── Assignment table ────────────────────────────────────────── #}
+<div class="eve-card card border-0 mb-4">
+    <div class="card-body p-3">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+            <div>
+                <div class="fw-semibold">{{ t('colony_plan.assignment_table') }}</div>
+                <div class="text-muted small">{{ product_labels.get(selected_product, selected_product) }}</div>
+            </div>
+            <span id="tableRowCount" class="text-muted small"></span>
+        </div>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <select class="form-select form-select-sm eve-input" id="filterChar" style="max-width:170px;" onchange="applyFilters()">
+                <option value="">All Characters</option>
+                {% for ch in plan.characters %}<option value="{{ ch.name }}">{{ ch.name }}</option>{% endfor %}
+            </select>
+            <select class="form-select form-select-sm eve-input" id="filterSystem" style="max-width:160px;" onchange="applyFilters()">
+                <option value="">All Systems</option>
+                {% for sys in plan.used_systems %}<option value="{{ sys.name }}">{{ sys.name }}</option>{% endfor %}
+            </select>
+            <select class="form-select form-select-sm eve-input" id="filterRole" style="max-width:130px;" onchange="applyFilters()">
+                <option value="">All Roles</option>
+                <option value="Extractor">{{ t('colony_plan.role_extractor') }}</option>
+                <option value="Extractor+Factory">{{ t('colony_plan.role_self_sufficient') }}</option>
+                <option value="Factory">{{ t('colony_plan.role_factory') }}</option>
+            </select>
+            <select class="form-select form-select-sm eve-input" id="filterStatus" style="max-width:130px;" onchange="applyFilters()">
+                <option value="">All Status</option>
+                <option value="existing">Existing</option>
+                <option value="new">New</option>
+                <option value="relocate">Relocate</option>
+                {% if plan.missing %}<option value="missing">Missing</option>{% endif %}
+            </select>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle mb-0" id="assignmentTable">
+                <thead>
+                    <tr>
+                        <th class="sortable" onclick="sortTable(0,this)">{{ t('colony_plan.col_character') }} <i class="bi bi-arrow-down-up sort-icon ms-1" style="font-size:.72rem;"></i></th>
+                        <th class="sortable" onclick="sortTable(1,this)">{{ t('colony_plan.col_planet') }} <i class="bi bi-arrow-down-up sort-icon ms-1" style="font-size:.72rem;"></i></th>
+                        <th class="sortable" onclick="sortTable(2,this)">{{ t('colony_plan.col_role') }} <i class="bi bi-arrow-down-up sort-icon ms-1" style="font-size:.72rem;"></i></th>
+                        <th>{{ t('colony_plan.col_details') }}</th>
+                        <th class="sortable" onclick="sortTable(4,this)">{{ t('colony_plan.col_status') }} <i class="bi bi-arrow-down-up sort-icon ms-1" style="font-size:.72rem;"></i></th>
+                    </tr>
+                </thead>
+                <tbody id="assignmentTableBody">
+                    {% for item in plan.assignments %}
+                    {% set ns = namespace(portrait='') %}
+                    {% for ch in characters %}{% if ch.character_name == item.character_name %}{% set ns.portrait = ch.portrait_url %}{% endif %}{% endfor %}
+                    <tr data-char="{{ item.character_name }}" data-system="{{ item.system_name }}"
+                        data-role="{{ item.role }}" data-status="{{ item.status }}">
+                        <td data-sort="{{ item.character_name }}">
+                            <div class="d-flex align-items-center gap-2">
+                                <img src="{{ ns.portrait or '/static/img/default_char.svg' }}"
+                                     class="rounded-circle" style="width:28px;height:28px;object-fit:cover;flex-shrink:0;"
+                                     onerror="this.src='/static/img/default_char.svg'">
+                                <div>
+                                    <div class="fw-semibold" style="font-size:.85rem;">{{ item.character_name }}</div>
+                                    <div class="text-muted" style="font-size:.72rem;">{{ item.system_name }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td data-sort="{{ item.planet_name }}">
+                            <div style="font-size:.85rem;">{{ item.planet_name }}</div>
+                            <div class="text-muted" style="font-size:.72rem;">{{ planet_type_labels.get(item.planet_type, item.planet_type) }}</div>
+                        </td>
+                        <td data-sort="{{ item.role }}">
+                            {% if item.role == 'Extractor' %}
+                            <span class="badge" style="background:rgba(0,180,216,.15);border:1px solid rgba(0,180,216,.4);color:#59d8f0;">{{ t('colony_plan.role_extractor') }}</span>
+                            {% elif item.role == 'Extractor+Factory' %}
+                            <span class="badge" style="background:rgba(87,204,153,.12);border:1px solid rgba(87,204,153,.4);color:#57cc99;" title="{{ t('colony_plan.role_self_sufficient_hint') }}">{{ t('colony_plan.role_self_sufficient') }}</span>
+                            {% else %}
+                            <span class="badge" style="background:rgba(244,163,0,.12);border:1px solid rgba(244,163,0,.35);color:#f0b74d;">{{ t('colony_plan.role_factory') }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="fw-semibold" style="font-size:.83rem;">
+                                {% if item.tier in ('P2','P3','P4') and item.output_product %}
+                                <a href="/planner?product={{ item.output_product | urlencode }}" target="_blank"
+                                   style="color:inherit;text-decoration:none;border-bottom:1px dashed rgba(255,255,255,.2);"
+                                   title="Open in PI Chain Planner">{{ item.output_display }}</a>
+                                {% else %}
+                                {{ item.output_display }}
+                                {% endif %}
+                            </div>
+                            <div class="text-muted" style="font-size:.72rem;">{{ item.summary_display }}</div>
+                        </td>
+                        <td data-sort="{{ item.status }}">
+                            {% if item.status == 'existing' %}
+                            <span class="text-success" style="font-size:.8rem;"><i class="bi bi-arrow-repeat me-1"></i>{{ t('colony_plan.status_existing') }}</span>
+                            {% elif item.status == 'relocate' %}
+                            <span style="font-size:.8rem;color:#a78bfa;"><i class="bi bi-arrow-left-right me-1"></i>{{ t('colony_plan.status_relocate') }}</span>
+                            {% else %}
+                            <span class="text-warning" style="font-size:.8rem;"><i class="bi bi-plus-circle me-1"></i>{{ t('colony_plan.status_new') }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% for item in plan.missing %}
+                    <tr data-char="" data-system="" data-role="{{ item.kind | capitalize }}" data-status="missing"
+                        style="opacity:.8;">
+                        <td data-sort="">
+                            <div class="d-flex align-items-center gap-2">
+                                <div style="width:28px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+                                    <i class="bi bi-question-circle" style="color:#586e75;font-size:1rem;"></i>
+                                </div>
+                                <div class="text-muted" style="font-size:.82rem;">—</div>
+                            </div>
+                        </td>
+                        <td data-sort=""><span class="text-muted" style="font-size:.82rem;">—</span></td>
+                        <td data-sort="{{ item.kind | capitalize }}">
+                            {% if item.kind == 'extractor' %}
+                            <span class="badge" style="background:rgba(0,180,216,.15);border:1px solid rgba(0,180,216,.4);color:#59d8f0;">{{ t('colony_plan.role_extractor') }}</span>
+                            {% else %}
+                            <span class="badge" style="background:rgba(244,163,0,.12);border:1px solid rgba(244,163,0,.35);color:#f0b74d;">{{ t('colony_plan.role_factory') }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="fw-semibold" style="font-size:.83rem;">{{ item.display_label }}</div>
+                        </td>
+                        <td data-sort="missing">
+                            <span class="text-danger" style="font-size:.8rem;"><i class="bi bi-x-circle me-1"></i>{{ t('colony_plan.status_missing') }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not plan.assignments and not plan.missing %}
+                    <tr><td colspan="5" class="text-center text-muted py-4">{{ t('colony_plan.no_assignments') }}</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+            <div id="noResultsMsg" class="text-center text-muted py-3 d-none" style="font-size:.85rem;">No rows match the current filters.</div>
+        </div>
+    </div>
+</div>
+
+{# ── Material flow (2-col) ───────────────────────────────────── #}
+{% if plan.flows %}
+<div class="eve-card card border-0 mb-4">
+    <div class="card-body p-3">
+        <div class="fw-semibold mb-3">{{ t('colony_plan.flow_summary') }}</div>
+        <div class="row g-2">
+            {% for flow in plan.flows %}
+            <div class="col-md-6">
+                <div class="flow-card">
+                    <div class="flex-grow-1 overflow-hidden">
+                        <div style="font-size:.82rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ flow.from_product_display }}</div>
+                        <div class="text-muted" style="font-size:.7rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ flow.from_character }} · {{ flow.from_planet }}</div>
+                    </div>
+                    <div class="d-flex flex-column align-items-center flex-shrink-0 px-1">
+                        <i class="bi bi-arrow-right eve-accent" style="font-size:.9rem;"></i>
+                        {% if flow.transport_label == 'same_character' %}<span class="flow-local">local</span>
+                        {% elif flow.transport_label == 'cross_system' %}<span class="flow-cross">cross-sys</span>
+                        {% else %}<span class="flow-customs">customs</span>{% endif %}
+                    </div>
+                    <div class="flex-grow-1 overflow-hidden text-end">
+                        <div style="font-size:.82rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ flow.to_product_display }}</div>
+                        <div class="text-muted" style="font-size:.7rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ flow.to_character }} · {{ flow.to_planet }}</div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── Capacity + Unused ───────────────────────────────────────── #}
+<div class="row g-4 mb-4">
+    <div class="{{ 'col-xl-6' if plan.unused_characters else 'col-12' }}">
+        <div class="eve-card card border-0 h-100">
+            <div class="card-body p-3">
+                <div class="fw-semibold mb-3">{{ t('colony_plan.capacity_summary') }}</div>
+                <div class="table-responsive">
+                    <table class="table table-dark table-sm align-middle mb-0">
+                        <thead><tr>
+                            <th>{{ t('colony_plan.col_character') }}</th>
+                            <th>{{ t('colony_plan.capacity_used') }}</th>
+                            <th>{{ t('colony_plan.capacity_remaining') }}</th>
+                        </tr></thead>
+                        <tbody>
+                            {% for char in plan.characters %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <img src="{{ char.portrait or '/static/img/default_char.svg' }}"
+                                             class="rounded-circle" style="width:22px;height:22px;object-fit:cover;"
+                                             onerror="this.src='/static/img/default_char.svg'">
+                                        <div>
+                                            <div style="font-size:.82rem;">{{ char.name }}</div>
+                                            {% if not char.scope_based %}<div class="text-muted" style="font-size:.68rem;">{{ t('colony_plan.capacity_estimated') }}</div>{% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td style="font-size:.85rem;">{{ char.max_planets - char.remaining_slots }}/{{ char.max_planets }}</td>
+                                <td><span class="{% if char.remaining_slots <= 0 %}text-danger{% else %}text-success{% endif %}" style="font-size:.85rem;">{{ char.remaining_slots }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if plan.unused_characters %}
+    <div class="col-xl-6">
+        <div class="eve-card card border-0 h-100">
+            <div class="card-body p-3">
+                <div class="fw-semibold mb-3">Unused Characters
+                    <span class="ms-2 badge" style="background:rgba(88,110,117,.2);border:1px solid rgba(88,110,117,.4);color:#9aaab0;font-weight:400;">{{ plan.unused_characters | length }}</span>
+                </div>
+                <div class="d-flex flex-column gap-2">
+                    {% for char in plan.unused_characters %}
+                    <div class="unused-char-row">
+                        <img src="{{ char.portrait or '/static/img/default_char.svg' }}"
+                             class="rounded-circle" style="width:32px;height:32px;object-fit:cover;flex-shrink:0;"
+                             onerror="this.src='/static/img/default_char.svg'">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center gap-2">
+                                <span style="font-size:.85rem;font-weight:600;">{{ char.name }}</span>
+                                <span class="text-muted" style="font-size:.75rem;">{{ char.existing_total }}/{{ char.max_planets }}</span>
+                            </div>
+                            <div style="font-size:.75rem;" class="mt-1">
+                                {% if char.reason == 'no_slots' %}
+                                <i class="bi bi-x-circle-fill text-danger me-1"></i>No free planet slots — can only be used for existing colonies in the selected systems
+                                {% elif char.reason == 'excluded_unassigned' %}
+                                <i class="bi bi-slash-circle text-warning me-1"></i>No existing colonies in selected systems — enable "Include unassigned" to allow new placements
+                                {% else %}
+                                <i class="bi bi-check-circle text-muted me-1"></i>Available but not needed for this plan
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{# ── Missing ─────────────────────────────────────────────────── #}
+{% if plan.missing %}
+<div class="eve-card card border-0 mb-4">
+    <div class="card-body p-3">
+        <div class="fw-semibold mb-2 text-warning"><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ t('colony_plan.missing_title') }}</div>
+        <ul class="mb-0 small">{% for item in plan.missing %}<li class="mb-1"><strong>{{ item.kind_display }}</strong>: {{ item.display_label }}</li>{% endfor %}</ul>
+        {% if plan.additional_characters_needed > 0 %}
+        <div class="text-muted small mt-2">{{ t('colony_plan.additional_characters_needed') }}: <strong>{{ plan.additional_characters_needed }}</strong></div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{# ── Export (collapsed) ──────────────────────────────────────── #}
+<div class="eve-card card border-0">
+    <div class="eve-collapse-hdr" data-bs-toggle="collapse" data-bs-target="#exportPanel"
+         aria-expanded="false" aria-controls="exportPanel">
+        <span class="fw-semibold small">{{ t('colony_plan.export_title') }}</span>
+        <i class="bi bi-chevron-down chevron"></i>
+    </div>
+    <div class="collapse" id="exportPanel">
+        <div class="card-body p-3">
+            <textarea class="form-control eve-input" id="assignmentSummaryText" rows="8" readonly>{{ plan.summary_text }}</textarea>
+            <div class="mt-2">
+                <button class="btn eve-btn-outline btn-sm" onclick="copyAssignmentSummary()">
+                    <i class="bi bi-clipboard me-1"></i>{{ t('colony_plan.copy_summary') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ── Product search (custom dropdown) ─────────────────────────────────────────
+const ALL_PRODUCTS = {{ all_products | tojson }};
+
+function searchProducts(q) {
+    const dropdown = document.getElementById('productDropdown');
+    if (!q || q.length < 1) { dropdown.classList.add('d-none'); dropdown.innerHTML = ''; return; }
+    const ql = q.toLowerCase();
+    const matches = ALL_PRODUCTS.filter(p =>
+        p.display_name.toLowerCase().includes(ql) || p.name.toLowerCase().includes(ql)
+    ).slice(0, 20);
+    dropdown.innerHTML = '';
+    matches.forEach(p => {
+        const item = document.createElement('div');
+        item.className = 'eve-search-item';
+        item.innerHTML = `<span>${p.display_name}</span><span class="text-muted" style="font-size:.75rem;">${p.tier}</span>`;
+        item.onclick = () => {
+            document.getElementById('productInput').value = p.display_name;
+            document.getElementById('productHidden').value = p.name;
+            dropdown.classList.add('d-none'); dropdown.innerHTML = '';
+            updateProductFavIcon(); updateBtnText();
+        };
+        dropdown.appendChild(item);
+    });
+    dropdown.classList.toggle('d-none', matches.length === 0);
+}
+
+document.addEventListener('click', e => {
+    if (!e.target.closest('#productInput') && !e.target.closest('#productDropdown'))
+        document.getElementById('productDropdown')?.classList.add('d-none');
+});
+
+// ── System multi-select ───────────────────────────────────────────────────────
+const COLONY_SYSTEMS_KEY = 'pi_colony_plan_systems';
+const selectedSystems = new Map();
+
+// Seed from server (URL params present) or restore from localStorage
+{% if selected_systems %}
+{% for system in selected_systems %}
+selectedSystems.set({{ system.id }}, {{ system | tojson }});
+{% endfor %}
+{% else %}
+(function() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(COLONY_SYSTEMS_KEY) || '[]');
+        saved.forEach(sys => { if (sys && sys.id) selectedSystems.set(sys.id, sys); });
+    } catch {}
+})();
+{% endif %}
+
+function persistSelectedSystems() {
+    const arr = [];
+    selectedSystems.forEach(sys => arr.push(sys));
+    localStorage.setItem(COLONY_SYSTEMS_KEY, JSON.stringify(arr));
+}
+
+function syncSystemIds() {
+    document.getElementById('systemIdsInput').value = [...selectedSystems.keys()].join(',');
+    persistSelectedSystems();
+    updateBtnText();
+}
+
+function renderSelectedSystems() {
+    const wrap = document.getElementById('selectedSystems');
+    wrap.innerHTML = '';
+    selectedSystems.forEach((sys, id) => {
+        const el = document.createElement('span');
+        el.className = 'badge';
+        el.style.cssText = 'background:rgba(0,180,216,.15);border:1px solid rgba(0,180,216,.4);color:#59d8f0;font-weight:500;';
+        el.innerHTML = `${sys.name} <button class="btn btn-sm p-0 ms-1 border-0 bg-transparent" style="color:inherit;" type="button" onclick="removeSystem(${id})">&times;</button>`;
+        wrap.appendChild(el);
+    });
+    syncSystemIds();
+}
+
+function removeSystem(id) { selectedSystems.delete(id); renderSelectedSystems(); }
+
+async function searchSystems(q) {
+    const results = document.getElementById('systemSearchResults');
+    if (!q || q.length < 2) { results.style.display = 'none'; results.innerHTML = ''; return; }
+    try {
+        const data = await fetch('/system/search?q=' + encodeURIComponent(q)).then(r => r.json());
+        results.innerHTML = '';
+        (data.systems || []).forEach(sys => {
+            if (selectedSystems.has(sys.id)) return;
+            const btn = document.createElement('button');
+            btn.type = 'button'; btn.className = 'list-group-item list-group-item-action';
+            btn.textContent = `${sys.name}${sys.region ? ' | ' + sys.region : ''}`;
+            btn.onclick = () => {
+                selectedSystems.set(sys.id, sys);
+                renderSelectedSystems();
+                results.innerHTML = ''; results.style.display = 'none';
+                document.getElementById('systemSearchInput').value = '';
+            };
+            results.appendChild(btn);
+        });
+        results.style.display = results.children.length ? 'block' : 'none';
+    } catch { results.style.display = 'none'; }
+}
+
+document.getElementById('systemSearchInput')?.addEventListener('input', e => searchSystems(e.target.value));
+
+// ── Character grid ────────────────────────────────────────────────────────────
+function toggleChar(card) {
+    const allToggle = document.getElementById('selectAllToggle');
+    if (allToggle?.checked) allToggle.checked = false;
+    card.classList.toggle('selected');
+    syncCharIds(); updateBtnText();
+}
+
+function toggleAllChars(checked) {
+    document.querySelectorAll('.colony-char-card').forEach(c => c.classList.toggle('selected', checked));
+    syncCharIds(); updateBtnText();
+}
+
+function syncCharIds() {
+    document.querySelectorAll('.char-id-hidden').forEach(el => el.remove());
+    const form = document.getElementById('colonyPlanForm');
+    document.querySelectorAll('.colony-char-card.selected').forEach(card => {
+        const inp = document.createElement('input');
+        inp.type = 'hidden'; inp.name = 'character_ids';
+        inp.value = card.dataset.charId; inp.className = 'char-id-hidden';
+        form.appendChild(inp);
+    });
+    let allInput = form.querySelector('input[name="all_characters"]');
+    if (!allInput) { allInput = document.createElement('input'); allInput.type = 'hidden'; allInput.name = 'all_characters'; form.appendChild(allInput); }
+    allInput.value = document.getElementById('selectAllToggle')?.checked ? '1' : '0';
+}
+
+// ── Dynamic button text ───────────────────────────────────────────────────────
+function updateBtnText() {
+    const btn = document.getElementById('generateBtnText');
+    if (!btn) return;
+    {% if plan %}
+    btn.textContent = 'Update Plan';
+    {% else %}
+    const product = (document.getElementById('productHidden')?.value || '').trim();
+    const sysIds  = (document.getElementById('systemIdsInput')?.value || '').trim();
+    if (product && sysIds)  btn.textContent = '{{ t("colony_plan.generate") }}';
+    else if (product)       btn.textContent = 'Add a system';
+    else if (sysIds)        btn.textContent = 'Select a product';
+    else                    btn.textContent = '{{ t("colony_plan.generate") }}';
+    {% endif %}
+}
+
+document.getElementById('productInput')?.addEventListener('input', () => {
+    if (!(document.getElementById('productInput')?.value || '').trim()) {
+        const h = document.getElementById('productHidden');
+        if (h) h.value = '';
+    }
+    updateBtnText();
+});
+
+// ── Product favorites — server API (/planner/favorites) ──────────────────────
+const PROD_TIER_COLORS  = {P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
+const PROD_TIER_BORDERS = {P1:'rgba(88,110,117,.4)', P2:'rgba(0,180,216,.4)', P3:'rgba(244,163,0,.4)', P4:'rgba(230,57,70,.4)'};
+let serverProdFavs = [];
+
+async function loadProdFavs() {
+    try { serverProdFavs = await fetch('/planner/favorites').then(r => r.json()); }
+    catch { serverProdFavs = []; }
+    renderProductFavs(); updateProductFavIcon();
+}
+
+async function toggleProductFav() {
+    const val = (document.getElementById('productHidden')?.value || '').trim();
+    if (!val) return;
+    try {
+        await fetch('/planner/favorites/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({product_name: val})
+        });
+        await loadProdFavs();
+    } catch {}
+}
+
+function updateProductFavIcon() {
+    const val = (document.getElementById('productHidden')?.value || '').trim();
+    const icon = document.getElementById('productFavIcon');
+    if (icon) icon.className = serverProdFavs.includes(val) ? 'bi bi-star-fill eve-accent' : 'bi bi-star';
+}
+
+function renderProductFavs() {
+    const strip = document.getElementById('productFavStrip');
+    if (!strip) return;
+    strip.innerHTML = '';
+    serverProdFavs.forEach(name => {
+        const prod = ALL_PRODUCTS.find(p => p.name === name);
+        const label = prod ? prod.display_name : name;
+        const tier  = prod ? prod.tier : 'P1';
+        const color  = PROD_TIER_COLORS[tier]  || '#586e75';
+        const border = PROD_TIER_BORDERS[tier] || 'rgba(88,110,117,.4)';
+        const pill = document.createElement('div');
+        pill.className = 'eve-fav-pill';
+        pill.style.borderColor = border;
+        pill.innerHTML = `<span style="color:${color};font-weight:700;font-size:.68rem;">${tier}</span><span>${label}</span><span class="eve-fav-remove" data-name="${name}">&#xd7;</span>`;
+        pill.addEventListener('click', e => {
+            if (e.target.classList.contains('eve-fav-remove')) {
+                e.stopPropagation(); removeProdFav(e.target.dataset.name); return;
+            }
+            document.getElementById('productInput').value = label;
+            document.getElementById('productHidden').value = name;
+            updateProductFavIcon(); updateBtnText();
+        });
+        strip.appendChild(pill);
+    });
+    serverProdFavs.length ? strip.classList.remove('d-none') : strip.classList.add('d-none');
+}
+
+async function removeProdFav(name) {
+    try {
+        await fetch('/planner/favorites/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({product_name: name})
+        });
+        await loadProdFavs();
+    } catch {}
+}
+
+// ── System favorites — shared key 'pi_fav_systems' ────────────────────────────
+const SYS_FAV_KEY = 'pi_fav_systems';
+const getSysFavs = () => { try { return JSON.parse(localStorage.getItem(SYS_FAV_KEY) || '[]'); } catch { return []; } };
+const saveSysFavs = v => localStorage.setItem(SYS_FAV_KEY, JSON.stringify(v));
+
+function saveCurrentSystemsAsFav() {
+    if (!selectedSystems.size) return;
+    const favs = getSysFavs();
+    selectedSystems.forEach(sys => {
+        if (!favs.find(f => f.id === sys.id))
+            favs.push({ id: sys.id, name: sys.name, region: sys.region || '', security: sys.security || 0 });
+    });
+    saveSysFavs(favs); renderSystemFavs();
+}
+
+function renderSystemFavs() {
+    const strip = document.getElementById('systemFavStrip');
+    if (!strip) return;
+    const favs = getSysFavs();
+    strip.innerHTML = '';
+    favs.forEach(fav => {
+        const sec = fav.security || 0;
+        const secColor = sec >= 0.5 ? '#2dc653' : (sec > 0 ? '#f4a300' : '#e63946');
+        const region = fav.region || '';
+        const pill = document.createElement('div');
+        pill.className = 'eve-fav-pill';
+        pill.dataset.id = fav.id;
+        pill.innerHTML = `<i class="bi bi-star-fill" style="color:#f4a300;font-size:.7rem;"></i><span>${fav.name}</span>${region ? `<span class="eve-fav-region">${region}</span>` : ''}<span style="color:${secColor};">${sec.toFixed(1)}</span><span class="eve-fav-remove" data-id="${fav.id}">&#xd7;</span>`;
+        pill.addEventListener('click', e => {
+            if (e.target.classList.contains('eve-fav-remove')) {
+                e.stopPropagation(); removeSysFav(parseInt(e.target.dataset.id)); return;
+            }
+            if (!selectedSystems.has(fav.id)) { selectedSystems.set(fav.id, fav); renderSelectedSystems(); }
+        });
+        strip.appendChild(pill);
+    });
+    favs.length ? strip.classList.remove('d-none') : strip.classList.add('d-none');
+}
+
+function removeSysFav(id) { saveSysFavs(getSysFavs().filter(f => f.id !== id)); renderSystemFavs(); }
+
+// ── Table filters ─────────────────────────────────────────────────────────────
+function applyFilters() {
+    const fChar   = document.getElementById('filterChar')?.value   || '';
+    const fSystem = document.getElementById('filterSystem')?.value || '';
+    const fRole   = document.getElementById('filterRole')?.value   || '';
+    const fStatus = document.getElementById('filterStatus')?.value || '';
+    let visible = 0;
+    document.querySelectorAll('#assignmentTableBody tr[data-char]').forEach(row => {
+        const show = (!fChar   || row.dataset.char   === fChar)   &&
+                     (!fSystem || row.dataset.system === fSystem) &&
+                     (!fRole   || row.dataset.role   === fRole)   &&
+                     (!fStatus || row.dataset.status === fStatus);
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+    document.getElementById('noResultsMsg')?.classList.toggle('d-none', visible > 0);
+    const count = document.getElementById('tableRowCount');
+    if (count) count.textContent = visible ? `${visible} row${visible !== 1 ? 's' : ''}` : '';
+}
+
+// ── Table sort ────────────────────────────────────────────────────────────────
+let sortCol = -1, sortAsc = true;
+function sortTable(colIdx, thEl) {
+    const tbody = document.getElementById('assignmentTableBody');
+    if (!tbody) return;
+    sortAsc = (sortCol === colIdx) ? !sortAsc : true;
+    sortCol = colIdx;
+    document.querySelectorAll('#assignmentTable th.sortable').forEach(th => th.classList.remove('sort-asc','sort-desc'));
+    thEl.classList.add(sortAsc ? 'sort-asc' : 'sort-desc');
+    const rows = [...tbody.querySelectorAll('tr[data-char]')];
+    rows.sort((a, b) => {
+        const aVal = (a.querySelectorAll('td')[colIdx]?.dataset?.sort || '').toLowerCase();
+        const bVal = (b.querySelectorAll('td')[colIdx]?.dataset?.sort || '').toLowerCase();
+        return sortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+    });
+    rows.forEach(r => tbody.appendChild(r));
+}
+
+// ── Copy export ───────────────────────────────────────────────────────────────
+function copyAssignmentSummary() {
+    const el = document.getElementById('assignmentSummaryText');
+    if (!el) return;
+    el.select(); el.setSelectionRange(0, 99999); document.execCommand('copy');
+}
+
+// ── Loading overlay on submit ─────────────────────────────────────────────────
+document.getElementById('colonyPlanForm')?.addEventListener('submit', () => {
+    const productVal = (document.getElementById('productHidden')?.value || '').trim();
+    const sysVal     = (document.getElementById('systemIdsInput')?.value || '').trim();
+    if (productVal && sysVal) {
+        document.getElementById('planLoadingOverlay')?.classList.add('active');
+    }
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+renderSelectedSystems();
+loadProdFavs();       // async — fetches from /planner/favorites
+renderSystemFavs();
+updateBtnText();
+syncCharIds();
+applyFilters();
+</script>
+{% endblock %}

@@ -194,7 +194,7 @@ SECRET_KEY=${SECRET_KEY}
 # Server
 APP_PORT=${APP_PORT}
 DEBUG=false
-WEB_WORKERS=4
+WEB_WORKERS=2
 
 # RabbitMQ / Celery
 RABBITMQ_USER=${RABBITMQ_USER}
@@ -228,7 +228,7 @@ log_info "Erstelle systemd Services..."
 
 # Resolve WEB_WORKERS at script time — systemd doesn't support ${VAR:-default} syntax
 WEB_WORKERS_VAL=$(grep "^WEB_WORKERS=" "${APP_DIR}/.env" 2>/dev/null | cut -d= -f2- | tr -d '[:space:]')
-WEB_WORKERS_VAL="${WEB_WORKERS_VAL:-4}"
+WEB_WORKERS_VAL="${WEB_WORKERS_VAL:-2}"
 
 # ── Web (gunicorn) ────────────────────────────────────────────────────────────
 cat > "/etc/systemd/system/${SERVICE_NAME}.service" << EOF

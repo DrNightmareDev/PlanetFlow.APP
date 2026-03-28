@@ -219,7 +219,7 @@ log_step "Systemd units"
 
 # Resolve WEB_WORKERS from .env at script time — systemd doesn't support ${VAR:-default} syntax
 WEB_WORKERS_VAL=$(grep "^WEB_WORKERS=" "${ENV_FILE}" | cut -d= -f2- | tr -d '[:space:]')
-WEB_WORKERS_VAL="${WEB_WORKERS_VAL:-4}"
+WEB_WORKERS_VAL="${WEB_WORKERS_VAL:-2}"
 
 # Web — upgrade from uvicorn to gunicorn if needed
 if grep -q "uvicorn app.main:app" "/etc/systemd/system/${SERVICE_NAME}.service" 2>/dev/null && \

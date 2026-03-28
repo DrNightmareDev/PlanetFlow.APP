@@ -226,6 +226,10 @@ log_ok "Migrationen abgeschlossen"
 # ============ 10. Systemd Services ============
 log_info "Erstelle systemd Services..."
 
+# Resolve WEB_WORKERS at script time — systemd doesn't support ${VAR:-default} syntax
+WEB_WORKERS_VAL=$(grep "^WEB_WORKERS=" "${APP_DIR}/.env" 2>/dev/null | cut -d= -f2- | tr -d '[:space:]')
+WEB_WORKERS_VAL="${WEB_WORKERS_VAL:-4}"
+
 # ── Web (gunicorn) ────────────────────────────────────────────────────────────
 cat > "/etc/systemd/system/${SERVICE_NAME}.service" << EOF
 [Unit]
@@ -241,7 +245,7 @@ WorkingDirectory=${APP_DIR}
 EnvironmentFile=${APP_DIR}/.env
 ExecStart=${APP_DIR}/venv/bin/gunicorn app.main:app \
     -k uvicorn.workers.UvicornWorker \
-    --workers \${WEB_WORKERS:-4} \
+    --workers ${WEB_WORKERS_VAL} \
     --bind 127.0.0.1:${APP_PORT} \
     --timeout 120 \
     --access-logfile - \

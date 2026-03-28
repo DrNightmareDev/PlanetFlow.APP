@@ -217,6 +217,10 @@ log_ok "Migrations complete"
 # ── Step 8: Update / create systemd units ────────────────────────────────────
 log_step "Systemd units"
 
+# Resolve WEB_WORKERS from .env at script time — systemd doesn't support ${VAR:-default} syntax
+WEB_WORKERS_VAL=$(grep "^WEB_WORKERS=" "${ENV_FILE}" | cut -d= -f2- | tr -d '[:space:]')
+WEB_WORKERS_VAL="${WEB_WORKERS_VAL:-4}"
+
 # Web — upgrade from uvicorn to gunicorn if needed
 if grep -q "uvicorn app.main:app" "/etc/systemd/system/${SERVICE_NAME}.service" 2>/dev/null && \
    ! grep -q "gunicorn" "/etc/systemd/system/${SERVICE_NAME}.service" 2>/dev/null; then
@@ -237,7 +241,7 @@ WorkingDirectory=${APP_DIR}
 EnvironmentFile=${ENV_FILE}
 ExecStart=${APP_DIR}/venv/bin/gunicorn app.main:app \\
     -k uvicorn.workers.UvicornWorker \\
-    --workers \${WEB_WORKERS:-4} \\
+    --workers ${WEB_WORKERS_VAL} \\
     --bind 127.0.0.1:8000 \\
     --timeout 120 \\
     --access-logfile - \\

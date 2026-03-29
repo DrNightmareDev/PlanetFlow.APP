@@ -284,7 +284,7 @@
             <div class="card-header eve-card-header d-flex flex-column gap-2">
                 <form id="dashboardFiltersForm" method="get" class="d-flex flex-column gap-2">
                     <input type="hidden" id="dashboardPageInput" name="page" value="{{ dashboard_pagination.current_page }}">
-                    <input type="hidden" name="page_size" value="{{ dashboard_pagination.page_size }}">
+                    <input type="hidden" name="page_size" value="{{ dashboard_view_state.page_size }}">
                     <input type="hidden" id="dashboardSortInput" name="sort" value="{{ dashboard_view_state.sort }}">
                     <input type="hidden" id="dashboardOrderInput" name="order" value="{{ dashboard_view_state.order }}">
                     <input type="hidden" id="dashboardTiersInput" name="tiers" value="{{ dashboard_view_state.tiers | join(',') }}">

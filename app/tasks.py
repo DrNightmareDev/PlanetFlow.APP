@@ -199,19 +199,30 @@ def refresh_account_task(self, account_id: int) -> dict:
             "char_count": len(characters),
         })
 
-        # Save to DB cache
         existing = db.query(DashboardCache).filter_by(account_id=account_id).first()
-        if existing:
-            existing.colonies_json = payload_colonies
-            existing.meta_json = payload_meta
+
+        if len(all_colonies) == 0 and existing:
+            # ESI returned 0 colonies — keep existing colony data to avoid wiping
+            # the cache on transient token failures or ESI outages. Only bump
+            # fetched_at so auto-refresh doesn't immediately re-trigger.
+            logger.warning(
+                "tasks: account %d — ESI returned 0 colonies, keeping cached data",
+                account_id,
+            )
             existing.fetched_at = datetime.now(timezone.utc)
         else:
-            db.add(DashboardCache(
-                account_id=account_id,
-                colonies_json=payload_colonies,
-                meta_json=payload_meta,
-                fetched_at=datetime.now(timezone.utc),
-            ))
+            # Save to DB cache
+            if existing:
+                existing.colonies_json = payload_colonies
+                existing.meta_json = payload_meta
+                existing.fetched_at = datetime.now(timezone.utc)
+            else:
+                db.add(DashboardCache(
+                    account_id=account_id,
+                    colonies_json=payload_colonies,
+                    meta_json=payload_meta,
+                    fetched_at=datetime.now(timezone.utc),
+                ))
 
         db.commit()
 

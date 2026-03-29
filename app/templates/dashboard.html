@@ -69,6 +69,33 @@
 {% endblock %}
 
 {% block content %}
+{% macro render_dashboard_pagination(pagination) %}
+{% if pagination.total_items > 0 %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 px-3 py-2 border-bottom" style="border-color:rgba(30,45,61,.5)!important;">
+    <div class="small text-muted">
+        Zeige {{ pagination.range_start }}-{{ pagination.range_end }} von {{ pagination.total_items }} Kolonien
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <div class="d-flex align-items-center gap-1">
+            <span class="small text-muted">Pro Seite</span>
+            {% for item in pagination.page_sizes %}
+            <a href="{{ item.url }}"
+               class="eve-filter-toggle eve-price-btn text-decoration-none{% if item.is_current %} active{% endif %}">{{ item.value }}</a>
+            {% endfor %}
+        </div>
+        <div class="d-flex align-items-center gap-1">
+            <a href="{{ pagination.first_url }}" class="eve-filter-toggle eve-price-btn text-decoration-none{% if not pagination.has_prev %} disabled{% endif %}" {% if not pagination.has_prev %}tabindex="-1" aria-disabled="true"{% endif %}>«</a>
+            <a href="{{ pagination.prev_url }}" class="eve-filter-toggle eve-price-btn text-decoration-none{% if not pagination.has_prev %} disabled{% endif %}" {% if not pagination.has_prev %}tabindex="-1" aria-disabled="true"{% endif %}>‹</a>
+            {% for item in pagination.pages %}
+            <a href="{{ item.url }}" class="eve-filter-toggle eve-price-btn text-decoration-none{% if item.is_current %} active{% endif %}">{{ item.page }}</a>
+            {% endfor %}
+            <a href="{{ pagination.next_url }}" class="eve-filter-toggle eve-price-btn text-decoration-none{% if not pagination.has_next %} disabled{% endif %}" {% if not pagination.has_next %}tabindex="-1" aria-disabled="true"{% endif %}>›</a>
+            <a href="{{ pagination.last_url }}" class="eve-filter-toggle eve-price-btn text-decoration-none{% if not pagination.has_next %} disabled{% endif %}" {% if not pagination.has_next %}tabindex="-1" aria-disabled="true"{% endif %}>»</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endmacro %}
 <div class="row g-4">
 
     <!-- Charakter-Header -->
@@ -255,11 +282,22 @@
     <div class="col-12">
         <div class="eve-card card border-0">
             <div class="card-header eve-card-header d-flex flex-column gap-2">
+                <form id="dashboardFiltersForm" method="get" class="d-flex flex-column gap-2">
+                    <input type="hidden" id="dashboardPageInput" name="page" value="{{ dashboard_pagination.current_page }}">
+                    <input type="hidden" name="page_size" value="{{ dashboard_pagination.page_size }}">
+                    <input type="hidden" id="dashboardSortInput" name="sort" value="{{ dashboard_view_state.sort }}">
+                    <input type="hidden" id="dashboardOrderInput" name="order" value="{{ dashboard_view_state.order }}">
+                    <input type="hidden" id="dashboardTiersInput" name="tiers" value="{{ dashboard_view_state.tiers | join(',') }}">
+                    <input type="hidden" id="dashboardFlag_balanced" name="balanced" value="{{ '1' if dashboard_view_state.balanced else '0' }}">
+                    <input type="hidden" id="dashboardFlag_unbalanced" name="unbalanced" value="{{ '1' if dashboard_view_state.unbalanced else '0' }}">
+                    <input type="hidden" id="dashboardFlag_active" name="active" value="{{ '1' if dashboard_view_state.active else '0' }}">
+                    <input type="hidden" id="dashboardFlag_expired" name="expired" value="{{ '1' if dashboard_view_state.expired else '0' }}">
+                    <input type="hidden" id="dashboardFlag_stalled" name="stalled" value="{{ '1' if dashboard_view_state.stalled else '0' }}">
                 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-2">
                     <i class="bi bi-globe2 eve-accent"></i>
                     <span class="fw-medium">PI Kolonien</span>
-                    {% if colonies %}
+                    {% if colony_count > 0 %}
                     <div class="d-flex align-items-center gap-2 flex-wrap ms-2">
                         <span class="badge" style="background:rgba(45,198,83,0.12);color:#2dc653;border:1px solid rgba(45,198,83,0.35);font-size:.82rem;font-weight:500;padding:.42rem .72rem;">
                             {{ active_colony_count }} {{ t('common.active') }}
@@ -279,8 +317,8 @@
                         {% elif cache_age_sec < 3600 %}Vor {{ cache_age_sec // 60 }} Min.
                         {% else %}Vor {{ cache_age_sec // 3600 }}h{% endif %}
                     </span>
-                    {% if colonies %}
-                    <button class="btn btn-sm eve-btn-outline" onclick="openPiCheck()"
+                    {% if colony_count > 0 %}
+                    <button type="button" class="btn btn-sm eve-btn-outline" onclick="openPiCheck()"
                             title="P4 Produktion vs. P0 Abbau analysieren">
                         <i class="bi bi-clipboard-data me-1"></i>Check P4
                     </button>
@@ -290,7 +328,7 @@
                     </a>
                     {% endif %}
                     {% if not refreshing and cooldown_remaining == 0 %}
-                    <button class="btn btn-sm eve-btn-outline" id="refreshBtn"
+                    <button type="button" class="btn btn-sm eve-btn-outline" id="refreshBtn"
                             onclick="forceRefresh()"
                             title="Daten aktualisieren (max. 1× pro Minute)">
                         <i class="bi bi-arrow-clockwise" id="refreshIcon"></i>
@@ -300,117 +338,114 @@
                 </div>
                 </div>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                    {% if colonies %}
+                    {% if colony_count > 0 %}
                     <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <button id="balancedFilter" class="eve-state-toggle eve-state-toggle-balanced" onclick="toggleBalancedFilter()">
+                        <button type="button" id="balancedFilter" class="eve-state-toggle eve-state-toggle-balanced{% if dashboard_view_state.balanced %} active{% endif %}" onclick="toggleBalancedFilter()">
                             <i class="bi bi-check-circle"></i>{{ t('common.balanced') }}
                         </button>
-                        <button id="unbalancedFilter" class="eve-state-toggle eve-state-toggle-unbalanced" onclick="toggleUnbalancedFilter()">
+                        <button type="button" id="unbalancedFilter" class="eve-state-toggle eve-state-toggle-unbalanced{% if dashboard_view_state.unbalanced %} active{% endif %}" onclick="toggleUnbalancedFilter()">
                             <i class="bi bi-exclamation-circle"></i>{{ t('common.unbalanced') }}
                         </button>
-                        <button id="activeFilter" class="eve-state-toggle eve-state-toggle-active" onclick="toggleActiveFilter()">
+                        <button type="button" id="activeFilter" class="eve-state-toggle eve-state-toggle-active{% if dashboard_view_state.active %} active{% endif %}" onclick="toggleActiveFilter()">
                             <i class="bi bi-play-circle"></i>{{ t('common.active') }}
                         </button>
-                        <button id="expiredFilter" class="eve-state-toggle eve-state-toggle-inactive" onclick="toggleExpiredFilter()">
+                        <button type="button" id="expiredFilter" class="eve-state-toggle eve-state-toggle-inactive{% if dashboard_view_state.expired %} active{% endif %}" onclick="toggleExpiredFilter()">
                             <i class="bi bi-exclamation-circle"></i>{{ t('common.expired') }}
                         </button>
-                        <button id="stalledFilter" class="eve-state-toggle eve-state-toggle-stalled" onclick="toggleStalledFilter()">
+                        <button type="button" id="stalledFilter" class="eve-state-toggle eve-state-toggle-stalled{% if dashboard_view_state.stalled %} active{% endif %}" onclick="toggleStalledFilter()">
                             <i class="bi bi-pause-circle"></i>{{ t('common.stalled') }}
                         </button>
                     </div>
                     {% endif %}
-                    {% if colonies and char_count > 1 %}
+                    {% if colony_count > 0 and char_count > 1 %}
                     <div class="d-flex align-items-center gap-2">
                         <span class="small text-muted" style="font-size:.78rem;">Char</span>
-                        <select id="charFilter" class="eve-select form-select form-select-sm" onchange="applyFilters()" style="max-width:160px">
+                        <select id="charFilter" name="char" class="eve-select form-select form-select-sm" onchange="submitDashboardFilters(true)" style="max-width:160px">
                             <option value="">Alle Charaktere</option>
-                            {% set seen = [] %}
-                            {% for colony in colonies %}
-                                {% if colony.character_name not in seen %}
-                                    {% set _ = seen.append(colony.character_name) %}
-                                    <option value="{{ colony.character_name }}">{{ colony.character_name }}</option>
-                                {% endif %}
+                            {% for character_name in all_colony_characters %}
+                                    <option value="{{ character_name }}"{% if dashboard_view_state.char == character_name %} selected{% endif %}>{{ character_name }}</option>
                             {% endfor %}
                         </select>
                     </div>
                     {% endif %}
-                    {% if colonies %}
+                    {% if colony_count > 0 %}
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                         <span class="small text-muted" style="font-size:.78rem;">Tier</span>
-                        <button id="tierFilterP1" class="eve-state-toggle eve-tier-filter-toggle eve-tier-filter-p1" onclick="setTierFilter('P1')">P1</button>
-                        <button id="tierFilterP2" class="eve-state-toggle eve-tier-filter-toggle eve-tier-filter-p2" onclick="setTierFilter('P2')">P2</button>
-                        <button id="tierFilterP3" class="eve-state-toggle eve-tier-filter-toggle eve-tier-filter-p3" onclick="setTierFilter('P3')">P3</button>
-                        <button id="tierFilterP4" class="eve-state-toggle eve-tier-filter-toggle eve-tier-filter-p4" onclick="setTierFilter('P4')">P4</button>
+                        <button type="button" id="tierFilterP1" class="eve-state-toggle eve-tier-filter-toggle eve-tier-filter-p1{% if not dashboard_view_state.tiers or 'P1' in dashboard_view_state.tiers %} active{% endif %}" onclick="setTierFilter('P1')">P1</button>
+                        <button type="button" id="tierFilterP2" class="eve-state-toggle eve-tier-filter-toggle eve-tier-filter-p2{% if not dashboard_view_state.tiers or 'P2' in dashboard_view_state.tiers %} active{% endif %}" onclick="setTierFilter('P2')">P2</button>
+                        <button type="button" id="tierFilterP3" class="eve-state-toggle eve-tier-filter-toggle eve-tier-filter-p3{% if not dashboard_view_state.tiers or 'P3' in dashboard_view_state.tiers %} active{% endif %}" onclick="setTierFilter('P3')">P3</button>
+                        <button type="button" id="tierFilterP4" class="eve-state-toggle eve-tier-filter-toggle eve-tier-filter-p4{% if not dashboard_view_state.tiers or 'P4' in dashboard_view_state.tiers %} active{% endif %}" onclick="setTierFilter('P4')">P4</button>
                     </div>
                     {% endif %}
-                    {% if colonies %}
+                    {% if colony_count > 0 %}
                     <div class="d-flex align-items-center gap-3 flex-wrap">
                         <div class="d-flex align-items-center gap-2" title="Maximal erlaubte Abweichung der Extraktoren pro Stunde">
                             <span class="small text-muted" style="font-size:.78rem;">{{ t('dashboard.balance_threshold') }}</span>
-                            <input id="balanceThresholdRange" type="range" min="1" max="50" step="0.5" value="5"
-                                   style="width:90px;" oninput="updateBalanceThreshold(this.value)">
-                            <span id="balanceThresholdValue" class="small" style="min-width:42px;color:#c9d1d9;">5.0%</span>
+                            <input id="balanceThresholdRange" name="balance_threshold" type="range" min="1" max="50" step="0.5" value="{{ dashboard_view_state.balance_threshold }}"
+                                   style="width:90px;" oninput="updateBalanceThreshold(this.value)" onchange="submitDashboardFilters(true)">
+                            <span id="balanceThresholdValue" class="small" style="min-width:42px;color:#c9d1d9;">{{ '%.1f'|format(dashboard_view_state.balance_threshold) }}%</span>
                         </div>
                         <div class="d-flex align-items-center gap-2" title="Zeige nur Planeten mit zwei oder mehr laufenden Extraktoren, wenn mindestens einer unter diesem Wert pro Stunde liegt">
                             <span class="small text-muted d-inline-flex align-items-center" style="font-size:.82rem;min-width:34px;" aria-label="2 oder mehr Extraktoren">
                                 <i class="bi bi-2-circle me-1"></i><span style="font-size:.72rem;">+</span>
                             </span>
-                            <input id="extractorRateThresholdRange" type="range" min="0" max="50000" step="500" value="0"
-                                   style="width:110px;" oninput="updateExtractorRateThreshold(this.value)">
-                            <span id="extractorRateThresholdValue" class="small" style="min-width:60px;color:#c9d1d9;">0</span>
+                            <input id="extractorRateThresholdRange" name="extractor_rate_threshold" type="range" min="0" max="50000" step="500" value="{{ dashboard_view_state.extractor_rate_threshold | int }}"
+                                   style="width:110px;" oninput="updateExtractorRateThreshold(this.value)" onchange="submitDashboardFilters(true)">
+                            <span id="extractorRateThresholdValue" class="small" style="min-width:60px;color:#c9d1d9;">{{ dashboard_view_state.extractor_rate_threshold | int }}</span>
                         </div>
                         <div class="d-flex align-items-center gap-2" title="Zeige nur Planeten mit genau einem laufenden Extraktor, wenn seine gesamte Abbaurate pro Stunde unter diesem Wert liegt">
                             <span class="small text-muted d-inline-flex align-items-center" style="font-size:.82rem;min-width:34px;" aria-label="Ein Extraktor">
                                 <i class="bi bi-1-circle"></i>
                             </span>
-                            <input id="singleExtractorRateThresholdRange" type="range" min="0" max="100000" step="1000" value="0"
-                                   style="width:118px;" oninput="updateSingleExtractorRateThreshold(this.value)">
-                            <span id="singleExtractorRateThresholdValue" class="small" style="min-width:66px;color:#c9d1d9;">0</span>
+                            <input id="singleExtractorRateThresholdRange" name="single_extractor_rate_threshold" type="range" min="0" max="100000" step="1000" value="{{ dashboard_view_state.single_extractor_rate_threshold | int }}"
+                                   style="width:118px;" oninput="updateSingleExtractorRateThreshold(this.value)" onchange="submitDashboardFilters(true)">
+                            <span id="singleExtractorRateThresholdValue" class="small" style="min-width:66px;color:#c9d1d9;">{{ dashboard_view_state.single_extractor_rate_threshold | int }}</span>
                         </div>
                     </div>
                     {% endif %}
                 </div>
+                </form>
             </div>
             <div class="card-body p-0">
-                {% if colonies %}
-                <div id="coloniesTablePaginationTop"></div>
+                {% if filtered_colony_count > 0 %}
+                {{ render_dashboard_pagination(dashboard_pagination) }}
                 <div id="coloniesTableWrap">
                 <div id="coloniesLoadingOverlay">
                     <div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div>
                     <div class="overlay-label">Daten werden aktualisiert…</div>
                 </div>
                 <div class="table-responsive">
-                    <table class="table eve-table mb-0" id="coloniesTable">
+                    <table class="table eve-table mb-0" id="coloniesTable" data-server-paginated="1">
                         <thead>
                             <tr>
-                                <th class="eve-sortable" data-col="char">
-                                    Charakter <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                                <th class="eve-sortable{% if dashboard_view_state.sort == 'char' %} sort-{{ dashboard_view_state.order }}{% endif %}" data-col="char" onclick="setDashboardSort('char')">
+                                    Charakter <i class="bi {% if dashboard_view_state.sort == 'char' %}bi-chevron-{{ 'up' if dashboard_view_state.order == 'asc' else 'down' }}{% else %}bi-chevron-expand{% endif %} eve-sort-icon"></i>
                                 </th>
-                                <th class="eve-sortable" data-col="planet">
-                                    Ort <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                                <th class="eve-sortable{% if dashboard_view_state.sort == 'planet' %} sort-{{ dashboard_view_state.order }}{% endif %}" data-col="planet" onclick="setDashboardSort('planet')">
+                                    Ort <i class="bi {% if dashboard_view_state.sort == 'planet' %}bi-chevron-{{ 'up' if dashboard_view_state.order == 'asc' else 'down' }}{% else %}bi-chevron-expand{% endif %} eve-sort-icon"></i>
                                 </th>
-                                <th class="eve-sortable" data-col="type">
-                                    Typ <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                                <th class="eve-sortable{% if dashboard_view_state.sort == 'type' %} sort-{{ dashboard_view_state.order }}{% endif %}" data-col="type" onclick="setDashboardSort('type')">
+                                    Typ <i class="bi {% if dashboard_view_state.sort == 'type' %}bi-chevron-{{ 'up' if dashboard_view_state.order == 'asc' else 'down' }}{% else %}bi-chevron-expand{% endif %} eve-sort-icon"></i>
                                 </th>
-                                <th class="eve-sortable" data-col="level">
-                                    Stufe <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                                <th class="eve-sortable{% if dashboard_view_state.sort == 'level' %} sort-{{ dashboard_view_state.order }}{% endif %}" data-col="level" onclick="setDashboardSort('level')">
+                                    Stufe <i class="bi {% if dashboard_view_state.sort == 'level' %}bi-chevron-{{ 'up' if dashboard_view_state.order == 'asc' else 'down' }}{% else %}bi-chevron-expand{% endif %} eve-sort-icon"></i>
                                 </th>
-                                <th class="eve-sortable" data-col="tier">
-                                    Tier <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                                <th class="eve-sortable{% if dashboard_view_state.sort == 'tier' %} sort-{{ dashboard_view_state.order }}{% endif %}" data-col="tier" onclick="setDashboardSort('tier')">
+                                    Tier <i class="bi {% if dashboard_view_state.sort == 'tier' %}bi-chevron-{{ 'up' if dashboard_view_state.order == 'asc' else 'down' }}{% else %}bi-chevron-expand{% endif %} eve-sort-icon"></i>
                                 </th>
-                                <th class="eve-sortable" data-col="expiry">
-                                    Ablauf <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                                <th class="eve-sortable{% if dashboard_view_state.sort == 'expiry' %} sort-{{ dashboard_view_state.order }}{% endif %}" data-col="expiry" onclick="setDashboardSort('expiry')">
+                                    Ablauf <i class="bi {% if dashboard_view_state.sort == 'expiry' %}bi-chevron-{{ 'up' if dashboard_view_state.order == 'asc' else 'down' }}{% else %}bi-chevron-expand{% endif %} eve-sort-icon"></i>
                                 </th>
-                                <th class="eve-sortable" data-col="isk" style="white-space:nowrap">
-                                    ISK/Tag <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                                <th class="eve-sortable{% if dashboard_view_state.sort == 'isk' %} sort-{{ dashboard_view_state.order }}{% endif %}" data-col="isk" style="white-space:nowrap" onclick="setDashboardSort('isk')">
+                                    ISK/Tag <i class="bi {% if dashboard_view_state.sort == 'isk' %}bi-chevron-{{ 'up' if dashboard_view_state.order == 'asc' else 'down' }}{% else %}bi-chevron-expand{% endif %} eve-sort-icon"></i>
                                     <div id="priceModeButtons" class="d-flex gap-1 mt-1" onclick="event.stopPropagation()" style="cursor:default">
                                         {% for lbl, val in [('Sell','sell'),('Buy','buy'),('Split','split')] %}
-                                        <button class="eve-filter-toggle eve-price-btn{% if price_mode == val %} active{% endif %}"
+                                        <button type="button" class="eve-filter-toggle eve-price-btn{% if price_mode == val %} active{% endif %}"
                                                 onclick="setPriceMode('{{ val }}')">{{ lbl }}</button>
                                         {% endfor %}
                                     </div>
                                 </th>
-                                <th class="eve-sortable" data-col="storage">Lager <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                                <th class="eve-sortable{% if dashboard_view_state.sort == 'storage' %} sort-{{ dashboard_view_state.order }}{% endif %}" data-col="storage" onclick="setDashboardSort('storage')">Lager <i class="bi {% if dashboard_view_state.sort == 'storage' %}bi-chevron-{{ 'up' if dashboard_view_state.order == 'asc' else 'down' }}{% else %}bi-chevron-expand{% endif %} eve-sort-icon"></i></th>
                                 <th>Skyhook</th>
                             </tr>
                         </thead>
@@ -596,11 +631,14 @@
                     </table>
                 </div>
                 </div><!-- /coloniesTableWrap -->
-                <div id="coloniesTablePagination"></div>
+                {{ render_dashboard_pagination(dashboard_pagination) }}
                 {% else %}
                 <div class="text-center py-5">
                     <i class="bi bi-globe fs-1 text-muted d-block mb-3"></i>
-                    {% if main_char %}
+                    {% if colony_count > 0 %}
+                    <p class="text-muted mb-0">Keine Kolonien für die aktuellen Filter gefunden.</p>
+                    <small class="text-muted">Passe die Filter an, um wieder Ergebnisse zu sehen.</small>
+                    {% elif main_char %}
                     <p class="text-muted mb-0">Keine PI-Kolonien gefunden.</p>
                     <small class="text-muted">Erstelle Kolonien in EVE Online um sie hier zu sehen.</small>
                     {% else %}
@@ -717,6 +755,23 @@
 
 {% block extra_scripts %}
 <script>
+const dashboardFilterForm = document.getElementById('dashboardFiltersForm');
+
+function submitDashboardFilters(resetPage = true) {
+    if (!dashboardFilterForm) return;
+    if (resetPage) {
+        const pageInput = document.getElementById('dashboardPageInput');
+        if (pageInput) pageInput.value = '1';
+    }
+    dashboardFilterForm.submit();
+}
+
+function toggleDashboardFlag(flagName) {
+    const input = document.getElementById(`dashboardFlag_${flagName}`);
+    if (!input) return;
+    input.value = input.value === '1' ? '0' : '1';
+    submitDashboardFilters(true);
+}
 // -- Daten für Colony-Detail-Modal ---------------------------------------------
 const COLONY_META = [
 {% for colony in colonies %}
@@ -1109,10 +1164,10 @@ showColoniesOverlay();
 
 // -- Push-Benachrichtigungen (Service Worker) ----------------------------------
 const COLONY_EXPIRIES = [
-{% for colony in colonies %}{% if colony.expiry_hours is not none and colony.expiry_hours > 0 %}
+{% for colony in notification_colonies %}
   {name: {{ colony.planet_name | tojson }}, char: {{ colony.character_name | tojson }},
    system: {{ colony.solar_system_name | tojson }}, expiry_ts: Date.now() + {{ (colony.expiry_hours * 3600000) | int }}},
-{% endif %}{% endfor %}
+{% endfor %}
 ];
 
 let swReg = null;
@@ -1387,39 +1442,62 @@ initServiceWorker();
 // tooltips via CSS .eve-hover-wrap – no JS init needed
 
 function toggleExpiredFilter() {
-    const btn = document.getElementById('expiredFilter');
-    btn.classList.toggle('active');
-    window.applyFilters();
+    toggleDashboardFlag('expired');
 }
 
 function toggleActiveFilter() {
-    const btn = document.getElementById('activeFilter');
-    btn.classList.toggle('active');
-    window.applyFilters();
+    toggleDashboardFlag('active');
 }
 
 function toggleBalancedFilter() {
-    const btn = document.getElementById('balancedFilter');
-    btn.classList.toggle('active');
-    window.applyFilters();
+    toggleDashboardFlag('balanced');
 }
 
 function toggleUnbalancedFilter() {
-    const btn = document.getElementById('unbalancedFilter');
-    btn.classList.toggle('active');
-    window.applyFilters();
+    toggleDashboardFlag('unbalanced');
 }
 
 function toggleStalledFilter() {
-    const btn = document.getElementById('stalledFilter');
-    btn.classList.toggle('active');
-    window.applyFilters();
+    toggleDashboardFlag('stalled');
+}
+
+function setDashboardSort(col) {
+    const sortInput = document.getElementById('dashboardSortInput');
+    const orderInput = document.getElementById('dashboardOrderInput');
+    if (!sortInput || !orderInput) return;
+    if (sortInput.value === col) {
+        orderInput.value = orderInput.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortInput.value = col;
+        orderInput.value = 'asc';
+    }
+    submitDashboardFilters(true);
+}
+
+function setTierFilter(tier) {
+    const input = document.getElementById('dashboardTiersInput');
+    if (!input) return;
+    const allTiers = ['P1', 'P2', 'P3', 'P4'];
+    let tiers = (input.value || '').split(',').filter(Boolean);
+    if (!tier) {
+        tiers = [];
+    } else if (!tiers.length) {
+        tiers = allTiers.filter(value => value !== tier);
+    } else if (tiers.includes(tier)) {
+        tiers = tiers.filter(value => value !== tier);
+    } else {
+        tiers.push(tier);
+    }
+    if (tiers.length === allTiers.length) {
+        tiers = [];
+    }
+    input.value = tiers.join(',');
+    submitDashboardFilters(true);
 }
 
 function updateVisibleHoverCards() {
     const rows = Array.from(document.querySelectorAll('#coloniesTable tbody tr'));
-    const visibleRows = rows.filter(row => row.style.display !== 'none');
-    const visibleTail = new Set(visibleRows.slice(-4));
+    const visibleTail = new Set(rows.slice(-4));
     rows.forEach(row => {
         const shouldBeUp = visibleTail.has(row);
         if (shouldBeUp) row.classList.add('eve-hover-up');
@@ -1437,19 +1515,19 @@ function formatDashboardIsk(val) {
 }
 
 function getBalanceThreshold() {
-    const raw = parseFloat(localStorage.getItem(BALANCE_THRESHOLD_KEY) || '5');
+    const raw = parseFloat(document.getElementById('balanceThresholdRange')?.value || '5');
     return Number.isFinite(raw) ? raw : 5;
 }
 window.getBalanceThreshold = getBalanceThreshold;
 
 function getExtractorRateThreshold() {
-    const raw = parseFloat(localStorage.getItem(EXTRACTOR_RATE_THRESHOLD_KEY) || '0');
+    const raw = parseFloat(document.getElementById('extractorRateThresholdRange')?.value || '0');
     return Number.isFinite(raw) ? raw : 0;
 }
 window.getExtractorRateThreshold = getExtractorRateThreshold;
 
 function getSingleExtractorRateThreshold() {
-    const raw = parseFloat(localStorage.getItem(SINGLE_EXTRACTOR_RATE_THRESHOLD_KEY) || '0');
+    const raw = parseFloat(document.getElementById('singleExtractorRateThresholdRange')?.value || '0');
     return Number.isFinite(raw) ? raw : 0;
 }
 window.getSingleExtractorRateThreshold = getSingleExtractorRateThreshold;
@@ -1561,42 +1639,30 @@ window.renderExtractorBalanceIndicators = renderExtractorBalanceIndicators;
 
 function updateBalanceThreshold(value) {
     const numeric = Math.max(1, Math.min(50, parseFloat(value) || 5));
-    localStorage.setItem(BALANCE_THRESHOLD_KEY, String(numeric));
     const range = document.getElementById('balanceThresholdRange');
     const label = document.getElementById('balanceThresholdValue');
     if (range) range.value = String(numeric);
     if (label) label.textContent = `${numeric.toFixed(1)}%`;
     renderExtractorBalanceIndicators();
-    if (typeof window.applyFilters === 'function') {
-        window.applyFilters();
-    }
 }
 window.updateBalanceThreshold = updateBalanceThreshold;
 
 function updateExtractorRateThreshold(value) {
     const numeric = Math.max(0, Math.min(50000, parseFloat(value) || 0));
-    localStorage.setItem(EXTRACTOR_RATE_THRESHOLD_KEY, String(numeric));
     const range = document.getElementById('extractorRateThresholdRange');
     const label = document.getElementById('extractorRateThresholdValue');
     if (range) range.value = String(numeric);
     if (label) label.textContent = `${Math.round(numeric)}`;
-    if (typeof window.applyFilters === 'function') {
-        window.applyFilters();
-    }
 }
 window.updateExtractorRateThreshold = updateExtractorRateThreshold;
 
 function updateSingleExtractorRateThreshold(value) {
     const numeric = Math.max(0, Math.min(100000, parseFloat(value) || 0));
-    localStorage.setItem(SINGLE_EXTRACTOR_RATE_THRESHOLD_KEY, String(numeric));
     const range = document.getElementById('singleExtractorRateThresholdRange');
     const label = document.getElementById('singleExtractorRateThresholdValue');
     if (range) range.value = String(numeric);
     if (label) label.textContent = `${Math.round(numeric)}`;
     renderExtractorBalanceIndicators();
-    if (typeof window.applyFilters === 'function') {
-        window.applyFilters();
-    }
 }
 window.updateSingleExtractorRateThreshold = updateSingleExtractorRateThreshold;
 
@@ -1605,7 +1671,6 @@ function updateDashboardIskFromVisibleRows() {
     const rows = Array.from(document.querySelectorAll('#coloniesTable tbody tr'));
     if (!valueEl || !rows.length) return;
     const total = rows.reduce((sum, row) => {
-        if (row.dataset.fp === 'hide') return sum;
         return sum + (parseFloat(row.dataset.sortIsk) || 0);
     }, 0);
     valueEl.textContent = formatDashboardIsk(total);
@@ -1668,15 +1733,6 @@ function initGlobalHoverCards() {
 
 const coloniesTableBody = document.querySelector('#coloniesTable tbody');
 if (coloniesTableBody) {
-    const hoverObserver = new MutationObserver(() => {
-        updateVisibleHoverCards();
-        updateDashboardIskFromVisibleRows();
-    });
-    hoverObserver.observe(coloniesTableBody, {
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['style']
-    });
     updateVisibleHoverCards();
     updateDashboardIskFromVisibleRows();
     initGlobalHoverCards();

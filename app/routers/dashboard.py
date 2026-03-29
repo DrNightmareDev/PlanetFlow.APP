@@ -4,6 +4,8 @@ import threading as _threading
 import time as _time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
+from math import ceil
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Body
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -1052,6 +1054,7 @@ def dashboard(
     db: Session = Depends(get_db),
 ):
     db.refresh(account)
+    view_state = _get_dashboard_view_state(request)
 
     main_char = db.query(Character).filter(Character.id == account.main_character_id).first() if account.main_character_id else None
 
@@ -1127,6 +1130,56 @@ def dashboard(
         colony_count = 0
         cache_age_sec = 0
 
+    all_colonies = colonies
+    all_colony_characters = sorted({c.get("character_name") for c in all_colonies if c.get("character_name")})
+    filtered_colonies = [
+        colony for colony in all_colonies
+        if _colony_matches_dashboard_filters(colony, view_state)
+    ]
+    filtered_colonies = _sort_dashboard_colonies(filtered_colonies, view_state)
+    filtered_colony_count = len(filtered_colonies)
+    page_size = view_state["page_size"]
+    total_pages = max(1, ceil(filtered_colony_count / page_size)) if filtered_colony_count else 1
+    current_page = min(view_state["page"], total_pages)
+    page_start = (current_page - 1) * page_size
+    page_end = page_start + page_size
+    colonies = filtered_colonies[page_start:page_end]
+    total_isk_day = sum(float(colony.get("isk_day") or 0.0) for colony in colonies)
+    page_numbers = list(range(max(1, current_page - 2), min(total_pages, current_page + 2) + 1))
+    page_colony_range_start = page_start + 1 if filtered_colony_count else 0
+    page_colony_range_end = min(page_end, filtered_colony_count)
+    pagination_base_path = str(request.url.path or "/dashboard")
+    dashboard_pagination = {
+        "current_page": current_page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "total_items": filtered_colony_count,
+        "range_start": page_colony_range_start,
+        "range_end": page_colony_range_end,
+        "pages": [
+            {
+                "page": page_num,
+                "url": _build_dashboard_page_url(pagination_base_path, view_state, page=page_num),
+                "is_current": page_num == current_page,
+            }
+            for page_num in page_numbers
+        ],
+        "page_sizes": [
+            {
+                "value": size,
+                "url": _build_dashboard_page_url(pagination_base_path, view_state, page=1, page_size=size),
+                "is_current": size == page_size,
+            }
+            for size in (25, 50, 100)
+        ],
+        "prev_url": _build_dashboard_page_url(pagination_base_path, view_state, page=max(1, current_page - 1)),
+        "next_url": _build_dashboard_page_url(pagination_base_path, view_state, page=min(total_pages, current_page + 1)),
+        "first_url": _build_dashboard_page_url(pagination_base_path, view_state, page=1),
+        "last_url": _build_dashboard_page_url(pagination_base_path, view_state, page=total_pages),
+        "has_prev": current_page > 1,
+        "has_next": current_page < total_pages,
+    }
+
     # ── ISK-Historie (immer frisch aus DB) ───────────────────────────────────
     snapshots = (
         db.query(IskSnapshot)
@@ -1166,13 +1219,13 @@ def dashboard(
             ]
     expired_colony_count = sum(
         1
-        for colony in colonies
+        for colony in all_colonies
         if colony.get("expiry_hours") is not None and colony.get("expiry_hours") < 0
     )
-    active_colony_count = sum(1 for colony in colonies if colony.get("is_active") is True)
+    active_colony_count = sum(1 for colony in all_colonies if colony.get("is_active") is True)
     stalled_colony_count = sum(
         1
-        for colony in colonies
+        for colony in all_colonies
         if colony.get("expiry_hours") is None and colony.get("is_stalled") is True
     )
     lang = get_language_from_request(request)
@@ -1205,15 +1258,23 @@ def dashboard(
         if not c.refresh_token or c.esi_consecutive_errors >= 3
     ]
     token_error_count = len(token_error_chars)
+    notification_colonies = [
+        colony for colony in all_colonies
+        if colony.get("expiry_hours") is not None and colony.get("expiry_hours") > 0
+    ]
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "account": account,
         "main_char": main_char,
         "characters": characters,
+        "all_colony_characters": all_colony_characters,
         "char_count": char_count,
         "colonies": colonies,
         "colony_count": colony_count,
+        "filtered_colony_count": filtered_colony_count,
+        "dashboard_pagination": dashboard_pagination,
+        "dashboard_view_state": view_state,
         "planet_type_colors": PLANET_TYPE_COLORS,
         "total_isk_day": total_isk_day,
         "next_expiry": next_expiry_dt,
@@ -1227,6 +1288,7 @@ def dashboard(
         "isk_history": isk_history,
         "skyhook_data": skyhook_data,
         "product_labels": product_labels,
+        "notification_colonies": notification_colonies,
         "price_mode": current_price_mode,
         "refreshing": refreshing,
         "market_last_updated_iso": market_last_updated_iso,
@@ -1806,6 +1868,185 @@ def _attach_pi_skills(characters: list[Character], db: Session) -> None:
         setattr(char, "pi_skill_total", sum(skill_levels.values()))
         setattr(char, "has_skill_scope", has_skill_scope)
         setattr(char, "pi_skill_error", skill_error)
+
+
+def _parse_dashboard_float(value: str | None, default: float, minimum: float = 0.0, maximum: float | None = None) -> float:
+    try:
+        parsed = float(value) if value is not None else default
+    except (TypeError, ValueError):
+        parsed = default
+    parsed = max(minimum, parsed)
+    if maximum is not None:
+        parsed = min(maximum, parsed)
+    return parsed
+
+
+def _parse_dashboard_int(value: str | None, default: int, allowed: set[int] | None = None, minimum: int | None = None) -> int:
+    try:
+        parsed = int(value) if value is not None else default
+    except (TypeError, ValueError):
+        parsed = default
+    if minimum is not None:
+        parsed = max(minimum, parsed)
+    if allowed is not None and parsed not in allowed:
+        return default
+    return parsed
+
+
+def _get_dashboard_view_state(request: Request) -> dict:
+    params = request.query_params
+    tiers_raw = (params.get("tiers") or "").strip()
+    tiers = [tier for tier in tiers_raw.split(",") if tier in {"P1", "P2", "P3", "P4"}]
+    sort_key = params.get("sort") or ""
+    if sort_key not in {"char", "planet", "type", "level", "tier", "expiry", "isk", "storage"}:
+        sort_key = ""
+    sort_order = (params.get("order") or "asc").lower()
+    if sort_order not in {"asc", "desc"}:
+        sort_order = "asc"
+
+    return {
+        "page": _parse_dashboard_int(params.get("page"), 1, minimum=1),
+        "page_size": _parse_dashboard_int(params.get("page_size"), 50, allowed={25, 50, 100}),
+        "char": (params.get("char") or "").strip(),
+        "tiers": tiers,
+        "balanced": params.get("balanced") == "1",
+        "unbalanced": params.get("unbalanced") == "1",
+        "active": params.get("active") == "1",
+        "expired": params.get("expired") == "1",
+        "stalled": params.get("stalled") == "1",
+        "balance_threshold": _parse_dashboard_float(params.get("balance_threshold"), 5.0, minimum=1.0, maximum=50.0),
+        "extractor_rate_threshold": _parse_dashboard_float(params.get("extractor_rate_threshold"), 0.0, minimum=0.0, maximum=50000.0),
+        "single_extractor_rate_threshold": _parse_dashboard_float(params.get("single_extractor_rate_threshold"), 0.0, minimum=0.0, maximum=100000.0),
+        "sort": sort_key,
+        "order": sort_order,
+    }
+
+
+def _colony_matches_dashboard_filters(colony: dict, view_state: dict) -> bool:
+    char_val = view_state["char"]
+    if char_val and colony.get("character_name") != char_val:
+        return False
+
+    tiers = view_state["tiers"]
+    if tiers and (colony.get("highest_tier") or "P0") not in tiers:
+        return False
+
+    balance_threshold = float(view_state["balance_threshold"])
+    balance = colony.get("extractor_balance") or {}
+    rate_summary = colony.get("extractor_rate_summary") or {}
+    extractor_status = colony.get("extractor_status") or {}
+
+    has_balance = bool(balance.get("extractors")) and len(balance.get("extractors") or []) == 2
+    try:
+        balance_diff_pct = float(balance.get("diff_pct", -1))
+    except (TypeError, ValueError):
+        balance_diff_pct = -1.0
+    is_balanced = has_balance and balance_diff_pct >= 0 and balance_diff_pct <= balance_threshold
+    is_unbalanced = has_balance and balance_diff_pct > balance_threshold
+
+    try:
+        min_rate = float(rate_summary.get("min_avg_per_hour", -1))
+    except (TypeError, ValueError):
+        min_rate = -1.0
+    try:
+        total_rate = float(rate_summary.get("total_avg_per_hour", -1))
+    except (TypeError, ValueError):
+        total_rate = -1.0
+    extractor_count = int(extractor_status.get("total", 0) or 0)
+
+    multi_rate_threshold = float(view_state["extractor_rate_threshold"])
+    if multi_rate_threshold > 0 and extractor_count >= 2:
+        if not (min_rate >= 0 and min_rate < multi_rate_threshold):
+            return False
+
+    single_rate_threshold = float(view_state["single_extractor_rate_threshold"])
+    if single_rate_threshold > 0 and extractor_count == 1:
+        if not (total_rate >= 0 and total_rate < single_rate_threshold):
+            return False
+
+    only_balanced = view_state["balanced"]
+    only_unbalanced = view_state["unbalanced"]
+    only_active = view_state["active"]
+    only_expired = view_state["expired"]
+    only_stalled = view_state["stalled"]
+    has_state_filter = only_balanced or only_unbalanced or only_active or only_expired or only_stalled
+    if has_state_filter:
+        expiry_hours = colony.get("expiry_hours")
+        is_expired = expiry_hours is not None and expiry_hours < 0
+        is_stalled = expiry_hours is None and colony.get("is_stalled") is True
+        is_active = (expiry_hours is not None and expiry_hours > 0) or colony.get("is_stalled") is False
+        state_ok = (
+            (only_balanced and is_balanced)
+            or (only_unbalanced and is_unbalanced)
+            or (only_active and is_active)
+            or (only_expired and is_expired)
+            or (only_stalled and is_stalled)
+        )
+        if not state_ok:
+            return False
+
+    return True
+
+
+def _sort_dashboard_colonies(colonies: list[dict], view_state: dict) -> list[dict]:
+    sort_key = view_state.get("sort") or ""
+    if not sort_key:
+        return list(colonies)
+
+    reverse = view_state.get("order") == "desc"
+
+    def _sort_value(colony: dict):
+        if sort_key == "char":
+            return (colony.get("character_name") or "").lower()
+        if sort_key == "planet":
+            return (colony.get("planet_name") or "").lower()
+        if sort_key == "type":
+            return (colony.get("planet_type") or "").lower()
+        if sort_key == "level":
+            return int(colony.get("upgrade_level") or 0)
+        if sort_key == "tier":
+            raw = str(colony.get("highest_tier") or "P0")
+            return int(raw.replace("P", "") or 0)
+        if sort_key == "expiry":
+            expiry_hours = colony.get("expiry_hours")
+            return float(expiry_hours) if expiry_hours is not None else 9_999_999.0
+        if sort_key == "isk":
+            return float(colony.get("isk_day") or 0.0)
+        if sort_key == "storage":
+            storage = colony.get("storage") or []
+            return max((float(item.get("fill_pct") or 0.0) for item in storage), default=-1.0)
+        return ""
+
+    return sorted(colonies, key=_sort_value, reverse=reverse)
+
+
+def _build_dashboard_page_url(base_path: str, view_state: dict, **overrides) -> str:
+    merged = {**view_state, **overrides}
+    query: dict[str, str] = {}
+    if merged.get("page", 1) != 1:
+        query["page"] = str(merged["page"])
+    if merged.get("page_size", 50) != 50:
+        query["page_size"] = str(merged["page_size"])
+    if merged.get("char"):
+        query["char"] = str(merged["char"])
+    if merged.get("tiers"):
+        query["tiers"] = ",".join(merged["tiers"])
+    for flag in ("balanced", "unbalanced", "active", "expired", "stalled"):
+        if merged.get(flag):
+            query[flag] = "1"
+    if float(merged.get("balance_threshold", 5.0)) != 5.0:
+        query["balance_threshold"] = str(merged["balance_threshold"])
+    if float(merged.get("extractor_rate_threshold", 0.0)) != 0.0:
+        query["extractor_rate_threshold"] = str(merged["extractor_rate_threshold"])
+    if float(merged.get("single_extractor_rate_threshold", 0.0)) != 0.0:
+        query["single_extractor_rate_threshold"] = str(merged["single_extractor_rate_threshold"])
+    if merged.get("sort"):
+        query["sort"] = str(merged["sort"])
+    if merged.get("order", "asc") != "asc":
+        query["order"] = str(merged["order"])
+    if not query:
+        return base_path
+    return f"{base_path}?{urlencode(query)}"
 
 
 @router.get("/export.csv")

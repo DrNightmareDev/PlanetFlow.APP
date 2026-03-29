@@ -937,6 +937,7 @@ document.addEventListener('DOMContentLoaded', function() {
 document.addEventListener('DOMContentLoaded', function () {
     const table = document.getElementById('coloniesTable');
     if (!table) return;
+    if (table.dataset.serverPaginated === '1') return;
 
     const tbody = table.querySelector('tbody');
     const rows  = Array.from(tbody.querySelectorAll('tr'));

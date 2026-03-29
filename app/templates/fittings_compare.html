@@ -872,27 +872,39 @@ function buildComparisonPairs(leftItems, rightItems) {
     const rightPool = [...rightItems].sort(compareItemsByTypeAndName);
     const pairs = [];
 
-    while (leftPool.length || rightPool.length) {
-        if (!leftPool.length) {
-            pairs.push({ left: null, right: rightPool.shift() });
-            continue;
+    function pairBy(matchFn) {
+        let index = 0;
+        while (index < leftPool.length) {
+            const leftItem = leftPool[index];
+            const matchIndex = rightPool.findIndex(candidate => matchFn(leftItem, candidate));
+            if (matchIndex >= 0) {
+                pairs.push({
+                    left: leftPool.splice(index, 1)[0],
+                    right: rightPool.splice(matchIndex, 1)[0],
+                });
+                continue;
+            }
+            index += 1;
         }
-        if (!rightPool.length) {
-            pairs.push({ left: leftPool.shift(), right: null });
-            continue;
-        }
-
-        const leftItem = leftPool.shift();
-        const targetType = itemTypeKey(leftItem);
-        let matchIndex = rightPool.findIndex(candidate => itemTypeKey(candidate) === targetType);
-        if (matchIndex < 0) {
-            matchIndex = rightPool.findIndex(candidate => itemSignature(candidate) === itemSignature(leftItem));
-        }
-        const rightItem = matchIndex >= 0 ? rightPool.splice(matchIndex, 1)[0] : rightPool.shift();
-        pairs.push({ left: leftItem, right: rightItem || null });
     }
 
-    return pairs;
+    // First lock in exact module matches so identical items cannot be displaced by unrelated modules.
+    pairBy((leftItem, rightItem) => itemSignature(leftItem) === itemSignature(rightItem));
+
+    // Then pair remaining items by module family/type.
+    pairBy((leftItem, rightItem) => itemTypeKey(leftItem) === itemTypeKey(rightItem));
+
+    while (leftPool.length && rightPool.length) {
+        pairs.push({ left: leftPool.shift(), right: rightPool.shift() });
+    }
+    while (leftPool.length) {
+        pairs.push({ left: leftPool.shift(), right: null });
+    }
+    while (rightPool.length) {
+        pairs.push({ left: null, right: rightPool.shift() });
+    }
+
+    return pairs.sort((a, b) => compareItemsByTypeAndName(a.left || a.right, b.left || b.right));
 }
 
 function renderItemCell(item, otherItem) {

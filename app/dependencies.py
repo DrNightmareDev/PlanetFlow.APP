@@ -33,3 +33,10 @@ def require_admin(request: Request, db: Session = Depends(get_db)) -> Account:
     if not account.is_admin:
         raise HTTPException(status_code=403, detail="Zugriff verweigert - Manager-Rechte erforderlich")
     return account
+
+
+def require_manager_or_admin(request: Request, db: Session = Depends(get_db)) -> Account:
+    account = require_account(request, db)
+    if not (account.is_admin or account.is_owner):
+        raise HTTPException(status_code=403, detail="Zugriff verweigert - Manager- oder Administrator-Rechte erforderlich")
+    return account

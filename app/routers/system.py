@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, get_db
-from app.dependencies import require_account, require_admin
+from app.dependencies import require_account, require_manager_or_admin
 from app.esi import ensure_valid_token, get_character_fittings, get_system_info, get_planet_info
 from app.i18n import get_language_from_request, translate, translate_type_name
 from app.market import get_prices_by_names, get_market_trends, PI_TYPE_IDS
@@ -620,7 +620,7 @@ def system_mix_analyze(
 @router.get("/fittings", response_class=HTMLResponse)
 def fittings_compare_page(
     request: Request,
-    account=Depends(require_admin),
+    account=Depends(require_manager_or_admin),
 ):
     return templates.TemplateResponse("fittings_compare.html", {
         "request": request,
@@ -631,7 +631,7 @@ def fittings_compare_page(
 
 @router.get("/fittings/data")
 def fittings_compare_data(
-    account=Depends(require_admin),
+    account=Depends(require_manager_or_admin),
     db: Session = Depends(get_db),
 ):
     characters = sorted(

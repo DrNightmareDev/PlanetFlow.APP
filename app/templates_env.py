@@ -34,15 +34,7 @@ def format_expiry(hours: float) -> str:
 def account_can_access_corp_nav(account) -> bool:
     if not account:
         return False
-    if getattr(account, "is_owner", False) or getattr(account, "is_admin", False):
-        return True
-    main_char = getattr(account, "main_character", None)
-    if not main_char or not getattr(main_char, "corporation_id", None):
-        return False
-    scopes = set((getattr(main_char, "scopes", "") or "").split())
-    if "esi-characters.read_corporation_roles.v1" in scopes:
-        return True
-    return False
+    return bool(getattr(account, "is_owner", False) or getattr(account, "is_admin", False))
 
 
 templates = Jinja2Templates(directory="app/templates")

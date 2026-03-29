@@ -106,6 +106,7 @@
                     <img src="{{ main.portrait_url }}"
                          alt="{{ main.character_name }}"
                          class="eve-portrait-md rounded"
+                         loading="lazy"
                          onerror="this.src='/static/img/default_char.svg'">
                     {% if acc.is_owner and account.is_owner %}
                     <span class="eve-admin-indicator position-absolute top-0 start-0"
@@ -141,16 +142,6 @@
                             <i class="bi bi-shield-fill me-1"></i>Manager
                         </span>
                         {% endif %}
-                        {% if entry.is_ceo %}
-                        <span class="badge" style="background:#00b4d818;color:#7ee7ff;border:1px solid #00b4d840;">
-                            <i class="bi bi-briefcase-fill me-1"></i>CEO
-                        </span>
-                        {% endif %}
-                        {% if entry.is_director %}
-                        <span class="badge" style="background:#1f6b8b22;color:#7ec8e3;border:1px solid #3c8fb040;">
-                            <i class="bi bi-diagram-3-fill me-1"></i>Director
-                        </span>
-                        {% endif %}
                         <span class="badge eve-badge-count">{{ entry.char_count }} Chars</span>
                         {% if entry.colony_count > 0 %}
                         <span class="badge" style="background:#00b4d818;color:#00b4d8;border:1px solid #00b4d830;">
@@ -163,11 +154,6 @@
                     </div>
                     <div class="text-muted small mb-2">
                         Account #{{ acc.id }}
-                        {% if entry.roles_scope_missing %}
-                        <span class="ms-2" style="color:#d8b36a;">
-                            <i class="bi bi-key me-1"></i>Corp-Rollen-Scope fehlt
-                        </span>
-                        {% endif %}
                         {% if acc.created_at %}· Erstellt: {{ acc.created_at.strftime('%d.%m.%Y') }}{% endif %}
                     </div>
 
@@ -178,6 +164,7 @@
                             <img src="{{ char.portrait_url }}"
                                  alt="{{ char.character_name }}"
                                  class="eve-portrait-xs rounded-circle {% if char.id == acc.main_character_id %}eve-main-glow{% endif %}"
+                                 loading="lazy"
                                  onerror="this.src='/static/img/default_char.svg'">
                         </div>
                         {% endfor %}

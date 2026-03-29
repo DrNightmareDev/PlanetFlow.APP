@@ -1,0 +1,706 @@
+{% extends "base.html" %}
+{% block title %}Fitting Compare - {{ t('app.name') }}{% endblock %}
+
+{% block extra_head %}
+<style>
+.fit-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+}
+
+.fit-source-card,
+.fit-summary-card,
+.fit-compare-card {
+    background: linear-gradient(180deg, rgba(17,24,32,0.95) 0%, rgba(14,19,27,0.98) 100%);
+}
+
+.fit-source-card .form-label,
+.fit-help-text {
+    color: var(--eve-text-muted);
+}
+
+.fit-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.fit-summary-head {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.fit-ship-image {
+    width: 88px;
+    height: 88px;
+    border-radius: 14px;
+    object-fit: cover;
+    border: 1px solid var(--eve-card-border);
+    background: rgba(255,255,255,0.02);
+}
+
+.fit-ship-placeholder {
+    width: 88px;
+    height: 88px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    font-size: 2rem;
+    color: var(--eve-accent);
+    border: 1px solid var(--eve-card-border);
+    background: rgba(0, 180, 216, 0.06);
+}
+
+.fit-compare-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+}
+
+.fit-slot-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: stretch;
+    padding: 0.65rem 0;
+    border-top: 1px solid rgba(255,255,255,0.04);
+}
+
+.fit-slot-row:first-child {
+    border-top: 0;
+    padding-top: 0;
+}
+
+.fit-slot-cell {
+    border: 1px solid rgba(126, 200, 227, 0.12);
+    border-radius: 12px;
+    padding: 0.75rem;
+    min-height: 84px;
+    background: rgba(255,255,255,0.02);
+}
+
+.fit-slot-cell.is-different {
+    border-color: rgba(244, 163, 0, 0.45);
+    background: rgba(244, 163, 0, 0.08);
+}
+
+.fit-slot-cell.is-missing {
+    border-style: dashed;
+    border-color: rgba(88, 110, 117, 0.45);
+    color: var(--eve-text-muted);
+}
+
+.fit-slot-middle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--eve-text-muted);
+    font-size: 0.85rem;
+    min-width: 38px;
+}
+
+.fit-item {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.fit-item-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    object-fit: cover;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+    flex-shrink: 0;
+}
+
+.fit-item-icon-placeholder {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    color: var(--eve-accent);
+    background: rgba(0,180,216,0.08);
+    border: 1px solid rgba(126, 200, 227, 0.15);
+    flex-shrink: 0;
+}
+
+.fit-item-name {
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.fit-item-meta {
+    color: var(--eve-text-muted);
+    font-size: 0.8rem;
+}
+
+.fit-compare-empty {
+    border: 1px dashed var(--eve-card-border);
+    border-radius: 16px;
+    padding: 2.5rem 1.25rem;
+    text-align: center;
+    color: var(--eve-text-muted);
+}
+
+.fit-source-toggle {
+    display: inline-flex;
+    gap: 0.35rem;
+    padding: 0.25rem;
+    border: 1px solid var(--eve-card-border);
+    border-radius: 999px;
+    background: rgba(255,255,255,0.02);
+}
+
+.fit-source-toggle .btn {
+    border-radius: 999px;
+}
+
+.fit-source-pane[hidden] {
+    display: none !important;
+}
+
+.fit-warnings {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.fit-warning-card {
+    border: 1px solid rgba(230, 57, 70, 0.25);
+    background: rgba(230, 57, 70, 0.07);
+    border-radius: 12px;
+    padding: 0.85rem 1rem;
+}
+
+.fit-warning-card a {
+    color: var(--eve-accent);
+}
+
+.fit-summary-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.fit-summary-badges .badge {
+    font-size: 0.72rem;
+}
+
+@media (max-width: 991.98px) {
+    .fit-summary-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .fit-slot-row {
+        grid-template-columns: 1fr;
+    }
+
+    .fit-slot-middle {
+        min-height: 24px;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column gap-4">
+    <div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3">
+        <div>
+            <h2 class="mb-1 d-flex align-items-center gap-2">
+                <i class="bi bi-layout-split eve-accent"></i>
+                <span>Fitting Compare</span>
+            </h2>
+            <div class="text-muted">
+                Zwei Fittings nebeneinander vergleichen, gespeicherte ESI-Fits lesen oder Fit-Text direkt einfuegen.
+            </div>
+        </div>
+        <span class="badge eve-badge-admin-lg">Admin only</span>
+    </div>
+
+    <div class="card eve-card border-0">
+        <div class="card-body">
+            <div class="fit-help-text">
+                Gespeicherte Fits werden ueber ESI gelesen. Wenn einem Charakter der Scope
+                <code>{{ required_scope }}</code> fehlt oder ESI den Zugriff blockiert, erscheint unten automatisch eine Warnung.
+            </div>
+        </div>
+    </div>
+
+    <div id="fitWarningList" class="fit-warnings"></div>
+
+    <div class="fit-hero">
+        <div class="fit-summary-grid">
+            {% for side in ['left', 'right'] %}
+            <section class="card eve-card border-0 fit-source-card">
+                <div class="card-header eve-card-header d-flex justify-content-between align-items-center">
+                    <span class="fw-medium">{{ 'Linke Seite' if side == 'left' else 'Rechte Seite' }}</span>
+                    <div class="fit-source-toggle" role="tablist" aria-label="Quelle {{ side }}">
+                        <button type="button" class="btn btn-sm eve-btn-outline fit-mode-btn active" data-side="{{ side }}" data-mode="saved">Gespeicherter Fit</button>
+                        <button type="button" class="btn btn-sm eve-btn-outline fit-mode-btn" data-side="{{ side }}" data-mode="text">Fit-Text</button>
+                    </div>
+                </div>
+                <div class="card-body d-flex flex-column gap-3">
+                    <div id="{{ side }}SavedPane" class="fit-source-pane">
+                        <div class="mb-3">
+                            <label class="form-label">Charakter</label>
+                            <select id="{{ side }}CharacterSelect" class="form-select eve-input"></select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Fitting</label>
+                            <select id="{{ side }}FittingSelect" class="form-select eve-input"></select>
+                        </div>
+                        <div id="{{ side }}SavedHint" class="small text-muted"></div>
+                    </div>
+
+                    <div id="{{ side }}TextPane" class="fit-source-pane" hidden>
+                        <label class="form-label">Fitting-Text</label>
+                        <textarea id="{{ side }}FitText" class="form-control eve-input" rows="11" placeholder="[Drake, Passive Test]&#10;Shield Power Relay II&#10;Shield Power Relay II&#10;&#10;Large Shield Extender II&#10;Large Shield Extender II&#10;&#10;Heavy Missile Launcher II, Scourge Fury Heavy Missile&#10;&#10;Medium Core Defense Field Purger I"></textarea>
+                        <div class="small text-muted mt-2">Unterstuetzt EFT-/Ingame-Exporttext. Leerzeilen werden als Bereichstrenner interpretiert.</div>
+                    </div>
+
+                    <div id="{{ side }}SourceWarning" class="small"></div>
+                </div>
+            </section>
+            {% endfor %}
+        </div>
+
+        <div id="fitSummaryGrid" class="fit-summary-grid mt-1"></div>
+        <div id="fitCompareGrid" class="fit-compare-grid"></div>
+    </div>
+</div>
+
+<script>
+const FITTINGS_REQUIRED_SCOPE = {{ required_scope | tojson }};
+const FITTING_GROUP_ORDER = ['high', 'mid', 'low', 'rig', 'subsystem', 'service', 'drone', 'cargo', 'fighter', 'implant', 'booster', 'other'];
+const IMPORT_GROUP_FALLBACKS = ['low', 'mid', 'high', 'rig', 'subsystem', 'service', 'drone', 'cargo', 'implant', 'booster', 'other'];
+
+const state = {
+    dataset: null,
+    sources: {
+        left: { mode: 'saved', characterId: '', fittingId: '', text: '' },
+        right: { mode: 'saved', characterId: '', fittingId: '', text: '' },
+    }
+};
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function findCharacter(characterId) {
+    return (state.dataset?.characters || []).find(entry => String(entry.character_id) === String(characterId)) || null;
+}
+
+function setButtonState(side, mode) {
+    document.querySelectorAll('.fit-mode-btn[data-side="' + side + '"]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === mode);
+        btn.classList.toggle('btn-primary', btn.dataset.mode === mode);
+        btn.classList.toggle('eve-btn-outline', btn.dataset.mode !== mode);
+    });
+}
+
+function renderGlobalWarnings() {
+    const container = document.getElementById('fitWarningList');
+    const warnings = (state.dataset?.characters || []).filter(character => character.warning);
+    if (!warnings.length) {
+        container.innerHTML = '';
+        return;
+    }
+    container.innerHTML = warnings.map(character => `
+        <div class="fit-warning-card">
+            <div class="fw-semibold mb-1">${escapeHtml(character.character_name)}</div>
+            <div class="small">${escapeHtml(character.warning)}</div>
+            <div class="small mt-2">
+                <a href="${escapeHtml(character.refresh_url || '/auth/refresh-scopes')}">Scopes aktualisieren</a>
+            </div>
+        </div>
+    `).join('');
+}
+
+function populateCharacterSelect(side) {
+    const select = document.getElementById(side + 'CharacterSelect');
+    const characters = state.dataset?.characters || [];
+    const currentId = state.sources[side].characterId;
+    select.innerHTML = characters.map(character => {
+        const suffix = character.fittings?.length ? ` (${character.fittings.length} Fits)` : '';
+        const warning = character.warning ? ' - Warnung' : '';
+        return `<option value="${character.character_id}">${escapeHtml(character.character_name + suffix + warning)}</option>`;
+    }).join('');
+
+    if (!characters.length) {
+        state.sources[side].characterId = '';
+        state.sources[side].fittingId = '';
+        return;
+    }
+
+    if (!characters.some(character => String(character.character_id) === String(currentId))) {
+        const preferred = characters.find(character => (character.fittings || []).length > 0) || characters[0];
+        state.sources[side].characterId = String(preferred.character_id);
+    }
+    select.value = state.sources[side].characterId;
+}
+
+function populateFittingSelect(side) {
+    const select = document.getElementById(side + 'FittingSelect');
+    const hint = document.getElementById(side + 'SavedHint');
+    const warning = document.getElementById(side + 'SourceWarning');
+    const character = findCharacter(state.sources[side].characterId);
+
+    if (!character) {
+        select.innerHTML = '<option value="">Keine Charaktere</option>';
+        select.disabled = true;
+        hint.textContent = 'Keine Charaktere verfuegbar.';
+        warning.innerHTML = '';
+        return;
+    }
+
+    if (character.warning) {
+        warning.innerHTML = `<span class="badge eve-badge-err">Warnung</span> <span class="text-muted">${escapeHtml(character.warning)}</span>`;
+    } else if (!character.fittings?.length) {
+        warning.innerHTML = `<span class="badge eve-badge-count">Info</span> <span class="text-muted">Keine gespeicherten Fittings bei ESI gefunden.</span>`;
+    } else {
+        warning.innerHTML = `<span class="badge eve-badge-ok">ESI</span> <span class="text-muted">${character.fittings.length} Fittings verfuegbar.</span>`;
+    }
+
+    const fittings = character.fittings || [];
+    select.disabled = fittings.length === 0;
+    select.innerHTML = fittings.length
+        ? fittings.map(fit => `<option value="${fit.fitting_id}">${escapeHtml(fit.ship_name + ' - ' + fit.name)}</option>`).join('')
+        : '<option value="">Keine Fits verfuegbar</option>';
+
+    if (fittings.length && !fittings.some(fit => String(fit.fitting_id) === String(state.sources[side].fittingId))) {
+        state.sources[side].fittingId = String(fittings[0].fitting_id);
+    }
+    if (!fittings.length) {
+        state.sources[side].fittingId = '';
+    }
+    if (state.sources[side].fittingId) {
+        select.value = state.sources[side].fittingId;
+    }
+
+    hint.textContent = character.warning
+        ? 'Dieser Charakter braucht einen funktionierenden Fitting-Scope.'
+        : 'Waehle einen gespeicherten Fit oder wechsle auf Fit-Text.';
+}
+
+function parseImportedFit(text) {
+    const normalized = String(text || '').replace(/\r/g, '').trim();
+    if (!normalized) {
+        return null;
+    }
+
+    const lines = normalized.split('\n');
+    let shipName = 'Imported Fit';
+    let fitName = 'Pasted Fit';
+    const headerMatch = lines[0].trim().match(/^\[(.+?),\s*(.+)\]$/);
+    let bodyStart = 0;
+    if (headerMatch) {
+        shipName = headerMatch[1].trim() || shipName;
+        fitName = headerMatch[2].trim() || fitName;
+        bodyStart = 1;
+    }
+
+    const sections = [];
+    let currentSection = [];
+    lines.slice(bodyStart).forEach(rawLine => {
+        const line = rawLine.trim();
+        if (!line) {
+            if (currentSection.length) {
+                sections.push(currentSection);
+                currentSection = [];
+            }
+            return;
+        }
+        if (/^\[empty/i.test(line)) {
+            return;
+        }
+        currentSection.push(line);
+    });
+    if (currentSection.length) {
+        sections.push(currentSection);
+    }
+
+    const items = [];
+    sections.forEach((sectionLines, sectionIndex) => {
+        const slotGroup = IMPORT_GROUP_FALLBACKS[sectionIndex] || 'other';
+        sectionLines.forEach((line, lineIndex) => {
+            const qtyMatch = line.match(/^(.*?)(?:\s+x(\d+))$/i);
+            const itemName = (qtyMatch ? qtyMatch[1] : line).trim();
+            const quantity = qtyMatch ? parseInt(qtyMatch[2], 10) : 1;
+            items.push({
+                type_id: null,
+                name: itemName,
+                flag: 'import-' + slotGroup + '-' + lineIndex,
+                quantity: quantity,
+                slot_group: slotGroup,
+                slot_label: state.dataset?.slot_labels?.[slotGroup] || slotGroup,
+                sort_index: lineIndex,
+                icon_url: null,
+            });
+        });
+    });
+
+    return {
+        fitting_id: 'import-' + shipName + '-' + fitName,
+        name: fitName,
+        description: 'Imported from pasted fitting text',
+        ship_type_id: null,
+        ship_name: shipName,
+        ship_icon_url: null,
+        items: items,
+    };
+}
+
+function getSelectedFit(side) {
+    const source = state.sources[side];
+    if (source.mode === 'text') {
+        return parseImportedFit(source.text);
+    }
+    const character = findCharacter(source.characterId);
+    if (!character) {
+        return null;
+    }
+    return (character.fittings || []).find(fit => String(fit.fitting_id) === String(source.fittingId)) || null;
+}
+
+function renderSummaryCard(side, fit) {
+    const sideLabel = side === 'left' ? 'Linke Seite' : 'Rechte Seite';
+    if (!fit) {
+        return `
+            <section class="card eve-card border-0 fit-summary-card">
+                <div class="card-body">
+                    <div class="fit-summary-head">
+                        <div class="fit-ship-placeholder"><i class="bi bi-box"></i></div>
+                        <div>
+                            <div class="text-muted small">${sideLabel}</div>
+                            <div class="fw-semibold">Noch kein Fitting gewaehlt</div>
+                            <div class="small text-muted">Waehle einen gespeicherten Fit oder fuege links/rechts Fit-Text ein.</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        `;
+    }
+
+    const itemCount = (fit.items || []).length;
+    const groupCount = new Set((fit.items || []).map(item => item.slot_group)).size;
+    const imageHtml = fit.ship_icon_url
+        ? `<img class="fit-ship-image" src="${escapeHtml(fit.ship_icon_url)}" alt="${escapeHtml(fit.ship_name)}">`
+        : '<div class="fit-ship-placeholder"><i class="bi bi-boxes"></i></div>';
+
+    return `
+        <section class="card eve-card border-0 fit-summary-card">
+            <div class="card-body">
+                <div class="fit-summary-head">
+                    ${imageHtml}
+                    <div>
+                        <div class="text-muted small">${sideLabel}</div>
+                        <div class="fw-semibold fs-5">${escapeHtml(fit.ship_name)}</div>
+                        <div>${escapeHtml(fit.name || 'Unnamed Fit')}</div>
+                        <div class="small text-muted">${escapeHtml(fit.description || '')}</div>
+                    </div>
+                </div>
+                <div class="fit-summary-badges mt-3">
+                    <span class="badge eve-badge-count">${itemCount} Eintraege</span>
+                    <span class="badge eve-badge-main">${groupCount} Bereiche</span>
+                </div>
+            </div>
+        </section>
+    `;
+}
+
+function itemsByGroup(fit) {
+    const map = {};
+    (fit?.items || []).forEach(item => {
+        const key = item.slot_group || 'other';
+        if (!map[key]) {
+            map[key] = [];
+        }
+        map[key].push(item);
+    });
+    return map;
+}
+
+function itemSignature(item) {
+    if (!item) {
+        return '';
+    }
+    return [item.name || '', item.quantity || 1].join('|').toLowerCase();
+}
+
+function renderItemCell(item, otherItem) {
+    if (!item) {
+        return '<div class="fit-slot-cell is-missing"><div class="small">Kein Eintrag</div></div>';
+    }
+    const different = itemSignature(item) !== itemSignature(otherItem);
+    const iconHtml = item.icon_url
+        ? `<img class="fit-item-icon" src="${escapeHtml(item.icon_url)}" alt="${escapeHtml(item.name)}">`
+        : '<div class="fit-item-icon-placeholder"><i class="bi bi-text-paragraph"></i></div>';
+    return `
+        <div class="fit-slot-cell ${different ? 'is-different' : ''}">
+            <div class="fit-item">
+                ${iconHtml}
+                <div>
+                    <div class="fit-item-name">${escapeHtml(item.name)}</div>
+                    <div class="fit-item-meta">${escapeHtml(item.slot_label || item.slot_group || 'Other')}${(item.quantity || 1) > 1 ? ' · x' + escapeHtml(item.quantity) : ''}</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderComparisonGrid() {
+    const leftFit = getSelectedFit('left');
+    const rightFit = getSelectedFit('right');
+    document.getElementById('fitSummaryGrid').innerHTML = renderSummaryCard('left', leftFit) + renderSummaryCard('right', rightFit);
+
+    const compare = document.getElementById('fitCompareGrid');
+    if (!leftFit && !rightFit) {
+        compare.innerHTML = `
+            <div class="fit-compare-empty">
+                <div class="fs-4 mb-2"><i class="bi bi-layout-split"></i></div>
+                <div class="fw-semibold mb-1">Noch kein Vergleich aktiv</div>
+                <div class="small">Waehle links und rechts jeweils ein Fitting oder fuege Fit-Text ein.</div>
+            </div>
+        `;
+        return;
+    }
+
+    const leftGroups = itemsByGroup(leftFit);
+    const rightGroups = itemsByGroup(rightFit);
+    const activeGroups = FITTING_GROUP_ORDER.filter(group => (leftGroups[group]?.length || rightGroups[group]?.length));
+
+    compare.innerHTML = activeGroups.map(group => {
+        const leftItems = leftGroups[group] || [];
+        const rightItems = rightGroups[group] || [];
+        const rowCount = Math.max(leftItems.length, rightItems.length);
+        const label = state.dataset?.slot_labels?.[group] || group;
+
+        const rows = Array.from({ length: rowCount }, (_, index) => {
+            const leftItem = leftItems[index] || null;
+            const rightItem = rightItems[index] || null;
+            return `
+                <div class="fit-slot-row">
+                    ${renderItemCell(leftItem, rightItem)}
+                    <div class="fit-slot-middle"><i class="bi bi-arrow-left-right"></i></div>
+                    ${renderItemCell(rightItem, leftItem)}
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <section class="card eve-card border-0 fit-compare-card">
+                <div class="card-header eve-card-header d-flex justify-content-between align-items-center">
+                    <span class="fw-medium">${escapeHtml(label)}</span>
+                    <span class="badge eve-badge-count">${rowCount}</span>
+                </div>
+                <div class="card-body">
+                    ${rows}
+                </div>
+            </section>
+        `;
+    }).join('') || `
+        <div class="fit-compare-empty">
+            <div class="fw-semibold mb-1">Keine Slot-Daten verfuegbar</div>
+            <div class="small">Die aktuelle Auswahl liefert noch keine verwertbaren Fitting-Eintraege.</div>
+        </div>
+    `;
+}
+
+function syncPane(side) {
+    const mode = state.sources[side].mode;
+    document.getElementById(side + 'SavedPane').hidden = mode !== 'saved';
+    document.getElementById(side + 'TextPane').hidden = mode !== 'text';
+    setButtonState(side, mode);
+}
+
+function refreshSource(side) {
+    populateCharacterSelect(side);
+    populateFittingSelect(side);
+    syncPane(side);
+    renderComparisonGrid();
+}
+
+function attachEvents(side) {
+    document.querySelectorAll('.fit-mode-btn[data-side="' + side + '"]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            state.sources[side].mode = btn.dataset.mode;
+            syncPane(side);
+            renderComparisonGrid();
+        });
+    });
+
+    document.getElementById(side + 'CharacterSelect').addEventListener('change', event => {
+        state.sources[side].characterId = event.target.value;
+        state.sources[side].fittingId = '';
+        populateFittingSelect(side);
+        renderComparisonGrid();
+    });
+
+    document.getElementById(side + 'FittingSelect').addEventListener('change', event => {
+        state.sources[side].fittingId = event.target.value;
+        renderComparisonGrid();
+    });
+
+    document.getElementById(side + 'FitText').addEventListener('input', event => {
+        state.sources[side].text = event.target.value;
+        renderComparisonGrid();
+    });
+}
+
+function initializeDefaults() {
+    const characters = state.dataset?.characters || [];
+    const withFits = characters.filter(character => (character.fittings || []).length > 0);
+    const leftCharacter = withFits[0] || characters[0] || null;
+    const rightCharacter = withFits[1] || withFits[0] || characters[1] || characters[0] || null;
+
+    if (leftCharacter) {
+        state.sources.left.characterId = String(leftCharacter.character_id);
+        state.sources.left.fittingId = leftCharacter.fittings?.[0] ? String(leftCharacter.fittings[0].fitting_id) : '';
+    }
+    if (rightCharacter) {
+        state.sources.right.characterId = String(rightCharacter.character_id);
+        state.sources.right.fittingId = rightCharacter.fittings?.[0] ? String(rightCharacter.fittings[0].fitting_id) : '';
+    }
+}
+
+async function loadFittings() {
+    const compare = document.getElementById('fitCompareGrid');
+    compare.innerHTML = `
+        <div class="fit-compare-empty">
+            <div class="spinner-border eve-accent mb-3" role="status" aria-hidden="true"></div>
+            <div class="fw-semibold mb-1">Fittings werden geladen</div>
+            <div class="small">ESI-Charakterdaten und gespeicherte Fits werden gerade vorbereitet.</div>
+        </div>
+    `;
+    const response = await fetch('/system/fittings/data', { credentials: 'same-origin' });
+    if (!response.ok) {
+        throw new Error('HTTP ' + response.status);
+    }
+    state.dataset = await response.json();
+    initializeDefaults();
+    renderGlobalWarnings();
+    ['left', 'right'].forEach(refreshSource);
+}
+
+['left', 'right'].forEach(attachEvents);
+
+loadFittings().catch(error => {
+    document.getElementById('fitCompareGrid').innerHTML = `
+        <div class="fit-compare-empty">
+            <div class="fs-4 mb-2 text-danger"><i class="bi bi-exclamation-triangle"></i></div>
+            <div class="fw-semibold mb-1">Fittings konnten nicht geladen werden</div>
+            <div class="small">${escapeHtml(error.message || 'Unbekannter Fehler')}</div>
+        </div>
+    `;
+});
+</script>
+{% endblock %}

@@ -1,9 +1,13 @@
+import re
+
+import requests
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
+from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
-from app.dependencies import require_account
-from app.esi import get_system_info, get_planet_info
+from app.database import SessionLocal, get_db
+from app.dependencies import require_account, require_admin
+from app.esi import ensure_valid_token, get_character_fittings, get_system_info, get_planet_info
 from app.i18n import get_language_from_request, translate, translate_type_name
 from app.market import get_prices_by_names, get_market_trends, PI_TYPE_IDS
 from app.models import StaticPlanet
@@ -73,6 +77,153 @@ def _build_planet_type_labels(lang: str) -> dict[str, str]:
         name: translate(f"planet_type.{name.lower()}", lang)
         for name in PLANET_TYPE_COLORS.keys()
     }
+
+
+FITTINGS_SCOPE = "esi-fittings.read_fittings.v1"
+FITTING_SLOT_GROUPS = (
+    "high",
+    "mid",
+    "low",
+    "rig",
+    "subsystem",
+    "service",
+    "drone",
+    "cargo",
+    "fighter",
+    "implant",
+    "booster",
+    "other",
+)
+FITTING_SLOT_LABELS = {
+    "high": "High Slots",
+    "mid": "Mid Slots",
+    "low": "Low Slots",
+    "rig": "Rig Slots",
+    "subsystem": "Subsystems",
+    "service": "Service Slots",
+    "drone": "Drone Bay",
+    "cargo": "Cargo",
+    "fighter": "Fighter Bay",
+    "implant": "Implants",
+    "booster": "Boosters",
+    "other": "Other",
+}
+_FLAG_INDEX_RE = re.compile(r"(\d+)$")
+
+
+def _scope_set(raw_scopes: str | None) -> set[str]:
+    if not raw_scopes:
+        return set()
+    return {part.strip() for part in raw_scopes.replace(",", " ").split() if part.strip()}
+
+
+def _flag_sort_index(flag: str | None) -> int:
+    if not flag:
+        return 999
+    match = _FLAG_INDEX_RE.search(flag)
+    return int(match.group(1)) if match else 999
+
+
+def _flag_to_slot_group(flag: str | None) -> str:
+    normalized = (flag or "").lower()
+    if normalized.startswith("hislot"):
+        return "high"
+    if normalized.startswith("medslot"):
+        return "mid"
+    if normalized.startswith("loslot"):
+        return "low"
+    if normalized.startswith("rigslot"):
+        return "rig"
+    if normalized.startswith("subsystemslot"):
+        return "subsystem"
+    if normalized.startswith("serviceslot"):
+        return "service"
+    if "drone" in normalized:
+        return "drone"
+    if "cargo" in normalized:
+        return "cargo"
+    if "fighter" in normalized:
+        return "fighter"
+    if "implant" in normalized:
+        return "implant"
+    if "booster" in normalized:
+        return "booster"
+    return "other"
+
+
+def _build_fitting_item(raw_item: dict) -> dict:
+    flag = raw_item.get("flag") or ""
+    type_id = int(raw_item.get("type_id") or 0)
+    quantity = int(raw_item.get("quantity") or 1)
+    name = sde.get_type_name(type_id) or f"Type {type_id}"
+    slot_group = _flag_to_slot_group(flag)
+    return {
+        "type_id": type_id,
+        "name": name,
+        "flag": flag,
+        "quantity": quantity,
+        "slot_group": slot_group,
+        "slot_label": FITTING_SLOT_LABELS.get(slot_group, "Other"),
+        "sort_index": _flag_sort_index(flag),
+        "icon_url": f"https://images.evetech.net/types/{type_id}/icon?size=64" if type_id else None,
+    }
+
+
+def _normalize_fitting(raw_fitting: dict) -> dict:
+    ship_type_id = int(raw_fitting.get("ship_type_id") or 0)
+    items = [_build_fitting_item(item) for item in (raw_fitting.get("items") or [])]
+    items.sort(key=lambda item: (FITTING_SLOT_GROUPS.index(item["slot_group"]) if item["slot_group"] in FITTING_SLOT_GROUPS else 999, item["sort_index"], item["name"]))
+    return {
+        "fitting_id": int(raw_fitting.get("fitting_id") or 0),
+        "name": raw_fitting.get("name") or "Unnamed Fit",
+        "description": raw_fitting.get("description") or "",
+        "ship_type_id": ship_type_id,
+        "ship_name": sde.get_type_name(ship_type_id) or f"Type {ship_type_id}",
+        "ship_icon_url": f"https://images.evetech.net/types/{ship_type_id}/render?size=256" if ship_type_id else None,
+        "items": items,
+    }
+
+
+def _serialize_character_fittings(character, db: Session) -> dict:
+    data = {
+        "character_id": int(character.eve_character_id),
+        "character_name": character.character_name,
+        "portrait_url": character.portrait_url,
+        "scopes": sorted(_scope_set(character.scopes)),
+        "status": "ok",
+        "warning": None,
+        "refresh_url": "/auth/refresh-scopes",
+        "fittings": [],
+    }
+    scopes = _scope_set(character.scopes)
+    if FITTINGS_SCOPE not in scopes:
+        data["status"] = "missing_scope"
+        data["warning"] = "Fittings konnten nicht gelesen werden. Der Scope 'esi-fittings.read_fittings.v1' fehlt."
+        return data
+
+    access_token = ensure_valid_token(character, db)
+    if not access_token:
+        data["status"] = "auth_error"
+        data["warning"] = "Fittings konnten nicht gelesen werden. Fuer diesen Charakter ist kein gueltiger Token vorhanden."
+        return data
+
+    try:
+        raw_fittings = get_character_fittings(int(character.eve_character_id), access_token)
+    except requests.HTTPError as exc:
+        status_code = exc.response.status_code if exc.response is not None else None
+        data["status"] = "esi_error"
+        if status_code in (401, 403):
+            data["warning"] = "ESI verweigert den Zugriff auf die Fittings. Bitte die Scopes aktualisieren und den Charakter erneut autorisieren."
+        else:
+            data["warning"] = f"ESI-Fehler beim Laden der Fittings ({status_code or 'unbekannt'})."
+        return data
+    except Exception as exc:
+        data["status"] = "esi_error"
+        data["warning"] = f"Fittings konnten nicht geladen werden: {exc}"
+        return data
+
+    data["fittings"] = [_normalize_fitting(entry) for entry in raw_fittings]
+    return data
 
 
 def _extract_planet_number(planet_name: str, system_name: str | None = None) -> str | None:
@@ -463,6 +614,37 @@ def system_mix_analyze(
         "planet_types": planet_types,
         "planet_count": len(selected_planets),
         "products": grouped,
+    })
+
+
+@router.get("/fittings", response_class=HTMLResponse)
+def fittings_compare_page(
+    request: Request,
+    account=Depends(require_admin),
+):
+    return templates.TemplateResponse("fittings_compare.html", {
+        "request": request,
+        "account": account,
+        "required_scope": FITTINGS_SCOPE,
+    })
+
+
+@router.get("/fittings/data")
+def fittings_compare_data(
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    characters = sorted(
+        account.characters,
+        key=lambda char: (
+            0 if account.main_character_id and char.id == account.main_character_id else 1,
+            char.character_name.lower(),
+        ),
+    )
+    return JSONResponse({
+        "required_scope": FITTINGS_SCOPE,
+        "slot_labels": FITTING_SLOT_LABELS,
+        "characters": [_serialize_character_fittings(character, db) for character in characters],
     })
 
 

@@ -517,6 +517,39 @@ function parseImportedFit(text) {
     };
 }
 
+function formatFitLine(item) {
+    const quantity = Number(item?.quantity || 1);
+    const name = String(item?.name || '').trim();
+    if (!name) {
+        return '';
+    }
+    return quantity > 1 ? `${quantity}x ${name}` : name;
+}
+
+function exportFitToText(fit) {
+    if (!fit) {
+        return '';
+    }
+    const lines = [`[${fit.ship_name || 'Imported Fit'}, ${fit.name || 'Unnamed Fit'}]`];
+    const grouped = itemsByGroup(fit);
+
+    FITTING_GROUP_ORDER.forEach(group => {
+        const items = grouped[group] || [];
+        if (!items.length) {
+            return;
+        }
+        lines.push('');
+        items.forEach(item => {
+            const line = formatFitLine(item);
+            if (line) {
+                lines.push(line);
+            }
+        });
+    });
+
+    return lines.join('\n').trim();
+}
+
 function getSelectedFit(side) {
     const source = state.sources[side];
     if (source.mode === 'text') {
@@ -527,6 +560,17 @@ function getSelectedFit(side) {
         return null;
     }
     return (character.fittings || []).find(fit => String(fit.fitting_id) === String(source.fittingId)) || null;
+}
+
+function syncFitTextFromSaved(side) {
+    const source = state.sources[side];
+    if (source.mode !== 'saved') {
+        return;
+    }
+    const fit = getSelectedFit(side);
+    const text = exportFitToText(fit);
+    source.text = text;
+    document.getElementById(side + 'FitText').value = text;
 }
 
 function renderSummaryCard(side, fit) {
@@ -684,6 +728,7 @@ function syncPane(side) {
 function refreshSource(side) {
     populateCharacterSelect(side);
     populateFittingSelect(side);
+    syncFitTextFromSaved(side);
     syncPane(side);
     renderComparisonGrid();
 }
@@ -701,11 +746,13 @@ function attachEvents(side) {
         state.sources[side].characterId = event.target.value;
         state.sources[side].fittingId = '';
         populateFittingSelect(side);
+        syncFitTextFromSaved(side);
         renderComparisonGrid();
     });
 
     document.getElementById(side + 'FittingSelect').addEventListener('change', event => {
         state.sources[side].fittingId = event.target.value;
+        syncFitTextFromSaved(side);
         renderComparisonGrid();
     });
 

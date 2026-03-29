@@ -166,16 +166,49 @@
     display: none !important;
 }
 
-.fit-warnings {
-    display: grid;
+.fit-warning-toggle {
+    width: 100%;
+    border: 1px solid rgba(230, 57, 70, 0.35);
+    background: rgba(230, 57, 70, 0.09);
+    color: #ffd7dc;
+    border-radius: 10px;
+    padding: 0.65rem 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 0.75rem;
+    text-align: left;
+}
+
+.fit-warning-toggle:hover {
+    border-color: rgba(230, 57, 70, 0.55);
+    background: rgba(230, 57, 70, 0.12);
+}
+
+.fit-warning-toggle i.bi-exclamation-triangle-fill {
+    color: #ff6b75;
+}
+
+.fit-warning-panel {
+    margin-top: 0.5rem;
+    border: 1px solid rgba(230, 57, 70, 0.22);
+    background: rgba(230, 57, 70, 0.05);
+    border-radius: 10px;
+    padding: 0.75rem;
 }
 
 .fit-warning-card {
-    border: 1px solid rgba(230, 57, 70, 0.25);
-    background: rgba(230, 57, 70, 0.07);
-    border-radius: 12px;
-    padding: 0.85rem 1rem;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding: 0.6rem 0;
+}
+
+.fit-warning-card:first-child {
+    border-top: 0;
+    padding-top: 0;
+}
+
+.fit-warning-card:last-child {
+    padding-bottom: 0;
 }
 
 .fit-warning-card a {
@@ -255,10 +288,9 @@
                 Gespeicherte Fits werden ueber ESI gelesen. Wenn einem Charakter der Scope
                 <code>{{ required_scope }}</code> fehlt oder ESI den Zugriff blockiert, erscheint unten automatisch eine Warnung.
             </div>
+            <div id="fitWarningList" class="mt-3"></div>
         </div>
     </div>
-
-    <div id="fitWarningList" class="fit-warnings"></div>
 
     <div class="fit-hero">
         <div class="fit-summary-grid">
@@ -372,15 +404,31 @@ function renderGlobalWarnings() {
         container.innerHTML = '';
         return;
     }
-    container.innerHTML = warnings.map(character => `
-        <div class="fit-warning-card">
-            <div class="fw-semibold mb-1">${escapeHtml(character.character_name)}</div>
-            <div class="small">${escapeHtml(character.warning)}</div>
-            <div class="small mt-2">
-                <a href="${escapeHtml(character.refresh_url || '/auth/refresh-scopes')}">Scopes aktualisieren</a>
+    const summary = warnings.length === 1
+        ? '1 Charakter hat eine Fitting-ESI-Warnung'
+        : `${warnings.length} Charaktere haben Fitting-ESI-Warnungen`;
+    container.innerHTML = `
+        <button class="fit-warning-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#fitWarningsCollapse" aria-expanded="false" aria-controls="fitWarningsCollapse">
+            <span class="d-flex align-items-center gap-2">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <span>${escapeHtml(summary)}</span>
+            </span>
+            <i class="bi bi-chevron-down"></i>
+        </button>
+        <div class="collapse" id="fitWarningsCollapse">
+            <div class="fit-warning-panel">
+                ${warnings.map(character => `
+                    <div class="fit-warning-card">
+                        <div class="fw-semibold mb-1">${escapeHtml(character.character_name)}</div>
+                        <div class="small">${escapeHtml(character.warning)}</div>
+                        <div class="small mt-2">
+                            <a href="${escapeHtml(character.refresh_url || '/auth/refresh-scopes')}">Scopes aktualisieren</a>
+                        </div>
+                    </div>
+                `).join('')}
             </div>
         </div>
-    `).join('');
+    `;
 }
 
 function populateCharacterSelect(side) {

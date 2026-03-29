@@ -2054,7 +2054,7 @@ def export_colonies_csv(
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
-    """Export all colony data as CSV for the current account."""
+    """Export detailed colony data as CSV for the current account."""
     import csv
     import io
     from fastapi.responses import StreamingResponse
@@ -2062,34 +2062,119 @@ def export_colonies_csv(
     cached = _load_colony_cache(account.id, db)
     colonies: list[dict] = (cached.get("colonies") or []) if cached else []
     _recompute_expiry(colonies)
+    characters = db.query(Character).filter(Character.account_id == account.id).all()
+    char_id_by_name = {char.character_name: char.eve_character_id for char in characters}
+
+    def _csv_status(colony: dict) -> str:
+        expiry_hours = colony.get("expiry_hours")
+        if expiry_hours is not None and expiry_hours < 0:
+            return "Expired"
+        if colony.get("is_stalled"):
+            return "Stalled"
+        if colony.get("is_active"):
+            return "Extracting"
+        return "Idle"
+
+    def _csv_is_working(colony: dict) -> bool:
+        expiry_hours = colony.get("expiry_hours")
+        if expiry_hours is not None:
+            return expiry_hours > 0
+        return colony.get("is_stalled") is False
+
+    def _csv_final_product(colony: dict) -> str:
+        highest_tier_num = int(colony.get("highest_tier_num") or 0)
+        productions = colony.get("productions") or {}
+        prod_tiers = colony.get("prod_tiers") or {}
+        names = sorted(name for name in productions if prod_tiers.get(name, 0) == highest_tier_num)
+        return " | ".join(names)
+
+    def _csv_capacity_breakdown(colony: dict) -> tuple[float, float, float]:
+        storage_entries = colony.get("storage") or []
+        total_capacity = sum(float(entry.get("capacity") or 0.0) for entry in storage_entries)
+        launchpad_used = sum(
+            float(entry.get("used_m3") or 0.0)
+            for entry in storage_entries
+            if str(entry.get("struct") or "").lower().startswith("launchpad")
+        )
+        storage_used = sum(
+            float(entry.get("used_m3") or 0.0)
+            for entry in storage_entries
+            if not str(entry.get("struct") or "").lower().startswith("launchpad")
+        )
+        return total_capacity, launchpad_used + storage_used, launchpad_used, storage_used
+
+    def _csv_expiry_reason(colony: dict, total_capacity: float, total_used: float) -> str:
+        expiry_hours = colony.get("expiry_hours")
+        if expiry_hours is not None and expiry_hours < 0:
+            return "Extractor expired"
+        if total_capacity > 0 and total_used >= (total_capacity * 0.95):
+            return "Storage full"
+        if colony.get("is_stalled"):
+            return "Factory stalled"
+        missing_inputs = colony.get("missing_inputs") or []
+        if missing_inputs:
+            return "Missing inputs"
+        return ""
+
+    def _csv_avg_rates(colony: dict, count: int = 4) -> list[float]:
+        extractors = ((colony.get("extractor_rate_summary") or {}).get("extractors") or [])
+        values = []
+        for extractor in extractors[:count]:
+            values.append(round(float(extractor.get("avg_per_hour") or 0.0), 2))
+        while len(values) < count:
+            values.append(0.0)
+        return values
 
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "Character", "Planet", "System", "Region", "Type", "Level",
-        "Tier", "ISK/Day", "Expiry (h)", "Active", "Stalled",
+        "Character name",
+        "Character ID",
+        "Planet name",
+        "Planet type",
+        "System name",
+        "System ID",
+        "Status",
+        "Is working",
+        "Final product",
+        "Product capacity",
+        "Used capacity total",
+        "Used capacity launchpad",
+        "Used capacity storage",
+        "Expires at",
+        "Expiry reason",
+        "Avg. per hour 1",
+        "Avg. per hour 2",
+        "Avg. per hour 3",
+        "Avg. per hour 4",
     ])
     for c in colonies:
-        expiry_h = c.get("expiry_hours")
+        total_capacity, total_used, launchpad_used, storage_used = _csv_capacity_breakdown(c)
+        avg_rates = _csv_avg_rates(c)
         writer.writerow([
             c.get("character_name", ""),
+            char_id_by_name.get(c.get("character_name", ""), ""),
             c.get("planet_name", ""),
-            c.get("solar_system_name", ""),
-            c.get("region_name", ""),
             c.get("planet_type", ""),
-            c.get("upgrade_level", ""),
-            c.get("highest_tier", ""),
-            round(float(c.get("isk_day", 0) or 0), 2),
-            round(float(expiry_h), 2) if expiry_h is not None else "",
-            "1" if c.get("is_active") else "0",
-            "1" if c.get("is_stalled") else "0",
+            c.get("solar_system_name", ""),
+            c.get("solar_system_id", ""),
+            _csv_status(c),
+            "true" if _csv_is_working(c) else "false",
+            _csv_final_product(c),
+            round(total_capacity, 2),
+            round(total_used, 2),
+            round(launchpad_used, 2),
+            round(storage_used, 2),
+            c.get("expiry_iso") or "",
+            _csv_expiry_reason(c, total_capacity, total_used),
+            *avg_rates,
         ])
 
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=pi_colonies.csv"},
+        headers={"Content-Disposition": "attachment; filename=pi_colonies_detailed.csv"},
     )
 
 

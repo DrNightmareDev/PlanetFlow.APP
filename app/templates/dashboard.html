@@ -146,7 +146,7 @@
 
     <!-- Token-Fehler Banner -->
     {% if token_error_count and token_error_count > 0 %}
-    <div class="col-12">
+    <div class="col-12" id="tokenErrorBannerWrap">
         <div class="alert mb-0" style="background:#3b221e;border:1px solid #7c3f35;color:#f3c0b8;border-radius:8px;">
             <div class="d-flex align-items-start gap-3 flex-wrap">
                 <i class="bi bi-exclamation-triangle-fill fs-5 mt-1" style="color:#e74c3c;flex-shrink:0;"></i>
@@ -161,9 +161,29 @@
                 <a href="/dashboard/characters" class="btn btn-sm" style="background:#7c3f35;color:#fff;border:none;white-space:nowrap;">
                     <i class="bi bi-key me-1"></i>Tokens prüfen
                 </a>
+                <button onclick="dismissTokenBanner()" title="Ausblenden bis zum nächsten Fehler"
+                        style="background:none;border:none;color:#f3c0b8;opacity:.6;cursor:pointer;font-size:1.1rem;padding:0 2px;line-height:1;flex-shrink:0;"
+                        onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.6'">
+                    <i class="bi bi-x-lg"></i>
+                </button>
             </div>
         </div>
     </div>
+    <script>
+    (function(){
+        const KEY = 'eve_pi_token_banner_dismissed';
+        const sig = {{ token_error_chars | tojson }}.slice().sort().join(',');
+        if (localStorage.getItem(KEY) === sig) {
+            const el = document.getElementById('tokenErrorBannerWrap');
+            if (el) el.style.display = 'none';
+        }
+        window.dismissTokenBanner = function() {
+            localStorage.setItem(KEY, sig);
+            const el = document.getElementById('tokenErrorBannerWrap');
+            if (el) el.style.display = 'none';
+        };
+    })();
+    </script>
     {% endif %}
 
     <!-- Statistiken -->

@@ -251,6 +251,16 @@
     font-size: 0.75rem;
 }
 
+.fit-compare-note {
+    margin-top: 0.75rem;
+    border: 1px solid rgba(0, 180, 216, 0.22);
+    background: rgba(0, 180, 216, 0.08);
+    color: var(--eve-text);
+    border-radius: 10px;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.82rem;
+}
+
 .fit-evaluate-btn-needs-action {
     background: rgba(244, 163, 0, 0.16);
     border-color: rgba(244, 163, 0, 0.7) !important;
@@ -352,6 +362,7 @@
         </div>
 
         <div id="fitSummaryGrid" class="fit-summary-grid mt-1"></div>
+        <div id="fitSummaryNote"></div>
         <div id="fitCompareGrid" class="fit-compare-grid"></div>
     </div>
 </div>
@@ -876,6 +887,11 @@ function renderComparisonGrid() {
     const leftFit = getSelectedFit('left');
     const rightFit = getSelectedFit('right');
     document.getElementById('fitSummaryGrid').innerHTML = renderSummaryCard('left', leftFit) + renderSummaryCard('right', rightFit);
+    const note = document.getElementById('fitSummaryNote');
+    const differentHulls = leftFit && rightFit && String(leftFit.ship_name || '') && String(rightFit.ship_name || '') && String(leftFit.ship_name) !== String(rightFit.ship_name);
+    note.innerHTML = differentHulls
+        ? `<div class="fit-compare-note"><i class="bi bi-info-circle me-2"></i>Es werden aktuell zwei unterschiedliche Huellen verglichen: <strong>${escapeHtml(leftFit.ship_name)}</strong> und <strong>${escapeHtml(rightFit.ship_name)}</strong>.</div>`
+        : '';
 
     const compare = document.getElementById('fitCompareGrid');
     if (!leftFit && !rightFit) {

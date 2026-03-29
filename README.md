@@ -1,49 +1,62 @@
 # EVE PI Manager
 
-[Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
+[Deutsch](README.de.md) | [English](README.en.md) | [简体中文](README.zh-Hans.md)
 
 Self-hosted Planetary Industry manager for EVE Online.
 
 If this project helps you, Ingame-ISK donations to `DrNightmare` are welcome.
 
-## Read The Docs
-
-- [Deutsch](README.de.md)
-- [English](README.en.md)
-- [Simplified Chinese](README.zh-Hans.md)
-
 ## Highlights
 
 - Dashboard, Skyhooks, Characters, Corporation, Jita Market, System Analyzer, Compare, System Mix, and PI Chain Planner
-- DB-backed caches for market prices, dashboard values, skyhook values, GUI translations, and static planet details
-- Dashboard extractor balance indicators, balance filters, extractor-rate filters, and tier filters
-- System Analyzer with single-planet recommendation filter and expandable planet details including planet number and radius
+- **Celery + RabbitMQ** background refresh — dashboard always loads instantly, ESI fetched in background every 30 min
+- **ETag caching** — ~60–70% fewer ESI calls after first run via HTTP 304
+- PI Templates with to-scale canvas rendering and community imports (GitHub)
+- DB-backed caches for market prices, dashboard values, skyhook values, ETag responses, GUI translations, and static planet details
+- Auto-refresh countdown on dashboard
+- Optional nginx, PgBouncer, Flower task monitor, and Sentry error tracking
 - GUI languages: German, English, and Simplified Chinese
-- Linux, Docker Compose, and native Windows setup/update scripts
+- Linux, Docker Compose, and native Windows setup/update/upgrade scripts
 
-## Page Guides
+## Full documentation
 
-- `Dashboard`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
-- `Skyhooks`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
-- `Characters`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
-- `Corporation`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
-- `Jita Market`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
-- `PI Chain Planner`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
-- `System Analyzer`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
-- `System Mix`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
-- `Compare`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
+- [Deutsch](README.de.md)
+- [English](README.en.md)
+- [简体中文](README.zh-Hans.md)
 
-## Update Scripts
+## Quick start
 
-- Linux native: `bash scripts/update_linux.sh`
-- Linux Docker Compose: `bash scripts/update_linux.sh --compose`
-- Windows native: `powershell -ExecutionPolicy Bypass -File .\scripts\update_windows.ps1`
-- Windows Docker Compose: `powershell -ExecutionPolicy Bypass -File .\scripts\update_windows.ps1 -Compose`
+```bash
+git clone https://github.com/DrNightmareDev/PI_Manager.git
+cd PI_Manager
+cp .env.example .env
+# Fill in .env, then:
+docker compose up -d
+```
 
-Both update scripts also support a custom branch:
+## Upgrade from older version (native Linux)
 
-- Linux: `bash scripts/update_linux.sh --branch main`
-- Windows: `powershell -ExecutionPolicy Bypass -File .\scripts\update_windows.ps1 -Branch main`
+```bash
+sudo bash scripts/upgrade_to_latest.sh
+```
+
+Handles RabbitMQ install, new `.env` keys, uvicorn → gunicorn migration, Celery systemd units, pip deps, and DB migrations automatically.
+
+## Scripts
+
+| Script | Purpose |
+|---|---|
+| `scripts/setup_linux.sh` | Fresh native Linux install |
+| `scripts/upgrade_to_latest.sh` | Upgrade any version to latest (native Linux) |
+| `scripts/update_linux.sh` | Regular update (native or `--compose`) |
+| `scripts/update_windows.ps1` | Update on Windows (native or `-Compose`) |
+
+## Health check
+
+```
+GET /health
+→ {"status": "ok", "database": "ok", "rabbitmq": "ok"}
+```
 
 ## CCP Notice
 

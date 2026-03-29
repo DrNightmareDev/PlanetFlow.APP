@@ -8,18 +8,23 @@
 
 ## 功能
 
-- 管理主号与小号的 PI 殖民地
-- 对市场价格、仪表盘数值、Skyhook 数值、GUI 翻译和静态行星信息使用数据库缓存
-- 每 15 分钟自动刷新价格与估值数据
-- 仪表盘支持状态筛选、ISK/天、到期提醒、提取器平衡指示、提取速率筛选、Tier 筛选和 Dotlan 链接
+- 管理主号与小号的 PI 殖民地，支持无限账号和角色
+- **Celery + RabbitMQ 后台刷新** — ESI 数据每 30 分钟在后台自动更新；仪表盘始终从缓存即时加载
+- **基于 ETag 的 ESI 缓存** — 未变化的行星返回 HTTP 304，跳过重新处理（首次运行后约减少 60–70% 的 ESI 请求）
+- 对市场价格、仪表盘数值、Skyhook 数值、ETag 响应、GUI 翻译和静态行星信息使用数据库缓存
+- 通过 Celery Beat 自动执行 15 分钟市场价格刷新和 30 分钟殖民地刷新
+- 仪表盘支持状态筛选、ISK/天、到期提醒、提取器平衡指示、提取速率筛选、Tier 筛选、自动刷新倒计时和 Dotlan 链接
+- **PI 模板** — 保存、分享和导入殖民地布局，支持等比例 Canvas 渲染和 GitHub 社区模板导入
 - Skyhook 库存支持历史记录与数据库价值缓存
 - 角色页面支持卡片视图与列表视图下的 PI 技能展示
 - 包含 Corporation、System Analyzer、Compare、System Mix 和 PI Chain Planner
 - Manager 页面支持数据库中的 GUI 翻译管理，语言包含德语、英语和简体中文
+- 可选 **Sentry** 错误追踪和 **Flower** Celery 任务监控
 
 ## 界面页面
 
-- `Dashboard`：显示全部 PI 殖民地、每日 ISK 价值、到期时间、仓储状态、Skyhook 信息，以及活跃、已过期、停滞、平衡、失衡、提取速率和 Tier 筛选。
+- `Dashboard`：显示全部 PI 殖民地、每日 ISK 价值、到期时间、仓储状态、Skyhook 信息、自动刷新倒计时，以及活跃、已过期、停滞、平衡、失衡、提取速率和 Tier 筛选。
+- `PI Templates`：殖民地布局 Canvas 编辑器，支持等比例行星渲染，并可从 GitHub 社区源（DalShooth、TheLegi0n-NBI）导入。
 - `Skyhooks`：按行星编辑并保存 Skyhook 库存，同时查看历史记录和缓存价值。
 - `Characters`：显示所有已绑定角色、主号/小号关系、Token 状态，以及卡片和列表视图下的 PI 技能。
 - `Corporation`：汇总自己军团的 PI 数据，并显示主角色、殖民地、PI 类型和跨军团殖民地的产品搜索。
@@ -31,12 +36,14 @@
 
 ## 所需 ESI Scopes
 
-- `esi-planets.manage_planets.v1`
-- `esi-planets.read_customs_offices.v1`
-- `esi-location.read_location.v1`
-- `esi-search.search_structures.v1`
-- `esi-characters.read_corporation_roles.v1`
-- `esi-skills.read_skills.v1`
+```
+esi-planets.manage_planets.v1
+esi-planets.read_customs_offices.v1
+esi-location.read_location.v1
+esi-search.search_structures.v1
+esi-characters.read_corporation_roles.v1
+esi-skills.read_skills.v1
+```
 
 ## 快速开始
 
@@ -60,79 +67,72 @@ EVE_CALLBACK_URL=http://YOUR-IP-OR-DOMAIN/auth/callback
 SECRET_KEY=a_long_random_secret_with_at_least_32_characters
 ```
 
-说明：
-
-- `DATABASE_URL`：应用使用的 PostgreSQL 连接串
-- `EVE_CLIENT_ID` / `EVE_CLIENT_SECRET`：来自 CCP Developer Portal
-- `EVE_CALLBACK_URL`：必须与 CCP 应用中的回调地址完全一致
-- `SECRET_KEY`：用于会话签名，必须替换为自己的安全随机值
-
-### 常用可调项
+### RabbitMQ / Celery（后台刷新所需）
 
 ```env
-EVE_SCOPES=esi-planets.manage_planets.v1 esi-planets.read_customs_offices.v1 esi-location.read_location.v1 esi-search.search_structures.v1 esi-characters.read_corporation_roles.v1 esi-skills.read_skills.v1
-APP_PORT=8000
-DEBUG=false
-JANICE_API_KEY=
-DB_PASSWORD=
+RABBITMQ_USER=evepi
+RABBITMQ_PASS=change_me_rabbit
+CELERY_BROKER_URL=amqp://evepi:change_me_rabbit@rabbitmq:5672//
 ```
 
-- `EVE_SCOPES`：登录时请求的 ESI 权限
-- `APP_PORT`：本地应用端口
-- `DEBUG`：仅建议开发时开启
-- `JANICE_API_KEY`：可选
-- `DB_PASSWORD`：主要用于 Compose 或容器场景
+- Docker Compose 使用 `@rabbitmq:5672`，Linux 原生安装使用 `@localhost:5672`
+- `CELERY_BROKER_URL` 留空则使用 APScheduler 回退模式（单进程，不推荐用于大型军团）
 
-### 修改 `.env` 之后
+### 性能
 
-- 重启服务或容器
-- 如果修改了 Scope，相关角色需要重新通过 EVE SSO 授权
-- 如果 `EVE_CALLBACK_URL` 或 `EVE_SCOPES` 配置错误，登录或 Scope 刷新通常会立即失败
+```env
+# 每个 gunicorn Worker 加载完整应用（约 400-500 MB）
+# 2 GB 内存建议 2 个 Worker，4 GB 以上可用 2-4 个
+WEB_WORKERS=2
+```
+
+### 可选集成
+
+```env
+SENTRY_DSN=          # Sentry 错误追踪，留空禁用
+FLOWER_USER=admin    # Flower 任务监控用户名（--profile monitoring）
+FLOWER_PASS=change_me_flower
+NGINX_PORT=80        # nginx 端口（--profile nginx）
+```
 
 ## Docker Compose
 
+### 启动
+
 ```bash
 docker compose up -d
 ```
 
-更新：
+启动核心组件：**PostgreSQL**、**RabbitMQ**、**Web 应用**（gunicorn）、**Celery Worker** 和 **Celery Beat** 调度器。
 
+### 可选 Profile
+
+| Profile | 命令 | 用途 |
+|---|---|---|
+| `nginx` | `--profile nginx` | 内置 nginx 反向代理（已有 nginx 则跳过）|
+| `pgbouncer` | `--profile pgbouncer` | PgBouncer 连接池（超大型部署）|
+| `monitoring` | `--profile monitoring` | Flower Celery 任务监控（localhost:5555）|
+
+示例：
 ```bash
-git pull origin main
-docker compose pull
-docker compose build
-docker compose up -d
-docker compose exec app alembic upgrade head
+docker compose --profile nginx up -d
 ```
 
-也可以直接使用项目自带的更新脚本：
+### 更新
 
 ```bash
 bash scripts/update_linux.sh --compose
 ```
 
-如果你直接基于本地工作目录更新，通常下面这样就够了：
+### 日志
 
 ```bash
-docker compose up -d --build
-docker compose exec app alembic upgrade head
+docker compose logs -f app
+docker compose logs -f celery_worker
+docker compose logs -f celery_beat
 ```
 
-推荐顺序：
-
-- 拉取最新代码
-- 拉取或重新构建镜像
-- 重启容器
-- 使用 `alembic upgrade head` 执行迁移
-- 然后简单检查日志
-
-日志检查：
-
-```bash
-docker compose logs -n 100 app
-```
-
-Compose 中的管理员脚本：
+### 管理员脚本
 
 ```bash
 docker compose exec app python /app/scripts/add_administrator.py --name "Character Name"
@@ -141,44 +141,53 @@ docker compose exec app python /app/scripts/remove_administrator.py --name "Char
 docker compose exec app python /app/scripts/remove_administrator.py --eve-id 123456789
 ```
 
-## Linux
+## Linux 原生
+
+### 全新安装
 
 ```bash
-chmod +x scripts/setup_linux.sh
-bash scripts/setup_linux.sh
+sudo bash scripts/setup_linux.sh
 ```
 
-更新：
+自动安装配置：PostgreSQL、RabbitMQ、Python venv、Alembic 迁移，以及三个 systemd 服务：
+
+| 服务 | 描述 |
+|---|---|
+| `eve-pi-manager` | Web 应用（gunicorn）|
+| `eve-pi-manager-worker` | Celery Worker（ESI 后台刷新）|
+| `eve-pi-manager-beat` | Celery Beat 调度器（每 30 分钟触发刷新）|
+
+### 从旧版本升级
 
 ```bash
-bash ~/PI_Manager/scripts/update_linux.sh
+sudo bash scripts/upgrade_to_latest.sh
 ```
 
-Linux 原生更新现在直接基于 `/opt/eve-pi-manager` 中的 Git 工作副本执行：
-- `git fetch`
-- `git checkout/reset` 到目标分支
-- 更新 Python 依赖
-- 执行 Alembic 迁移
-- 重启 `eve-pi-manager`
+自动处理：安装 RabbitMQ、补全 `.env` 缺失配置项、将 Web 服务从 uvicorn 升级到 gunicorn、创建 Celery systemd 单元、执行 pip install 和数据库迁移、重启所有服务。
 
-`.env`、`data/` 和 `venv/` 会被保留。
+### 常规更新
 
-可选：
+```bash
+sudo bash scripts/update_linux.sh
+```
 
-- 使用 `--branch <name>` 从其他分支更新
-- 使用 `--compose` 将同一脚本用于 Docker Compose 部署
+### 查看服务状态
+
+```bash
+systemctl status eve-pi-manager eve-pi-manager-worker eve-pi-manager-beat
+```
+
+### 日志
+
+```bash
+journalctl -u eve-pi-manager -f
+journalctl -u eve-pi-manager-worker -f
+journalctl -u eve-pi-manager-beat -f
+```
 
 ## Windows 原生运行
 
-可以，系统可以原生运行在 Windows 上。
-
-要求：
-
-- Python 3.11+
-- 本地或远程 PostgreSQL
-- 已填写好的 `.env`
-
-安装：
+注意：Windows 脚本不配置 RabbitMQ 和 Celery，应用将回退到 APScheduler（单进程）。生产环境推荐使用 Linux 或 Docker。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
@@ -190,25 +199,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\update_windows.ps1
 ```
 
-Windows 上的 Docker Compose 更新：
+## 健康检查
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\update_windows.ps1 -Compose
+```
+GET /health
+→ {"status": "ok", "database": "ok", "rabbitmq": "ok"}
 ```
 
-可选：
-
-- 使用 `-Branch <name>` 从其他分支更新
-
-说明：
-
-- 应用本体可以原生运行在 Windows 上
-- `systemd` 等 Linux 专属组件仅适用于 Linux
-- 生产环境依然更推荐 Linux 或 Docker
-
 ## 管理员脚本
-
-在主机上直接执行：
 
 ```bash
 cd /opt/eve-pi-manager
@@ -218,34 +216,27 @@ cd /opt/eve-pi-manager
 ./scripts/remove_administrator.py --eve-id 123456789
 ```
 
-作用：
-
-- `add_administrator.py`：授予 `Administrator` 与 `Manager`
-- `remove_administrator.py`：移除 `Administrator` 与 `Manager`
-
 ## 翻译
 
 - GUI 翻译从数据库表 `translation_entries` 加载
 - `app/locales/` 中的种子文件提供初始内容
-- 官方 PI 产品名称从 EVE SDE (`types.json`) 导入
-- 例如 `type.<id>.name` 这类 API/SDE 条目在 Manager 中为只读
-
-## 部署流程
-
-- 快速 UI / 模板测试运行在 `192.168.2.44` (`pitest`)
-- 持久修改会提交并推送到 `main`
-- 之后再通过现有更新脚本同步到目标环境
+- 官方 PI 产品名称从 EVE SDE（`types.json`）导入
+- 静态行星详情（行星编号、半径）来自 SDE 宇宙数据
+- `type.<id>.name` 等 SDE 条目在 Manager 中为只读
 
 ## 技术栈
 
-- Python 3.11
-- FastAPI
-- PostgreSQL
-- SQLAlchemy 2.0
-- Alembic
-- Jinja2
-- Bootstrap 5
-- APScheduler
+| 组件 | 技术 |
+|---|---|
+| Web 框架 | FastAPI + Jinja2 |
+| 数据库 | PostgreSQL + SQLAlchemy 2.0 + Alembic |
+| 后台任务 | Celery 5 + RabbitMQ |
+| Web 服务器 | gunicorn + UvicornWorker |
+| 前端 | Bootstrap 5 |
+| ESI 缓存 | ETag / If-None-Match（HTTP 304）|
+| 开发回退 | APScheduler（无需 RabbitMQ）|
+| 错误追踪 | Sentry SDK（可选）|
+| 任务监控 | Flower（可选，`--profile monitoring`）|
 
 ## CCP 声明
 

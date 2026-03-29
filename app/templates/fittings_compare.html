@@ -850,28 +850,33 @@ function attachEvents(side) {
     document.querySelectorAll('.fit-mode-btn[data-side="' + side + '"]').forEach(btn => {
         btn.addEventListener('click', () => {
             state.sources[side].mode = btn.dataset.mode;
-            syncPane(side);
-            renderComparisonGrid();
+            refreshSource(side);
         });
     });
 
     document.getElementById(side + 'CharacterSelect').addEventListener('change', event => {
         state.sources[side].characterId = event.target.value;
         state.sources[side].fittingId = '';
-        populateFittingSelect(side);
-        syncFitTextFromSaved(side);
-        renderComparisonGrid();
+        refreshSource(side);
     });
 
     document.getElementById(side + 'FittingSelect').addEventListener('change', event => {
         state.sources[side].fittingId = event.target.value;
-        syncFitTextFromSaved(side);
-        renderComparisonGrid();
+        refreshSource(side);
     });
 
-    document.getElementById(side + 'FitText').addEventListener('input', event => {
+    const fitText = document.getElementById(side + 'FitText');
+    const refreshFromText = event => {
         state.sources[side].text = event.target.value;
-        renderComparisonGrid();
+        refreshSource(side);
+    };
+    fitText.addEventListener('input', refreshFromText);
+    fitText.addEventListener('change', refreshFromText);
+    fitText.addEventListener('paste', () => {
+        window.setTimeout(() => {
+            state.sources[side].text = fitText.value;
+            refreshSource(side);
+        }, 0);
     });
 }
 

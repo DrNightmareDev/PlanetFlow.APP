@@ -80,7 +80,29 @@
                         {% endif %}
                     </div>
 
-                    {% if char.last_colony_sync_at %}
+                    {% if not char.refresh_token %}
+                    <div class="mb-3 p-2 rounded" style="background:#3b221e;border:1px solid #7c3f35;color:#f3c0b8;">
+                        <div class="small fw-semibold mb-1">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>Kein Refresh-Token — ESI-Zugriff nicht möglich
+                        </div>
+                        <div style="font-size:0.78rem;color:#e5b7af;">
+                            <a href="/auth/refresh-scopes" class="text-warning">Jetzt neu autorisieren</a>
+                        </div>
+                    </div>
+                    {% elif char.esi_consecutive_errors >= 3 %}
+                    <div class="mb-3 p-2 rounded" style="background:#3b221e;border:1px solid #7c3f35;color:#f3c0b8;">
+                        <div class="small fw-semibold mb-1">
+                            <i class="bi bi-x-circle-fill me-1"></i>ESI-Fehler — {{ char.esi_consecutive_errors }}× in Folge
+                        </div>
+                        <div style="font-size:0.78rem;color:#e5b7af;">
+                            Charakter wird automatisch nach 24h erneut versucht.
+                            {% if char.last_esi_refresh_at %}
+                            Letzter Versuch: {{ char.last_esi_refresh_at.strftime('%d.%m.%Y %H:%M') }}.
+                            {% endif %}
+                            <a href="/auth/refresh-scopes" class="text-warning ms-1">Manuell neu autorisieren</a>
+                        </div>
+                    </div>
+                    {% elif char.last_colony_sync_at %}
                     {% if char.colony_sync_issue and char.last_known_colony_count > 0 %}
                     <div class="mb-3 p-2 rounded" style="background:#3b221e;border:1px solid #7c3f35;color:#f3c0b8;">
                         <div class="small fw-semibold mb-1">
@@ -98,6 +120,9 @@
                         </div>
                         <div style="font-size:0.78rem;color:#9fe0b8;">
                             Aktueller Stand: {{ char.last_known_colony_count }} Kolonien.
+                            {% if char.last_esi_refresh_at %}
+                            ESI: {{ char.last_esi_refresh_at.strftime('%d.%m.%Y %H:%M') }}.
+                            {% endif %}
                         </div>
                     </div>
                     {% endif %}

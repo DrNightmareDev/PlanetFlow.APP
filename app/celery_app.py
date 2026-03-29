@@ -35,5 +35,10 @@ celery_app.conf.update(
             "task": "app.tasks.cleanup_sso_states_task",
             "schedule": 3600.0,
         },
+        # Discord/webhook expiry alerts every 15 minutes
+        "send-webhook-alerts": {
+            "task": "app.tasks.send_webhook_alerts_task",
+            "schedule": 900.0,
+        },
     },
 )

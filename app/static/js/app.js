@@ -947,7 +947,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const FILTER_KEY = 'eve_pi_colony_filter';
 
     const pager = EvePaginate('coloniesTable', {
-        pageSize: 6,
+        pageSize: 50,
+        pageSizes: [25, 50, 100, 0],
         controlsIds: ['coloniesTablePaginationTop', 'coloniesTablePagination'],
         onCount: n => { if (badge) badge.textContent = n; }
     });

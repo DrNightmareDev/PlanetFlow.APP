@@ -1199,6 +1199,13 @@ def dashboard(
         for name in product_names
         if name
     }
+    # Token health: count chars with no refresh_token or esi_consecutive_errors >= limit
+    token_error_chars = [
+        c for c in characters
+        if not c.refresh_token or c.esi_consecutive_errors >= 3
+    ]
+    token_error_count = len(token_error_chars)
+
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "account": account,
@@ -1223,6 +1230,8 @@ def dashboard(
         "price_mode": current_price_mode,
         "refreshing": refreshing,
         "market_last_updated_iso": market_last_updated_iso,
+        "token_error_count": token_error_count,
+        "token_error_chars": [c.character_name for c in token_error_chars],
     })
 
 
@@ -1538,6 +1547,14 @@ def corp_view_page(
             else:
                 colonies = None
                 uncached_count += 1
+                # Kick Celery background refresh so the corp page gets data soon
+                try:
+                    import os as _os
+                    if _os.getenv("CELERY_BROKER_URL"):
+                        from app.tasks import refresh_account_task
+                        refresh_account_task.delay(acc_id)
+                except Exception as _exc:
+                    logger.debug("corp: could not kick Celery for account %d: %s", acc_id, _exc)
 
         colony_count = 0
         planet_type_counts: dict[str, int] = {}
@@ -1789,6 +1806,129 @@ def _attach_pi_skills(characters: list[Character], db: Session) -> None:
         setattr(char, "pi_skill_total", sum(skill_levels.values()))
         setattr(char, "has_skill_scope", has_skill_scope)
         setattr(char, "pi_skill_error", skill_error)
+
+
+@router.get("/export.csv")
+def export_colonies_csv(
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """Export all colony data as CSV for the current account."""
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+
+    cached = _load_colony_cache(account.id, db)
+    colonies: list[dict] = (cached.get("colonies") or []) if cached else []
+    _recompute_expiry(colonies)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Character", "Planet", "System", "Region", "Type", "Level",
+        "Tier", "ISK/Day", "Expiry (h)", "Active", "Stalled",
+    ])
+    for c in colonies:
+        expiry_h = c.get("expiry_hours")
+        writer.writerow([
+            c.get("character_name", ""),
+            c.get("planet_name", ""),
+            c.get("solar_system_name", ""),
+            c.get("region_name", ""),
+            c.get("planet_type", ""),
+            c.get("upgrade_level", ""),
+            c.get("highest_tier", ""),
+            round(float(c.get("isk_day", 0) or 0), 2),
+            round(float(expiry_h), 2) if expiry_h is not None else "",
+            "1" if c.get("is_active") else "0",
+            "1" if c.get("is_stalled") else "0",
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=pi_colonies.csv"},
+    )
+
+
+@router.get("/webhook-settings")
+def get_webhook_settings(
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """Return current webhook alert settings for the account."""
+    from app.models import WebhookAlert
+    row = db.query(WebhookAlert).filter_by(account_id=account.id).first()
+    if not row:
+        return JSONResponse({"webhook_url": "", "alert_hours": 2, "enabled": False})
+    return JSONResponse({
+        "webhook_url": row.webhook_url or "",
+        "alert_hours": row.alert_hours or 2,
+        "enabled": bool(row.enabled),
+    })
+
+
+@router.post("/webhook-settings")
+def save_webhook_settings(
+    data: dict = Body(...),
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """Save Discord/webhook alert settings."""
+    from app.models import WebhookAlert
+    webhook_url = (data.get("webhook_url") or "").strip()
+    alert_hours = int(data.get("alert_hours") or 2)
+    enabled = bool(data.get("enabled", True))
+
+    if webhook_url and not webhook_url.startswith("https://"):
+        raise HTTPException(status_code=400, detail="Webhook URL must start with https://")
+    if alert_hours < 1 or alert_hours > 72:
+        raise HTTPException(status_code=400, detail="alert_hours must be between 1 and 72")
+
+    row = db.query(WebhookAlert).filter_by(account_id=account.id).first()
+    if row:
+        row.webhook_url = webhook_url or None
+        row.alert_hours = alert_hours
+        row.enabled = enabled
+    else:
+        from app.models import WebhookAlert as _WA
+        db.add(_WA(
+            account_id=account.id,
+            webhook_url=webhook_url or None,
+            alert_hours=alert_hours,
+            enabled=enabled,
+        ))
+    db.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.post("/webhook-test")
+def test_webhook(
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """Send a test message to the configured webhook."""
+    import urllib.request
+    import json as _json
+    from app.models import WebhookAlert
+    row = db.query(WebhookAlert).filter_by(account_id=account.id).first()
+    if not row or not row.webhook_url:
+        raise HTTPException(status_code=400, detail="No webhook URL configured")
+    payload = _json.dumps({"content": "✅ **EVE PI Manager** — Webhook test successful!"}).encode("utf-8")
+    try:
+        req = urllib.request.Request(
+            row.webhook_url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status in (200, 204):
+                return JSONResponse({"ok": True})
+            return JSONResponse({"ok": False, "status": resp.status})
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
 
 
 @router.get("/characters", response_class=HTMLResponse)

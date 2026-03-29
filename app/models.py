@@ -241,3 +241,15 @@ class PlanetTemplate(Base):
     source_url = Column(String(512), nullable=True)    # original repo URL if seeded
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class WebhookAlert(Base):
+    """Per-account Discord/webhook configuration for colony expiry alerts."""
+    __tablename__ = "webhook_alerts"
+
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
+    webhook_url = Column(String(1024), nullable=True)
+    alert_hours = Column(Integer, nullable=False, default=2, server_default="2")
+    enabled = Column(Boolean, nullable=False, default=True, server_default="true")
+    last_alert_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

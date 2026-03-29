@@ -14,6 +14,12 @@ If this project helps you, Ingame-ISK donations to `DrNightmare` are welcome.
 - Persistent DB caches for market prices, dashboard values, skyhook values, ETag responses, GUI translations, and static planet details
 - Automatic 15-minute price refresh and 30-minute colony refresh via Celery Beat
 - Dashboard with status filters, ISK/day, expiry timers, extractor balance indicators, extractor-rate filters, tier filtering, auto-refresh countdown, and Dotlan links
+- **Pagination** — client-side pagination (default 50/page, configurable up to All) for large colony lists
+- **Discord / Webhook alerts** — server-side colony expiry notifications via any Discord webhook or compatible endpoint, configurable per account with cooldown to avoid spam
+- **Token status overview** — dashboard banner and per-character status showing which chars have expired/missing tokens or ESI errors; auto-retry after 24 h
+- **Corporation page async** — uncached corp accounts are kicked to Celery background refresh automatically
+- **CSV export** — download the full colony list as CSV from the dashboard
+- **Mobile-responsive view** — compact table layout for small screens, horizontal scroll
 - **PI Templates** — save, share, and import colony layouts with to-scale canvas rendering and community templates from GitHub
 - Skyhook inventory with history and DB value cache
 - PI skills per character in card and list views
@@ -286,6 +292,7 @@ RabbitMQ ──► Celery Worker (4 concurrency)
 
 Celery Beat ──► auto_refresh_stale_accounts  (every 5 min)
             └─► refresh_market_prices_task   (every 15 min)
+            └─► send_webhook_alerts_task     (every 15 min)
             └─► cleanup_sso_states_task      (every 1 hour)
 ```
 

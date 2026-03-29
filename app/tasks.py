@@ -159,11 +159,24 @@ def refresh_account_task(self, account_id: int) -> dict:
             if not char.refresh_token:
                 continue
             if char.esi_consecutive_errors >= ESI_ERROR_BACKOFF_LIMIT:
-                logger.info(
-                    "tasks: skipping %s — %d consecutive errors",
-                    char.character_name, char.esi_consecutive_errors,
-                )
-                continue
+                # Auto-reset after 24 hours so characters are retried automatically
+                last_refresh = char.last_esi_refresh_at
+                if last_refresh is not None:
+                    if last_refresh.tzinfo is None:
+                        last_refresh = last_refresh.replace(tzinfo=timezone.utc)
+                    hours_since = (datetime.now(timezone.utc) - last_refresh).total_seconds() / 3600.0
+                    if hours_since >= 24:
+                        logger.info(
+                            "tasks: auto-resetting %s after %.1fh (was %d errors)",
+                            char.character_name, hours_since, char.esi_consecutive_errors,
+                        )
+                        char.esi_consecutive_errors = 0
+                if char.esi_consecutive_errors >= ESI_ERROR_BACKOFF_LIMIT:
+                    logger.info(
+                        "tasks: skipping %s — %d consecutive errors",
+                        char.character_name, char.esi_consecutive_errors,
+                    )
+                    continue
             try:
                 cols = _refresh_character_data(char, db)
                 if cols is None:
@@ -330,6 +343,101 @@ def refresh_market_prices_task() -> dict:
         except Exception as exc:
             logger.warning("tasks: market price refresh failed: %s", exc)
             return {"ok": False, "error": str(exc)}
+
+
+# ── Task: webhook / Discord expiry alerts ─────────────────────────────────────
+
+@celery_app.task(name="app.tasks.send_webhook_alerts_task")
+def send_webhook_alerts_task() -> dict:
+    """Send Discord/webhook alerts for colonies expiring within the configured threshold.
+
+    Runs every 15 minutes via Celery Beat. Each account is alerted at most once
+    per threshold window to avoid notification spam.
+    """
+    import urllib.request
+    from app.database import SessionLocal
+    from app.models import Account, DashboardCache, WebhookAlert
+
+    now = datetime.now(timezone.utc)
+    sent = 0
+    skipped = 0
+
+    with SessionLocal() as db:
+        alerts = (
+            db.query(WebhookAlert)
+            .filter(WebhookAlert.enabled == True, WebhookAlert.webhook_url.isnot(None))  # noqa: E712
+            .all()
+        )
+
+        for alert in alerts:
+            if not alert.webhook_url:
+                continue
+
+            threshold_hours = float(alert.alert_hours or 2)
+
+            # Cooldown: don't re-alert within threshold window
+            if alert.last_alert_at:
+                last = alert.last_alert_at
+                if last.tzinfo is None:
+                    last = last.replace(tzinfo=timezone.utc)
+                if (now - last).total_seconds() < threshold_hours * 3600 * 0.9:
+                    skipped += 1
+                    continue
+
+            cache = db.query(DashboardCache).filter_by(account_id=alert.account_id).first()
+            if not cache:
+                continue
+
+            try:
+                colonies = json.loads(cache.colonies_json or "[]")
+            except Exception:
+                continue
+
+            expiring = [
+                c for c in colonies
+                if c.get("expiry_hours") is not None
+                and 0 < c["expiry_hours"] <= threshold_hours
+            ]
+            if not expiring:
+                continue
+
+            # Build Discord-compatible embed message
+            lines = []
+            for c in sorted(expiring, key=lambda x: x.get("expiry_hours", 9999)):
+                h = c["expiry_hours"]
+                hh = int(h)
+                mm = int((h - hh) * 60)
+                name = c.get("planet_name") or f"Planet {c.get('planet_id')}"
+                char = c.get("character_name", "?")
+                lines.append(f"⏰ **{name}** ({char}) — {hh}h {mm}m")
+
+            message = (
+                f"🚨 **{len(expiring)} PI colony/colonies expiring within {threshold_hours:.0f}h**\n"
+                + "\n".join(lines[:10])
+                + ("\n…and more" if len(expiring) > 10 else "")
+            )
+
+            payload = json.dumps({"content": message}).encode("utf-8")
+            try:
+                req = urllib.request.Request(
+                    alert.webhook_url,
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    if resp.status in (200, 204):
+                        alert.last_alert_at = now
+                        sent += 1
+                    else:
+                        logger.warning("tasks: webhook alert returned %d for account %d", resp.status, alert.account_id)
+            except Exception as exc:
+                logger.warning("tasks: webhook alert failed for account %d: %s", alert.account_id, exc)
+
+        db.commit()
+
+    logger.info("tasks: webhook alerts — %d sent, %d skipped (cooldown)", sent, skipped)
+    return {"sent": sent, "skipped": skipped}
 
 
 # ── Task: SSO state cleanup ───────────────────────────────────────────────────

@@ -14,6 +14,12 @@ Wenn dir das Projekt hilft, freue ich mich ueber Ingame-ISK-Spenden an `DrNightm
 - Persistente DB-Caches fuer Marktpreise, Dashboard-Daten, Skyhook-Werte, ETag-Antworten, GUI-Uebersetzungen und statische Planetendetails
 - Automatischer 15-Minuten-Marktpreis-Refresh und 30-Minuten-Kolonie-Refresh via Celery Beat
 - Dashboard mit Statusfiltern, ISK/Tag, Ablaufwarnungen, Extraktor-Balance-Indikatoren, Extraktor-Ratenfiltern, Tier-Filter, Auto-Refresh-Countdown und Dotlan-Links
+- **Paginierung** — clientseitige Seitennavigation (Standard 50/Seite, bis zu Alle konfigurierbar) fuer grosse Kolonienlisten
+- **Discord / Webhook-Alerts** — Server-seitige Ablauf-Benachrichtigungen ueber Discord-Webhooks oder kompatible Endpunkte, pro Account konfigurierbar mit Cooldown
+- **Token-Status-Uebersicht** — Dashboard-Banner und Charakter-Detailansicht zeigen abgelaufene oder fehlende Tokens; automatischer Wiederholungsversuch nach 24 h
+- **Corporation-Seite asynchron** — nicht gecachte Corp-Accounts werden automatisch als Celery-Tasks in den Hintergrund verschoben
+- **CSV-Export** — vollstaendige Kolonienliste als CSV herunterladen
+- **Mobile-Ansicht** — kompaktes Tabellen-Layout fuer kleine Bildschirme mit horizontalem Scroll
 - **PI Templates** — Kolonie-Layouts speichern, teilen und importieren mit massstabsgetreuem Canvas-Rendering und Community-Templates von GitHub
 - Skyhook Inventar mit Verlauf und DB-Wert-Cache
 - PI Skills pro Charakter in Karten- und Listenansicht
@@ -286,6 +292,7 @@ RabbitMQ ──► Celery Worker (4 Concurrency)
 
 Celery Beat ──► auto_refresh_stale_accounts  (alle 5 Min.)
             └─► refresh_market_prices_task   (alle 15 Min.)
+            └─► send_webhook_alerts_task     (alle 15 Min.)
             └─► cleanup_sso_states_task      (alle 1 Stunde)
 ```
 

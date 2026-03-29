@@ -307,25 +307,26 @@ def invalidate_planet_detail_cache(character_id: int) -> None:
 _schematic_cache = {}  # schematic_id -> data
 
 
-def get_planet_detail_cached(character_id: int, planet_id: int, access_token: str, db) -> dict:
-    """
-    Like get_planet_detail but uses the planet_esi_cache table for ETag-based
-    conditional requests. Returns cached data on 304 Not Modified without
-    re-processing. Writes new ETag + response on 200.
-    """
-    from app.models import PlanetEsiCache
-    import json as _json
-    from datetime import datetime, timezone
+def get_planet_detail_cached(
+    character_id: int,
+    planet_id: int,
+    access_token: str,
+    etag: str | None,
+    cached_json: str | None,
+) -> tuple[dict, str | None, bool]:
+    """ETag-aware planet detail fetch — NO DB access, fully thread-safe.
 
-    cache_row = (
-        db.query(PlanetEsiCache)
-        .filter_by(eve_character_id=character_id, planet_id=planet_id)
-        .first()
-    )
+    Returns (data, new_etag, changed) where:
+      - data        : parsed planet detail dict (may be from cached_json on 304)
+      - new_etag    : ETag to store (None if unchanged)
+      - changed     : True when the server returned fresh data (200), False on 304
+    The caller is responsible for persisting the new ETag + data to the DB.
+    """
+    import json as _json
 
     req_headers = {**HEADERS, "Authorization": f"Bearer {access_token}"}
-    if cache_row and cache_row.etag:
-        req_headers["If-None-Match"] = cache_row.etag
+    if etag:
+        req_headers["If-None-Match"] = etag
 
     try:
         response = requests.get(
@@ -335,39 +336,20 @@ def get_planet_detail_cached(character_id: int, planet_id: int, access_token: st
             timeout=15,
         )
 
-        if response.status_code == 304 and cache_row:
-            # Not Modified — return stored data
-            return _json.loads(cache_row.response_json or "{}")
+        if response.status_code == 304:
+            data = _json.loads(cached_json or "{}") if cached_json else {}
+            return data, None, False
 
         response.raise_for_status()
         data = response.json()
-        new_etag = response.headers.get("ETag", "").strip('"')
-
-        # Upsert cache row
-        if cache_row:
-            cache_row.etag = new_etag or cache_row.etag
-            cache_row.response_json = _json.dumps(data)
-            cache_row.fetched_at = datetime.now(timezone.utc)
-        else:
-            db.add(PlanetEsiCache(
-                eve_character_id=character_id,
-                planet_id=planet_id,
-                etag=new_etag or None,
-                response_json=_json.dumps(data),
-                fetched_at=datetime.now(timezone.utc),
-            ))
-        db.commit()
-
-        # Also populate in-memory cache
+        new_etag = response.headers.get("ETag", "").strip('"') or None
         _planet_detail_cache[(character_id, planet_id)] = (data, _time.time())
-        return data
+        return data, new_etag, True
 
-    except Exception as exc:
-        # On error fall back to cached data if available
-        if cache_row and cache_row.response_json:
-            import json as _j
-            return _j.loads(cache_row.response_json)
-        return {}
+    except Exception:
+        # Fall back to cached data silently
+        data = _json.loads(cached_json or "{}") if cached_json else {}
+        return data, None, False
 
 
 def get_planet_detail(character_id: int, planet_id: int, access_token: str) -> dict:
@@ -436,7 +418,21 @@ def ensure_valid_token(character, db) -> str | None:
             from datetime import timedelta
             character.token_expires_at = now + timedelta(seconds=expires_in)
             db.commit()
-        except Exception:
-            return character.access_token
+        except Exception as exc:
+            import logging as _logging
+            _logging.getLogger(__name__).warning(
+                "Token refresh failed for character %s (%s): %s",
+                character.character_name, character.eve_character_id, exc,
+            )
+            # Track the failure so the UI and auto-retry logic see it
+            character.esi_consecutive_errors = (character.esi_consecutive_errors or 0) + 1
+            try:
+                db.commit()
+            except Exception:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+            return None
 
     return character.access_token

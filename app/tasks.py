@@ -68,21 +68,69 @@ def _refresh_character_data(char, db) -> dict | None:
         logger.warning("tasks: colony list failed for %s: %s", char.character_name, exc)
         return None
 
+    # Pre-load ETag cache rows on the main thread (DB session is not thread-safe)
+    from app.models import PlanetEsiCache
+    import json as _json_tasks
+    planet_ids = [c.get("planet_id") for c in raw_colonies if c.get("planet_id")]
+    etag_rows: dict[tuple, PlanetEsiCache] = {}
+    if planet_ids:
+        for row in db.query(PlanetEsiCache).filter(
+            PlanetEsiCache.eve_character_id == char.eve_character_id,
+            PlanetEsiCache.planet_id.in_(planet_ids),
+        ).all():
+            etag_rows[(char.eve_character_id, row.planet_id)] = row
+
     def _fetch_planet(args):
         char_eve_id, colony, tok = args
         planet_id = colony.get("planet_id")
         info = get_planet_info(planet_id) if planet_id else {}
         detail = {}
+        new_etag = None
+        changed = False
         if tok and planet_id:
             try:
-                detail = get_planet_detail_cached(char_eve_id, planet_id, tok, db)
+                existing = etag_rows.get((char_eve_id, planet_id))
+                detail, new_etag, changed = get_planet_detail_cached(
+                    char_eve_id, planet_id, tok,
+                    etag=existing.etag if existing else None,
+                    cached_json=existing.response_json if existing else None,
+                )
             except Exception as e:
                 logger.warning("tasks: planet %s fetch failed: %s", planet_id, e)
-        return info, detail
+        return info, detail, planet_id, new_etag, changed
 
     fetch_args = [(char.eve_character_id, colony, token) for colony in raw_colonies]
     with ThreadPoolExecutor(max_workers=PLANET_FETCH_WORKERS) as ex:
-        planet_data = list(ex.map(_fetch_planet, fetch_args))
+        _raw_planet_data = list(ex.map(_fetch_planet, fetch_args))
+
+    # Persist ETag updates on the main thread (thread-safe DB access)
+    from datetime import datetime as _dt, timezone as _tz
+    for _, _, planet_id, new_etag, changed in _raw_planet_data:
+        if not planet_id or not changed or new_etag is None:
+            continue
+        existing = etag_rows.get((char.eve_character_id, planet_id))
+        detail_data = next(
+            (d for _, d, pid, _, _ in _raw_planet_data if pid == planet_id), {}
+        )
+        if existing:
+            existing.etag = new_etag
+            existing.response_json = _json_tasks.dumps(detail_data)
+            existing.fetched_at = _dt.now(_tz.utc)
+        else:
+            db.add(PlanetEsiCache(
+                eve_character_id=char.eve_character_id,
+                planet_id=planet_id,
+                etag=new_etag,
+                response_json=_json_tasks.dumps(detail_data),
+                fetched_at=_dt.now(_tz.utc),
+            ))
+    try:
+        db.commit()
+    except Exception as exc:
+        logger.warning("tasks: ETag cache upsert failed: %s", exc)
+        db.rollback()
+
+    planet_data = [(info, detail) for info, detail, _, _, _ in _raw_planet_data]
 
     colonies = []
     for colony, (info, detail) in zip(raw_colonies, planet_data):

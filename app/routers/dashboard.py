@@ -64,6 +64,10 @@ _CORP_RECENT_CACHE_SECONDS = 60 * 10
 _corp_view_cache: dict[int, tuple[float, dict]] = {}  # corp_id -> (timestamp, data)
 _CORP_VIEW_CACHE_TTL = 300.0  # 5 minutes
 
+# Cache corp access flags (CEO/director check) per account to avoid ESI on every request
+_corp_access_cache: dict[int, tuple[float, dict]] = {}  # account_id -> (ts, flags)
+_CORP_ACCESS_CACHE_TTL = 300.0  # 5 minutes
+
 
 def _get_corp_load_lock(corp_id: int | None) -> dict | None:
     if not corp_id:
@@ -1495,6 +1499,11 @@ def refresh_status(
     return JSONResponse({"done": False})
 
 def _corp_access_flags(account: Account, main_char: Character | None, db: Session) -> dict:
+    # Serve from cache if fresh — avoids 2 live ESI calls per page load
+    cached = _corp_access_cache.get(account.id)
+    if cached and (_time.time() - cached[0]) < _CORP_ACCESS_CACHE_TTL:
+        return cached[1]
+
     own_corp_id = main_char.corporation_id if main_char else None
     own_corp_name = main_char.corporation_name if main_char else None
     is_ceo = False
@@ -1522,7 +1531,7 @@ def _corp_access_flags(account: Account, main_char: Character | None, db: Sessio
     has_access = bool(
         own_corp_id and (account.is_owner or account.is_admin or is_ceo or is_director)
     )
-    return {
+    result = {
         "corp_id": own_corp_id,
         "corp_name": own_corp_name,
         "is_ceo": is_ceo,
@@ -1531,6 +1540,8 @@ def _corp_access_flags(account: Account, main_char: Character | None, db: Sessio
         "has_access": has_access,
         "can_manage": bool(own_corp_id and account.is_owner),
     }
+    _corp_access_cache[account.id] = (_time.time(), result)
+    return result
 
 
 @router.get("/corp", response_class=HTMLResponse)

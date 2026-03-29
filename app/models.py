@@ -1,6 +1,6 @@
 from sqlalchemy import (
     BigInteger, Boolean, Column, DateTime, ForeignKey,
-    Integer, String, Text, UniqueConstraint, func
+    Index, Integer, String, Text, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -36,7 +36,7 @@ class Character(Base):
     id = Column(Integer, primary_key=True, index=True)
     eve_character_id = Column(BigInteger, unique=True, nullable=False, index=True)
     character_name = Column(String(255), nullable=False)
-    corporation_id = Column(BigInteger, nullable=True)
+    corporation_id = Column(BigInteger, nullable=True, index=True)
     corporation_name = Column(String(255), nullable=True)
     alliance_id = Column(BigInteger, nullable=True)
     alliance_name = Column(String(255), nullable=True)
@@ -56,7 +56,7 @@ class Character(Base):
     last_esi_refresh_at = Column(DateTime(timezone=True), nullable=True)
     esi_consecutive_errors = Column(Integer, nullable=False, default=0, server_default="0")
 
-    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False, index=True)
     last_login = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -130,6 +130,9 @@ class PiFavorite(Base):
 
 class SkyhookEntry(Base):
     __tablename__ = "skyhook_entries"
+    __table_args__ = (
+        Index("ix_skyhook_entries_account_planet", "account_id", "planet_id"),
+    )
 
     id             = Column(Integer, primary_key=True, index=True)
     account_id     = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)

@@ -324,6 +324,12 @@
                         <label class="form-label">Fitting-Text</label>
                         <textarea id="{{ side }}FitText" class="form-control eve-input" rows="11" placeholder="[Drake, Passive Test]&#10;Shield Power Relay II&#10;Shield Power Relay II&#10;&#10;Large Shield Extender II&#10;Large Shield Extender II&#10;&#10;Heavy Missile Launcher II, Scourge Fury Heavy Missile&#10;&#10;Medium Core Defense Field Purger I"></textarea>
                         <div class="small text-muted mt-2">Unterstuetzt EFT-/Ingame-Exporttext. Leerzeilen werden als Bereichstrenner interpretiert.</div>
+                        <div class="d-flex align-items-center gap-2 mt-3">
+                            <button type="button" id="{{ side }}EvaluateFitBtn" class="btn btn-sm eve-btn-outline">
+                                Auswerten
+                            </button>
+                            <div id="{{ side }}TextStatus" class="small text-muted"></div>
+                        </div>
                     </div>
 
                     <div id="{{ side }}SourceWarning" class="small"></div>
@@ -345,8 +351,8 @@ const IMPORT_GROUP_FALLBACKS = ['low', 'mid', 'high', 'rig', 'subsystem', 'servi
 const state = {
     dataset: null,
     sources: {
-        left: { mode: 'saved', characterId: '', shipName: '', fittingId: '', text: '' },
-        right: { mode: 'saved', characterId: '', shipName: '', fittingId: '', text: '' },
+        left: { mode: 'saved', characterId: '', shipName: '', fittingId: '', text: '', appliedText: '' },
+        right: { mode: 'saved', characterId: '', shipName: '', fittingId: '', text: '', appliedText: '' },
     }
 };
 
@@ -612,7 +618,7 @@ function exportFitToText(fit) {
 function getSelectedFit(side) {
     const source = state.sources[side];
     if (source.mode === 'text') {
-        return parseImportedFit(source.text);
+        return parseImportedFit(source.appliedText);
     }
     const character = findCharacter(source.characterId);
     if (!character) {
@@ -629,7 +635,28 @@ function syncFitTextFromSaved(side) {
     const fit = getSelectedFit(side);
     const text = exportFitToText(fit);
     source.text = text;
+    source.appliedText = text;
     document.getElementById(side + 'FitText').value = text;
+    updateTextStatus(side, fit ? 'Gespeicherter Fit als Text uebernommen.' : '');
+}
+
+function updateTextStatus(side, message, isError = false) {
+    const status = document.getElementById(side + 'TextStatus');
+    status.textContent = message || '';
+    status.className = isError ? 'small text-danger' : 'small text-muted';
+}
+
+function applyTextFit(side) {
+    const source = state.sources[side];
+    source.appliedText = source.text;
+    const parsed = parseImportedFit(source.appliedText);
+    if (!parsed) {
+        updateTextStatus(side, 'Kein gueltiger Fit-Text erkannt. Bitte Format pruefen und erneut auswerten.', true);
+        renderComparisonGrid();
+        return;
+    }
+    updateTextStatus(side, 'Fit-Text ausgewertet und in den Vergleich uebernommen.');
+    renderComparisonGrid();
 }
 
 function renderSummaryCard(side, fit) {
@@ -846,6 +873,9 @@ function syncPane(side) {
     document.getElementById(side + 'SavedPane').hidden = mode !== 'saved';
     document.getElementById(side + 'TextPane').hidden = mode !== 'text';
     document.getElementById(side + 'SourceWarning').style.display = mode === 'saved' ? '' : 'none';
+    if (mode === 'text' && !state.sources[side].appliedText && state.sources[side].text) {
+        updateTextStatus(side, 'Text bearbeitet. Mit "Auswerten" in den Vergleich uebernehmen.');
+    }
     setButtonState(side, mode);
 }
 
@@ -861,7 +891,8 @@ function attachEvents(side) {
     document.querySelectorAll('.fit-mode-btn[data-side="' + side + '"]').forEach(btn => {
         btn.addEventListener('click', () => {
             state.sources[side].mode = btn.dataset.mode;
-            refreshSource(side);
+            syncPane(side);
+            renderComparisonGrid();
         });
     });
 
@@ -884,17 +915,21 @@ function attachEvents(side) {
     });
 
     const fitText = document.getElementById(side + 'FitText');
-    const refreshFromText = event => {
+    const saveDraftText = event => {
         state.sources[side].text = event.target.value;
-        refreshSource(side);
+        updateTextStatus(side, 'Text bearbeitet. Mit "Auswerten" in den Vergleich uebernehmen.');
     };
-    fitText.addEventListener('input', refreshFromText);
-    fitText.addEventListener('change', refreshFromText);
+    fitText.addEventListener('input', saveDraftText);
+    fitText.addEventListener('change', saveDraftText);
     fitText.addEventListener('paste', () => {
         window.setTimeout(() => {
             state.sources[side].text = fitText.value;
-            refreshSource(side);
+            updateTextStatus(side, 'Fit eingefuegt. Mit "Auswerten" in den Vergleich uebernehmen.');
         }, 0);
+    });
+    document.getElementById(side + 'EvaluateFitBtn').addEventListener('click', () => {
+        state.sources[side].text = fitText.value;
+        applyTextFit(side);
     });
 }
 

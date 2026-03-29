@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
+DASHBOARD_PAGE_SIZES: tuple[int, ...] = (25, 50, 100)
+DASHBOARD_PAGE_WINDOW_RADIUS = 2
+
 PI_SKILL_NAMES = (
     "Command Center Upgrades",
     "Interplanetary Consolidation",
@@ -1145,7 +1148,7 @@ def dashboard(
     page_end = page_start + page_size
     colonies = filtered_colonies[page_start:page_end]
     total_isk_day = sum(float(colony.get("isk_day") or 0.0) for colony in colonies)
-    page_numbers = list(range(max(1, current_page - 2), min(total_pages, current_page + 2) + 1))
+    page_numbers = _build_dashboard_page_numbers(current_page, total_pages)
     page_colony_range_start = page_start + 1 if filtered_colony_count else 0
     page_colony_range_end = min(page_end, filtered_colony_count)
     pagination_base_path = str(request.url.path or "/dashboard")
@@ -1170,7 +1173,7 @@ def dashboard(
                 "url": _build_dashboard_page_url(pagination_base_path, view_state, page=1, page_size=size),
                 "is_current": size == page_size,
             }
-            for size in (25, 50, 100)
+            for size in DASHBOARD_PAGE_SIZES
         ],
         "prev_url": _build_dashboard_page_url(pagination_base_path, view_state, page=max(1, current_page - 1)),
         "next_url": _build_dashboard_page_url(pagination_base_path, view_state, page=min(total_pages, current_page + 1)),
@@ -1906,7 +1909,7 @@ def _get_dashboard_view_state(request: Request) -> dict:
 
     return {
         "page": _parse_dashboard_int(params.get("page"), 1, minimum=1),
-        "page_size": _parse_dashboard_int(params.get("page_size"), 50, allowed={25, 50, 100}),
+        "page_size": _parse_dashboard_int(params.get("page_size"), 50, allowed=set(DASHBOARD_PAGE_SIZES)),
         "char": (params.get("char") or "").strip(),
         "tiers": tiers,
         "balanced": params.get("balanced") == "1",
@@ -1920,6 +1923,12 @@ def _get_dashboard_view_state(request: Request) -> dict:
         "sort": sort_key,
         "order": sort_order,
     }
+
+
+def _build_dashboard_page_numbers(current_page: int, total_pages: int, radius: int = DASHBOARD_PAGE_WINDOW_RADIUS) -> list[int]:
+    start = max(1, current_page - radius)
+    end = min(total_pages, current_page + radius)
+    return list(range(start, end + 1))
 
 
 def _colony_matches_dashboard_filters(colony: dict, view_state: dict) -> bool:

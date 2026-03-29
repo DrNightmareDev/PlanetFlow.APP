@@ -118,13 +118,11 @@
                                 <i class="bi bi-layout-split me-2 text-muted"></i>{{ t('nav.compare') }}
                             </a>
                         </li>
-                        {% if account and (account.is_admin or account.is_owner) %}
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/system/fittings') %}active{% endif %}" href="/system/fittings">
                                 <i class="bi bi-cpu me-2 text-muted"></i>Fittings
                             </a>
                         </li>
-                        {% endif %}
                     </ul>
                 </li>
 
@@ -275,9 +273,7 @@
                         <li><strong>{{ t('nav.system') }}:</strong> {{ t('help.page.system') }}</li>
                         <li><strong>{{ t('nav.system_mix') }}:</strong> {{ t('help.page.system_mix') }}</li>
                         <li><strong>{{ t('nav.compare') }}:</strong> {{ t('help.page.compare') }}</li>
-                        {% if account and (account.is_admin or account.is_owner) %}
                         <li><strong>Fittings:</strong> Gespeicherte Fittings aus ESI laden oder eingefuegte Fits nebeneinander vergleichen.</li>
-                        {% endif %}
                     </ul>
                 </div>
 

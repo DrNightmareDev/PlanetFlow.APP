@@ -1384,37 +1384,37 @@ def set_price_mode(
 
 @router.get("/refresh-status")
 def refresh_status(
+    since: float | None = None,
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
-    """Liefert ob ein Hintergrund-ESI-Refresh läuft oder gerade fertig wurde.
+    """Poll whether a background ESI refresh has completed.
 
-    Works for both in-process threads and Celery workers: detects completion by
-    checking whether a fresh DB cache row appeared since the request was issued.
+    Uses the DB cache timestamp as the source of truth — safe across all
+    gunicorn workers (no shared in-process state needed).
+
+    `since` = Unix timestamp when the page was loaded. Done when the DB cache
+    was updated after that point.
     """
-    import os as _os
+    # Fast path: in-process thread finished on this exact worker
     done = _bg_refresh_done.pop(account.id, False)
-    running = (account.id in _bg_refresh_running) and not done
+    if done:
+        _bg_refresh_running.pop(account.id, None)
+        return JSONResponse({"done": True})
 
-    # When Celery is active the web process has no direct signal from the worker.
-    # Detect completion by checking whether the DB cache was updated after we kicked the task.
-    if not done and _os.getenv("CELERY_BROKER_URL") and account.id in _bg_refresh_running:
-        kicked_at = _bg_refresh_kicked_at.get(account.id, 0.0)
-        from app.models import DashboardCache as _DC
-        row = db.query(_DC).filter_by(account_id=account.id).first()
-        if row and row.fetched_at:
-            fetched = row.fetched_at
-            if fetched.tzinfo is None:
-                from datetime import timezone as _tz
-                fetched = fetched.replace(tzinfo=_tz.utc)
-            if fetched.timestamp() > kicked_at:
-                # DB cache updated after we kicked — Celery worker finished
-                _bg_refresh_running.pop(account.id, None)
-                _bg_refresh_kicked_at.pop(account.id, None)
-                done = True
-                running = False
+    # Primary path: check DB cache timestamp (works across all workers + Celery)
+    ref_ts = since or _bg_refresh_kicked_at.get(account.id, _time.time() - 5)
+    row = db.query(DashboardCache).filter_by(account_id=account.id).first()
+    if row and row.fetched_at:
+        fetched = row.fetched_at
+        if fetched.tzinfo is None:
+            fetched = fetched.replace(tzinfo=timezone.utc)
+        if fetched.timestamp() > ref_ts:
+            _bg_refresh_running.pop(account.id, None)
+            _bg_refresh_kicked_at.pop(account.id, None)
+            return JSONResponse({"done": True})
 
-    return JSONResponse({"running": running, "done": done})
+    return JSONResponse({"done": False})
 
 def _corp_access_flags(account: Account, main_char: Character | None, db: Session) -> dict:
     own_corp_id = main_char.corporation_id if main_char else None

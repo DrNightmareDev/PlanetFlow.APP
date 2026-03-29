@@ -1092,22 +1092,25 @@ function setPriceMode(mode) {
 {% if refreshing %}
 showColoniesOverlay();
 (function pollBgRefresh() {
+    // Pass page-load timestamp so the server can detect completion via DB
+    // without relying on in-process state (which differs across gunicorn workers).
+    const since = Math.floor(Date.now() / 1000);
     let polls = 0;
-    const MAX_POLLS = 20; // max 60s (3s * 20)
+    const MAX_POLLS = 40; // max 120s (3s * 40)
     function poll() {
         polls++;
         if (polls > MAX_POLLS) {
+            // Give up — reload anyway so the user isn't stuck forever
+            window.location.reload();
             return;
         }
-        fetch('/dashboard/refresh-status')
+        fetch('/dashboard/refresh-status?since=' + since)
         .then(r => r.json())
         .then(d => {
             if (d.done) {
                 window.location.reload();
-            } else if (d.running) {
-                setTimeout(poll, 3000);
             } else {
-                window.location.reload();
+                setTimeout(poll, 3000);
             }
         })
         .catch(() => setTimeout(poll, 5000));

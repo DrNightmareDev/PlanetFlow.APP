@@ -559,6 +559,38 @@ function populateFittingSelect(side) {
         : 'Erst Huelle waehlen, dann das passende Fitting.';
 }
 
+function inferImportedSlotGroup(itemName, fallbackGroup) {
+    const name = String(itemName || '').toLowerCase();
+    if (!name) {
+        return fallbackGroup || 'other';
+    }
+
+    const isRig = /(rig|accelerator|reinforcer|optimizer|extender|nozzle joints|polycarbon|trimark|projector|safeguard|cache partition|collision accelerator|burst aerator|auxiliary nano pump|nanobot accelerator|screen reinforcer|clocking unit|processor overclocking unit|hyperspatial|metastasis|locus coordinator)/.test(name);
+    if (isRig) {
+        return 'rig';
+    }
+
+    const isLow = /(damage control|armor repairer|reactive armor|energized|multispectrum energized|membrane|plate|plating|co-processor|coprocessor|power diagnostic|capacitor power relay|drone damage amplifier|magnetic field stabilizer|gyrostabilizer|heat sink|ballistic control|tracking enhancer|tracking diagnostic|overdrive|nanofiber|inertial stabilizer|warp core stabilizer|signal amplifier|expanded cargohold|hull repairer|shield power relay)/.test(name);
+    if (isLow) {
+        return 'low';
+    }
+
+    const isMid = /(afterburner|microwarpdrive|warp scrambler|warp disruptor|stasis webifier|webifier|shield extender|shield hardener|shield booster|shield boost amplifier|capacitor booster|sensor booster|tracking computer|guidance computer|guidance disruptor|tracking disruptor|cargo scanner|relic analyzer|data analyzer|scan rangefinding|scan acquisition|pinpointing|target painter|remote sensor dampener|multispectrum shield hardener|medium shield booster|small shield booster|large shield booster)/.test(name);
+    if (isMid) {
+        return 'mid';
+    }
+
+    const isHigh = /(launcher|probe launcher|cloaking device|salvager|tractor beam|energy neutralizer|nosferatu|smartbomb|strip miner|mining laser|gas cloud harvester|blaster|railgun|artillery|autocannon|beam laser|pulse laser|missile|torpedo|rocket launcher|festival launcher|remote armor repairer|remote shield booster|cynosural|core probe)/.test(name);
+    if (isHigh) {
+        return 'high';
+    }
+
+    if ((fallbackGroup || '') === 'other') {
+        return 'cargo';
+    }
+    return fallbackGroup || 'other';
+}
+
 function parseImportedFit(text) {
     const normalized = String(text || '').replace(/\r/g, '').trim();
     if (!normalized) {
@@ -614,13 +646,14 @@ function parseImportedFit(text) {
             const qtyMatch = line.match(/^(.*?)(?:\s+x(\d+))$/i);
             const itemName = (qtyMatch ? qtyMatch[1] : line).trim();
             const quantity = qtyMatch ? parseInt(qtyMatch[2], 10) : 1;
+            const inferredSlotGroup = inferImportedSlotGroup(itemName, slotGroup);
             items.push({
                 type_id: null,
                 name: itemName,
-                flag: 'import-' + slotGroup + '-' + lineIndex,
+                flag: 'import-' + inferredSlotGroup + '-' + lineIndex,
                 quantity: quantity,
-                slot_group: slotGroup,
-                slot_label: state.dataset?.slot_labels?.[slotGroup] || slotGroup,
+                slot_group: inferredSlotGroup,
+                slot_label: state.dataset?.slot_labels?.[inferredSlotGroup] || inferredSlotGroup,
                 sort_index: lineIndex,
                 icon_url: null,
             });

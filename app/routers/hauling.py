@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+import heapq
 from datetime import datetime, timezone
 
 import requests
@@ -158,74 +159,81 @@ def _get_route_systems(origin_system_id: int, destination_system_id: int) -> lis
 def _jump_count(origin_system_id: int, destination_system_id: int, use_ansiblex: bool = True) -> int:
     if origin_system_id == destination_system_id:
         return 0
-    leg, total_jumps = _best_leg(origin_system_id, destination_system_id, use_ansiblex=use_ansiblex)
+    _, total_jumps = _best_leg(origin_system_id, destination_system_id, use_ansiblex=use_ansiblex)
     return total_jumps
 
 
-def _build_plain_leg(origin_system_id: int, destination_system_id: int) -> tuple[list[dict], int]:
-    route_systems = _get_route_systems(origin_system_id, destination_system_id)
-    jumps = max(len(route_systems) - 1, 0)
-    items: list[dict] = []
-    for sys_id in route_systems[1:-1]:
-        items.append({
-            "system_id": int(sys_id),
-            "system_name": _system_name(int(sys_id)),
-            "jumps_from_prev": 1,
-            "is_waypoint": False,
-            "is_intermediate": True,
-            "via_bridge": False,
-        })
-    items.append({
-        "system_id": int(destination_system_id),
-        "system_name": _system_name(int(destination_system_id)),
-        "jumps_from_prev": int(jumps),
-        "is_waypoint": True,
-        "is_intermediate": False,
-        "via_bridge": False,
-    })
-    return items, jumps
+def _discover_route_nodes(origin_system_id: int, destination_system_id: int, use_ansiblex: bool) -> list[int]:
+    discovered = {int(origin_system_id), int(destination_system_id)}
+    if not use_ansiblex:
+        return sorted(discovered)
 
+    explored_paths = {int(system_id) for system_id in _get_route_systems(origin_system_id, destination_system_id)}
+    frontier = set(explored_paths)
+    rounds = 0
+    max_nodes = 48
 
-def _append_gate_segment(items: list[dict], route_systems: list[int], destination_system_id: int) -> None:
-    for sys_id in route_systems[1:]:
-        items.append({
-            "system_id": int(sys_id),
-            "system_name": _system_name(int(sys_id)),
-            "jumps_from_prev": 1,
-            "is_waypoint": int(sys_id) == int(destination_system_id),
-            "is_intermediate": int(sys_id) != int(destination_system_id),
-            "via_bridge": False,
-        })
-
-
-def _build_one_bridge_leg(origin_system_id: int, destination_system_id: int, bridge_start: int, bridge_end: int) -> tuple[list[dict], int]:
-    items: list[dict] = []
-    total_jumps = 0
-
-    to_bridge = _get_route_systems(origin_system_id, bridge_start)
-    total_jumps += max(len(to_bridge) - 1, 0)
-    _append_gate_segment(items, to_bridge, bridge_start)
-
-    total_jumps += 1
-    items.append({
-        "system_id": int(bridge_end),
-        "system_name": _system_name(int(bridge_end)),
-        "jumps_from_prev": 1,
-        "is_waypoint": int(bridge_end) == int(destination_system_id),
-        "is_intermediate": int(bridge_end) != int(destination_system_id),
-        "via_bridge": True,
-    })
-
-    if int(bridge_end) != int(destination_system_id):
-        from_bridge = _get_route_systems(bridge_end, destination_system_id)
-        total_jumps += max(len(from_bridge) - 1, 0)
-        _append_gate_segment(items, from_bridge, destination_system_id)
-
-    for idx in range(len(items) - 1, -1, -1):
-        if items[idx]["is_waypoint"]:
-            items[idx]["jumps_from_prev"] = total_jumps
+    while frontier and rounds < 3 and len(discovered) < max_nodes:
+        rounds += 1
+        new_nodes: set[int] = set()
+        bridges = _ansiblex.bridges_touching_systems(list(frontier))
+        for gate in bridges:
+            from_id = int(gate.get("from") or 0)
+            to_id = int(gate.get("to") or 0)
+            if from_id:
+                new_nodes.add(from_id)
+            if to_id:
+                new_nodes.add(to_id)
+        new_nodes -= discovered
+        if not new_nodes:
             break
-    return items, total_jumps
+        if len(discovered) + len(new_nodes) > max_nodes:
+            new_nodes = set(sorted(new_nodes)[: max_nodes - len(discovered)])
+        discovered.update(new_nodes)
+
+        next_frontier: set[int] = set()
+        for node_id in new_nodes:
+            for anchor in (int(origin_system_id), int(destination_system_id)):
+                for sys_id in _get_route_systems(anchor, node_id):
+                    if sys_id not in explored_paths:
+                        next_frontier.add(int(sys_id))
+                        explored_paths.add(int(sys_id))
+        frontier = next_frontier
+
+    return sorted(discovered)
+
+
+def _expand_compressed_path(node_path: list[int], edge_types: list[str], destination_system_id: int, total_jumps: int) -> list[dict]:
+    items: list[dict] = []
+    destination_id = int(destination_system_id)
+    for index, edge_type in enumerate(edge_types):
+        start_id = int(node_path[index])
+        end_id = int(node_path[index + 1])
+        is_final = end_id == destination_id
+        if edge_type == "bridge":
+            items.append({
+                "system_id": end_id,
+                "system_name": _system_name(end_id),
+                "jumps_from_prev": 1 if not is_final else total_jumps,
+                "is_waypoint": is_final,
+                "is_intermediate": not is_final,
+                "via_bridge": True,
+            })
+            continue
+
+        route_systems = _get_route_systems(start_id, end_id)
+        for sys_id in route_systems[1:]:
+            sys_id = int(sys_id)
+            is_segment_end = sys_id == end_id
+            items.append({
+                "system_id": sys_id,
+                "system_name": _system_name(sys_id),
+                "jumps_from_prev": total_jumps if is_final and is_segment_end else 1,
+                "is_waypoint": is_final and is_segment_end,
+                "is_intermediate": not (is_final and is_segment_end),
+                "via_bridge": False,
+            })
+    return items
 
 
 def _best_leg(origin_system_id: int, destination_system_id: int, use_ansiblex: bool = True) -> tuple[list[dict], int]:
@@ -237,23 +245,65 @@ def _best_leg(origin_system_id: int, destination_system_id: int, use_ansiblex: b
         data = cached[0]
         return list(data["items"]), int(data["jumps"])
 
-    best_items, best_jumps = _build_plain_leg(origin_system_id, destination_system_id)
+    nodes = _discover_route_nodes(origin_system_id, destination_system_id, use_ansiblex=use_ansiblex)
+    adjacency: dict[int, list[tuple[int, int, str]]] = {node_id: [] for node_id in nodes}
+
+    for idx, start_id in enumerate(nodes):
+        for end_id in nodes[idx + 1:]:
+            jumps = max(len(_get_route_systems(start_id, end_id)) - 1, 0)
+            adjacency[start_id].append((end_id, jumps, "gate"))
+            adjacency[end_id].append((start_id, jumps, "gate"))
+
     if use_ansiblex:
-        base_route = _get_route_systems(origin_system_id, destination_system_id)
-        for gate in _ansiblex.bridges_touching_systems(base_route):
+        for gate in _ansiblex.bridges_touching_systems(nodes):
             from_id = int(gate.get("from") or 0)
             to_id = int(gate.get("to") or 0)
-            if not from_id or not to_id:
-                continue
-            candidate_a, jumps_a = _build_one_bridge_leg(origin_system_id, destination_system_id, from_id, to_id)
-            if jumps_a < best_jumps:
-                best_items, best_jumps = candidate_a, jumps_a
-            candidate_b, jumps_b = _build_one_bridge_leg(origin_system_id, destination_system_id, to_id, from_id)
-            if jumps_b < best_jumps:
-                best_items, best_jumps = candidate_b, jumps_b
+            if from_id in adjacency and to_id in adjacency:
+                adjacency[from_id].append((to_id, 1, "bridge"))
+                adjacency[to_id].append((from_id, 1, "bridge"))
 
-    _best_route_cache[cache_key] = ({"items": list(best_items), "jumps": int(best_jumps)}, time.time())
-    return best_items, best_jumps
+    start_id = int(origin_system_id)
+    target_id = int(destination_system_id)
+    distances: dict[int, int] = {node_id: 10 ** 9 for node_id in nodes}
+    previous: dict[int, tuple[int, str] | None] = {node_id: None for node_id in nodes}
+    distances[start_id] = 0
+    heap: list[tuple[int, int]] = [(0, start_id)]
+
+    while heap:
+        current_distance, node_id = heapq.heappop(heap)
+        if current_distance != distances[node_id]:
+            continue
+        if node_id == target_id:
+            break
+        for neighbor_id, weight, edge_type in adjacency.get(node_id, []):
+            candidate = current_distance + int(weight)
+            if candidate < distances[neighbor_id]:
+                distances[neighbor_id] = candidate
+                previous[neighbor_id] = (node_id, edge_type)
+                heapq.heappush(heap, (candidate, neighbor_id))
+
+    total_jumps = int(distances.get(target_id, 10 ** 9))
+    if total_jumps >= 10 ** 9:
+        items = _expand_compressed_path([start_id, target_id], ["gate"], target_id, max(len(_get_route_systems(start_id, target_id)) - 1, 0))
+        total_jumps = max(len(_get_route_systems(start_id, target_id)) - 1, 0)
+    else:
+        node_path = [target_id]
+        edge_types: list[str] = []
+        cursor = target_id
+        while cursor != start_id:
+            previous_entry = previous.get(cursor)
+            if previous_entry is None:
+                break
+            prev_node, edge_type = previous_entry
+            node_path.append(prev_node)
+            edge_types.append(edge_type)
+            cursor = prev_node
+        node_path.reverse()
+        edge_types.reverse()
+        items = _expand_compressed_path(node_path, edge_types, target_id, total_jumps)
+
+    _best_route_cache[cache_key] = ({"items": list(items), "jumps": int(total_jumps)}, time.time())
+    return items, total_jumps
 
 
 def _build_route(origin_system_id: int, system_ids: list[int], use_ansiblex: bool = True) -> tuple[list[dict], int]:

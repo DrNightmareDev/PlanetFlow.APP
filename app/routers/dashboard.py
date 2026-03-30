@@ -861,7 +861,7 @@ def _update_character_colony_sync_status(
     dirty = False
     now_utc = datetime.now(timezone.utc)
 
-    for char in active_characters:
+    for char in characters:
         result = fetch_results.get(char.id) or {"status": "not_processed", "count": 0}
         status = result.get("status")
         count = int(result.get("count") or 0)

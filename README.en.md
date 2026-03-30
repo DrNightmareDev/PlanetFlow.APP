@@ -4,22 +4,24 @@
 
 Self-hosted Planetary Industry dashboard for EVE Online.
 
-If this project helps you, Ingame-ISK donations to `DrNightmare` are welcome.
+If this project helps you, in-game ISK donations to `DrNightmare` are welcome.
+
+---
 
 ## Features
 
 - PI colonies for mains and alts across any number of accounts and characters
-- **Celery + RabbitMQ background refresh** — ESI data is fetched in the background every 30 minutes; the dashboard always loads instantly from cache
+- **Celery + RabbitMQ background refresh** — ESI data is fetched in the background every 5 minutes; the dashboard always loads instantly from cache
 - **ETag-based ESI caching** — unchanged planets return HTTP 304 and skip re-processing (~60–70% fewer ESI calls after the first run)
-- Persistent DB caches for market prices, dashboard values, skyhook values, ETag responses, GUI translations, and static planet details
-- Automatic 15-minute price refresh and 30-minute colony refresh via Celery Beat
-- Dashboard with status filters, ISK/day, expiry timers, extractor balance indicators, extractor-rate filters, tier filtering, auto-refresh countdown, and Dotlan links
+- Persistent DB caches for market prices, dashboard data, skyhook values, ETag responses, GUI translations, and static planet details
+- Automatic 15-minute market price refresh and 5-minute colony refresh via Celery Beat
+- Dashboard with status filters, ISK/day, **live expiry countdown** (updates every minute in the browser without page reload), extractor balance indicators, extractor-rate filters, tier filtering, auto-refresh countdown, and Dotlan links
 - **Pagination** — client-side pagination (default 50/page, configurable up to All) for large colony lists
-- **Discord / Webhook alerts** — server-side colony expiry notifications via any Discord webhook or compatible endpoint, configurable per account with cooldown to avoid spam
-- **Token status overview** — dashboard banner and per-character status showing which chars have expired/missing tokens or ESI errors; auto-retry after 24 h
-- **Corporation page async** — uncached corp accounts are kicked to Celery background refresh automatically
+- **Discord / Webhook alerts** — server-side colony expiry notifications via Discord webhooks or compatible endpoints, configurable per account with cooldown; Discord rate-limiting (429) is handled automatically
+- **Token status overview** — dashboard banner and per-character view show expired or missing tokens; auto-retry after 24 h; banner only appears for genuine auth problems, not already-resolved errors
+- **Corporation page async** — uncached corp accounts are automatically dispatched to Celery background tasks
 - **CSV export** — download the full colony list as CSV from the dashboard
-- **Mobile-responsive view** — compact table layout for small screens, horizontal scroll
+- **Mobile-responsive view** — compact table layout for small screens with horizontal scroll
 - **PI Templates** — save, share, and import colony layouts with to-scale canvas rendering and community templates from GitHub
 - Skyhook inventory with history and DB value cache
 - PI skills per character in card and list views
@@ -29,18 +31,21 @@ If this project helps you, Ingame-ISK donations to `DrNightmare` are welcome.
 
 ## UI Pages
 
-- `Dashboard`: Shows all PI colonies, daily ISK value, expiry timers, storage state, skyhook context, auto-refresh countdown, and filters for active, expired, stalled, balanced, unbalanced, and extractor-rate thresholds.
-- `PI Templates`: Canvas editor for colony layouts with to-scale planet rendering and import from community GitHub sources (DalShooth, TheLegi0n-NBI).
-- `Skyhooks`: Edit and save skyhook inventories per planet, including history and cached value calculations.
-- `Characters`: Shows all linked characters, main/alt assignments, token state, and PI skills in card and list views.
-- `Corporation`: Summarizes PI data for your corporation and shows mains, colonies, PI types, and product search across corporation colonies.
-- `Jita Market`: Displays buy/sell prices, spreads, trends, and trade volume for PI products from the cached Jita/The Forge market data.
-- `PI Chain Planner`: Builds full production chains for P1-P4 items and shows required planet types, P0 resources, and suitable systems.
-- `System Analyzer`: Analyzes a single system and shows available planet types, P0 resources, derived PI recommendations, and expandable planet details with planet number and radius.
-- `System Mix`: Combines multiple systems or constellations and shows which PI products are possible with the shared planet mix.
-- `Compare`: Places multiple systems side by side to compare planet types and PI recommendations directly.
+| Page | Description |
+|---|---|
+| `Dashboard` | All PI colonies, daily ISK value, live expiry countdown, storage state, skyhook context, auto-refresh countdown, filters for Active/Expired/Stalled/Balanced/Unbalanced/Extractor-Rate |
+| `PI Templates` | Canvas editor for colony layouts with to-scale planet rendering and import from community GitHub sources |
+| `Skyhooks` | Edit and save skyhook inventories per planet, history view, value calculation |
+| `Characters` | All linked characters, main/alt assignments, token status, PI skills in card and list views |
+| `Corporation` | Corporation PI data summarized: mains, colonies, PI types, product search |
+| `Jita Market` | Buy/sell prices, spreads, trends, and trade volume for PI products from cached Jita market data |
+| `PI Chain Planner` | Build full production chains for P1-P4, show required planet types, P0 raw materials, and suitable systems |
+| `System Analyzer` | Analyze a single system: planet types, P0 resources, PI recommendations, planet details |
+| `System Mix` | Combine multiple systems or constellations and show achievable PI products |
+| `Compare` | Compare multiple systems side by side |
+| `Fittings` | Compare ESI fittings of all characters side by side (requires `esi-fittings.read_fittings.v1` scope) |
 
-## Required ESI scopes
+## Required ESI Scopes
 
 ```
 esi-planets.manage_planets.v1
@@ -51,7 +56,12 @@ esi-characters.read_corporation_roles.v1
 esi-skills.read_skills.v1
 ```
 
-## Quick start
+Optional (for Fittings comparison):
+```
+esi-fittings.read_fittings.v1
+```
+
+## Quick Start
 
 ```bash
 git clone https://github.com/DrNightmareDev/PI_Manager.git
@@ -75,7 +85,9 @@ SECRET_KEY=a_long_random_secret_with_at_least_32_characters
 
 - `EVE_CLIENT_ID` / `EVE_CLIENT_SECRET`: from the [CCP Developer Portal](https://developers.eveonline.com)
 - `EVE_CALLBACK_URL`: must exactly match the redirect URL configured in your CCP app
-- `SECRET_KEY`: used for session signing — replace with a random value
+- `SECRET_KEY`: used for session signing — replace with a secure random value (min. 32 characters). The app will not start if the default value is left unchanged.
+
+> **Note:** The app refuses to start if `EVE_CLIENT_ID`, `EVE_CLIENT_SECRET`, or `SECRET_KEY` are not configured.
 
 ### RabbitMQ / Celery (required for background refresh)
 
@@ -86,14 +98,19 @@ CELERY_BROKER_URL=amqp://evepi:change_me_rabbit@rabbitmq:5672//
 ```
 
 - Use `@rabbitmq:5672` for Docker Compose, `@localhost:5672` for native Linux installs.
-- Leave `CELERY_BROKER_URL` empty to run without Celery (APScheduler fallback, single-process dev mode — not recommended for large corps).
+- Leave `CELERY_BROKER_URL` empty to run without Celery (APScheduler fallback, single-process — not recommended for large corps).
 
 ### Performance
 
 ```env
 # Each gunicorn worker loads the full app (~400-500 MB).
-# Start with 2, raise to 4 on servers with 4+ GB RAM.
+# With 2 GB RAM use 2 workers, with 4+ GB RAM use 2-4 workers.
 WEB_WORKERS=2
+
+# Database connection pool (optional, defaults are sufficient for small instances)
+DB_POOL_SIZE=5
+DB_POOL_OVERFLOW=10
+DB_POOL_RECYCLE=3600
 ```
 
 ### Optional integrations
@@ -139,7 +156,7 @@ SENTRY_DSN=
 docker compose up -d
 ```
 
-This starts the core stack: **PostgreSQL**, **RabbitMQ**, the **web app** (gunicorn), **Celery worker**, and **Celery Beat** scheduler.
+Starts the core stack: **PostgreSQL**, **RabbitMQ**, the **web app** (gunicorn), **Celery worker**, and **Celery Beat** scheduler.
 
 ### Optional profiles
 
@@ -199,7 +216,7 @@ Installs and configures: PostgreSQL, RabbitMQ, Python venv, Alembic migrations, 
 |---|---|
 | `eve-pi-manager` | Web app (gunicorn) |
 | `eve-pi-manager-worker` | Celery worker (ESI background refresh) |
-| `eve-pi-manager-beat` | Celery Beat scheduler (triggers refresh every 30 min) |
+| `eve-pi-manager-beat` | Celery Beat scheduler (triggers refresh every 5 min) |
 
 ### Upgrade from any previous version
 
@@ -250,7 +267,7 @@ Requirements:
 - PostgreSQL (local or external)
 - Completed `.env`
 
-Note: RabbitMQ and Celery are not set up by the Windows script. The app falls back to APScheduler (single-process, no background worker). For production use with large corps, Linux or Docker is strongly recommended.
+> Note: RabbitMQ and Celery are not set up by the Windows script. The app falls back to APScheduler (single-process, no background worker). For production use with large corps, Linux or Docker is strongly recommended.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
@@ -262,7 +279,7 @@ Update:
 powershell -ExecutionPolicy Bypass -File .\scripts\update_windows.ps1
 ```
 
-## Health check
+## Health Check
 
 ```
 GET /health
@@ -278,16 +295,18 @@ Returns the status of PostgreSQL and RabbitMQ:
 }
 ```
 
+This endpoint is also used by the Docker healthcheck of the `app` container.
+
 ## Architecture
 
 ```
 Browser
   └─► nginx (optional) ──► gunicorn (2–4 workers)
                                 └─► FastAPI / Jinja2
-                                └─► PostgreSQL (SQLAlchemy)
+                                └─► PostgreSQL (SQLAlchemy 2.0)
 
-RabbitMQ ──► Celery Worker (4 concurrency)
-                └─► ESI API (ETag-cached, 304-aware)
+RabbitMQ ──► Celery Worker (4 concurrency, prefetch=1)
+                └─► ESI API (ETag-cached, 304-aware, Error-Budget-Guard)
                 └─► DashboardCache table (PostgreSQL)
 
 Celery Beat ──► auto_refresh_stale_accounts  (every 5 min)
@@ -303,7 +322,30 @@ Celery Beat ──► auto_refresh_stale_accounts  (every 5 min)
 4. When Celery worker finishes and writes updated cache, polling detects it and reloads
 5. Subsequent loads serve from cache instantly
 
-## Administrator scripts
+**ESI error handling:**
+- Token refresh fails: up to 3 retries with exponential backoff (2s, 4s); 401/403 fail immediately as permanent
+- ESI error budget: `X-ESI-Error-Limit-Remain` header is checked after every call; if below 20 remaining, waits 10s
+- Characters with >= 3 consecutive errors are skipped for 24h, then automatically reset
+
+## Manager Panel
+
+The Manager Panel (`/manager`) is for administrators:
+
+- **Account management**: View all accounts and characters, grant/revoke manager role, delete accounts, impersonate accounts
+- **Access policy**: Configure allowlist or blocklist for corporations and alliances
+- **Reset ESI errors**: Characters with ESI errors are shown with a red badge; the ↺ button resets `esi_consecutive_errors` immediately without waiting
+- **Reload colony cache**: Manually refresh the dashboard cache for any account
+- **Translations**: Edit custom GUI translations directly in the Manager
+
+## Security Notes
+
+- **Cookies**: Session cookies are `httponly`, `samesite=lax`, and automatically `secure` in production (`DEBUG=false`)
+- **Webhooks**: Only Discord webhook URLs are accepted (`discord.com/api/webhooks/…`); other URLs are rejected server-side
+- **Startup validation**: App refuses to start without `SECRET_KEY`, `EVE_CLIENT_ID`, and `EVE_CLIENT_SECRET`
+- **Docker**: App container runs as unprivileged user `appuser` (uid 1000)
+- **Error messages**: Raw exception details are never sent to the browser; all errors are logged server-side
+
+## Administrator Scripts
 
 ```bash
 cd /opt/eve-pi-manager
@@ -318,13 +360,13 @@ cd /opt/eve-pi-manager
 
 ## Translations
 
-- GUI translations are loaded from `translation_entries` in the database
+- GUI translations are loaded from `translation_entries` in the database (in-memory cached, invalidated on change)
 - Seed files in `app/locales/` provide the bootstrap content
 - Official PI product names are imported from the EVE SDE (`types.json`)
 - Static planet details (planet number, radius) are imported from SDE universe data
 - SDE-backed entries such as `type.<id>.name` are read-only in the Manager UI
 
-## Tech stack
+## Tech Stack
 
 | Component | Technology |
 |---|---|

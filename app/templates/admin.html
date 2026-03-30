@@ -247,6 +247,11 @@
                                         {% else %}
                                         <span class="badge eve-badge-alt">Alt</span>
                                         {% endif %}
+                                        {% if char.esi_consecutive_errors >= 3 %}
+                                        <span class="badge bg-danger ms-1" title="{{ char.esi_consecutive_errors }}× ESI-Fehler">
+                                            <i class="bi bi-exclamation-triangle-fill"></i> ESI
+                                        </span>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         <div class="d-flex gap-1">
@@ -262,7 +267,15 @@
                                            onclick="return confirm('Charakter {{ char.character_name }} wirklich löschen?')">
                                             <i class="bi bi-trash3"></i>
                                         </a>
-                                        {% else %}
+                                        {% endif %}
+                                        {% if char.esi_consecutive_errors >= 1 %}
+                                        <button class="btn btn-sm eve-btn-ghost py-0"
+                                                title="ESI-Fehler zurücksetzen"
+                                                onclick="adminResetCharErrors({{ char.id }}, '{{ char.character_name }}', this)">
+                                            <i class="bi bi-arrow-counterclockwise"></i>
+                                        </button>
+                                        {% endif %}
+                                        {% if char.id == acc.main_character_id and char.esi_consecutive_errors < 1 %}
                                         <span class="text-muted small">—</span>
                                         {% endif %}
                                         </div>
@@ -919,5 +932,24 @@ document.getElementById('adminReloadStartBtn')?.addEventListener('click', async 
     doneBtn.classList.remove('d-none');
     startBtn.classList.add('d-none');
 });
+
+async function adminResetCharErrors(charId, charName, btn) {
+    if (!confirm(`ESI-Fehler für ${charName} zurücksetzen?`)) return;
+    btn.disabled = true;
+    try {
+        const resp = await fetch(`/manager/reset-char-errors/${charId}`, { method: 'POST' });
+        if (resp.ok) {
+            showToast(`ESI-Fehler für ${charName} zurückgesetzt`, 'success');
+            btn.closest('tr').querySelector('.badge.bg-danger')?.remove();
+            btn.remove();
+        } else {
+            showToast('Fehler beim Zurücksetzen', 'error');
+            btn.disabled = false;
+        }
+    } catch(e) {
+        showToast('Netzwerkfehler', 'error');
+        btn.disabled = false;
+    }
+}
 </script>
 {% endblock %}

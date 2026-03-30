@@ -108,6 +108,28 @@ async def update_translation(
     return JSONResponse({"ok": True})
 
 
+@router.post("/reset-char-errors/{character_id}")
+def reset_char_errors(
+    character_id: int,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Reset esi_consecutive_errors for a stuck character so it is retried immediately."""
+    import logging as _logging
+    _logger = _logging.getLogger(__name__)
+    char = db.get(Character, character_id)
+    if not char:
+        raise HTTPException(status_code=404)
+    _logger.info(
+        "admin: %s reset ESI errors for char %s (%d errors → 0)",
+        account.id, char.character_name, char.esi_consecutive_errors or 0,
+    )
+    char.esi_consecutive_errors = 0
+    char.colony_sync_issue = False
+    db.commit()
+    return JSONResponse({"ok": True, "character_name": char.character_name})
+
+
 @router.get("/toggle-admin/{target_account_id}")
 def toggle_admin(
     target_account_id: int,

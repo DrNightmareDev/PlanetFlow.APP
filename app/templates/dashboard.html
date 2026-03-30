@@ -518,20 +518,21 @@
                                 </td>
                                 <td class="small">
                                     {% if colony.expiry_hours is not none %}
+                                        {% set expiry_ts_ms = (colony.expiry_hours * 3600000) | int %}
                                         {% if colony.expiry_hours < 0 %}
-                                            <span class="eve-expiry-expired">
+                                            <span class="eve-expiry-expired eve-expiry-live" data-expiry-ts="{{ (now_ts_ms + expiry_ts_ms) if expiry_ts_ms else '' }}">
                                                 <i class="bi bi-exclamation-circle me-1"></i>Abgelaufen
                                             </span>
                                         {% elif colony.expiry_hours < 12 %}
-                                            <span class="eve-expiry-crit">
+                                            <span class="eve-expiry-crit eve-expiry-live" data-expiry-ts="{{ now_ts_ms + expiry_ts_ms }}">
                                                 <i class="bi bi-clock me-1"></i>{{ colony.expiry_hours | format_expiry }}
                                             </span>
                                         {% elif colony.expiry_hours < 24 %}
-                                            <span class="eve-expiry-warn">
+                                            <span class="eve-expiry-warn eve-expiry-live" data-expiry-ts="{{ now_ts_ms + expiry_ts_ms }}">
                                                 <i class="bi bi-clock me-1"></i>{{ colony.expiry_hours | format_expiry }}
                                             </span>
                                         {% else %}
-                                            <span class="eve-expiry-ok">
+                                            <span class="eve-expiry-ok eve-expiry-live" data-expiry-ts="{{ now_ts_ms + expiry_ts_ms }}">
                                                 <i class="bi bi-clock me-1"></i>{{ colony.expiry_hours | format_expiry }}
                                             </span>
                                         {% endif %}
@@ -1267,6 +1268,36 @@ function updateThresholdUI() {
 }
 
 initServiceWorker();
+
+// ── Live expiry countdown — updates .eve-expiry-live spans every 60s ──────
+(function() {
+    function formatExpiry(hours) {
+        if (hours < 0) return null; // mark as expired — caller handles class swap
+        const h = Math.floor(hours);
+        const m = Math.floor((hours - h) * 60);
+        if (h === 0) return `${m}m`;
+        if (m === 0) return `${h}h`;
+        return `${h}h ${m}m`;
+    }
+    function tickExpiry() {
+        const now = Date.now();
+        document.querySelectorAll('.eve-expiry-live[data-expiry-ts]').forEach(el => {
+            const ts = parseInt(el.dataset.expiryTs, 10);
+            if (!ts) return;
+            const hours = (ts - now) / 3600000;
+            const icon = el.querySelector('i');
+            const iconHtml = icon ? icon.outerHTML + ' ' : '';
+            if (hours < 0) {
+                el.className = 'eve-expiry-expired eve-expiry-live';
+                el.innerHTML = iconHtml.replace('bi-clock', 'bi-exclamation-circle') + 'Abgelaufen';
+            } else {
+                el.className = (hours < 12 ? 'eve-expiry-crit' : hours < 24 ? 'eve-expiry-warn' : 'eve-expiry-ok') + ' eve-expiry-live';
+                el.innerHTML = iconHtml + (formatExpiry(hours) || 'Abgelaufen');
+            }
+        });
+    }
+    setInterval(tickExpiry, 60000);
+})();
 
 </script>
 <style>

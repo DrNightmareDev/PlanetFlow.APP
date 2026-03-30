@@ -90,12 +90,27 @@ class FavoriteToggle(BaseModel):
     product_name: str
 
 
+_VALID_PI_PRODUCTS: frozenset[str] | None = None
+
+def _get_valid_pi_products() -> frozenset[str]:
+    global _VALID_PI_PRODUCTS
+    if _VALID_PI_PRODUCTS is None:
+        _VALID_PI_PRODUCTS = frozenset(
+            set(P0_TO_P1.keys()) | set(P0_TO_P1.values())
+            | set(ALL_P1) | set(ALL_P2) | set(ALL_P3) | set(ALL_P4)
+        )
+    return _VALID_PI_PRODUCTS
+
+
 @router.post("/favorites/toggle")
 def toggle_favorite(
     body: FavoriteToggle,
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
+    from fastapi import HTTPException
+    if body.product_name not in _get_valid_pi_products():
+        raise HTTPException(status_code=400, detail="Unbekanntes PI-Produkt")
     existing = db.query(PiFavorite).filter(
         PiFavorite.account_id == account.id,
         PiFavorite.product_name == body.product_name,

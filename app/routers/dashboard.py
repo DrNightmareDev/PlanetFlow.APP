@@ -1331,6 +1331,7 @@ def dashboard(
         "market_last_updated_iso": market_last_updated_iso,
         "token_error_count": token_error_count,
         "token_error_chars": [c.character_name for c in token_error_chars],
+        "now_ts_ms": int(now * 1000),
     })
 
 

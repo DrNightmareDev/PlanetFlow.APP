@@ -489,6 +489,14 @@ def send_webhook_alerts_task() -> dict:
                 if resp.status_code in (200, 204):
                     alert.last_alert_at = now
                     sent += 1
+                elif resp.status_code == 429:
+                    retry_after = int(resp.headers.get("Retry-After", 5))
+                    logger.warning(
+                        "tasks: Discord rate-limited account %d — Retry-After %ds",
+                        alert.account_id, retry_after,
+                    )
+                    import time as _t
+                    _t.sleep(min(retry_after, 30))
                 else:
                     logger.warning("tasks: webhook alert returned %d for account %d", resp.status_code, alert.account_id)
             except Exception as exc:

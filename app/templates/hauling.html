@@ -167,40 +167,40 @@
                         {% if not item.is_intermediate %}
                         {% set route_ns.waypoint_index = route_ns.waypoint_index + 1 %}
                         {% endif %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center {% if item.is_intermediate %}py-1 border-0 opacity-75{% else %}eve-list-item border-secondary{% endif %} bg-transparent text-light">
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="text-muted" style="min-width:2rem;">{% if item.is_intermediate %}&nbsp;{% else %}{{ route_ns.waypoint_index }}.{% endif %}</span>
-                                {% if item.is_intermediate %}
-                                <i class="bi bi-arrow-down text-muted" style="font-size:.7rem;min-width:14px;"></i>
-                                <span class="small text-muted">{{ item.system_name }}</span>
-                                {% if item.system_id %}<span class="kill-badge" data-sys-id="{{ item.system_id }}"></span>{% endif %}
-                                {% if item.bridge_outgoing %}
-                                <span class="badge bg-info text-dark ms-1" title="{{ item.bridge_label or 'Jump Bridge' }}">&rarr; Bridge</span>
-                                {% endif %}
-                                {% if item.bridge_incoming %}
-                                <span class="badge bg-info text-dark ms-1" title="{{ item.bridge_label or 'Jump Bridge' }}">&larr; Bridge</span>
-                                {% endif %}
-                                {% else %}
-                                <span class="fw-bold">{{ item.system_name }}</span>
-                                {% if item.system_id %}<span class="kill-badge" data-sys-id="{{ item.system_id }}"></span>{% endif %}
-                                {% if item.bridge_outgoing %}
-                                <span class="badge bg-info text-dark ms-1" title="{{ item.bridge_label or 'Jump Bridge' }}">&rarr; Bridge</span>
-                                {% endif %}
-                                {% if item.bridge_incoming %}
-                                <span class="badge bg-info text-dark ms-1" title="{{ item.bridge_label or 'Jump Bridge' }}">&larr; Bridge</span>
-                                {% endif %}
-                                {% if loop.first %}
-                                <span class="text-muted small">Ausgangspunkt</span>
-                                {% else %}
-                                <span class="text-muted small">→ {{ item.jumps_from_prev }} Sprünge</span>
-                                {% endif %}
-                                {% endif %}
+                        <li class="list-group-item {% if item.is_intermediate %}py-1 border-0 opacity-75{% else %}eve-list-item border-secondary{% endif %} bg-transparent text-light">
+                            <div class="d-flex justify-content-between align-items-center gap-3">
+                                <div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width:0;">
+                                    <span class="text-muted" style="min-width:2rem;">{% if item.is_intermediate %}&nbsp;{% else %}{{ route_ns.waypoint_index }}.{% endif %}</span>
+                                    {% if item.is_intermediate %}
+                                    <i class="bi bi-arrow-down text-muted" style="font-size:.7rem;min-width:14px;"></i>
+                                    <span class="small text-muted text-truncate">{{ item.system_name }}</span>
+                                    {% else %}
+                                    <span class="fw-bold text-truncate">{{ item.system_name }}</span>
+                                    <span class="text-muted small">{% if loop.first %}Ausgangspunkt{% else %}&rarr; {{ item.jumps_from_prev }} Spruenge{% endif %}</span>
+                                    {% endif %}
+                                </div>
+                                <div class="d-flex justify-content-center" style="min-width:7.5rem;">
+                                    {% if item.bridge_outgoing %}
+                                    <span class="badge bg-info text-dark" title="{{ item.bridge_label or 'Jump Bridge' }}">&rarr; Bridge</span>
+                                    {% elif item.bridge_incoming %}
+                                    <span class="badge bg-info text-dark" title="{{ item.bridge_label or 'Jump Bridge' }}">&larr; Bridge</span>
+                                    {% else %}
+                                    <span class="small text-muted">&mdash;</span>
+                                    {% endif %}
+                                </div>
+                                <div class="d-flex justify-content-end align-items-center gap-2" style="min-width:6rem;">
+                                    {% if item.system_id %}
+                                    <span class="kill-badge" data-sys-id="{{ item.system_id }}"></span>
+                                    {% else %}
+                                    <span class="small text-muted">&mdash;</span>
+                                    {% endif %}
+                                    {% if not item.is_intermediate %}
+                                    <span class="badge {% if loop.first %}bg-secondary{% else %}bg-primary{% endif %}">
+                                        {% if loop.first %}Start{% else %}{{ item.jumps_from_prev }}J{% endif %}
+                                    </span>
+                                    {% endif %}
+                                </div>
                             </div>
-                            {% if not item.is_intermediate %}
-                            <span class="badge {% if loop.first %}bg-secondary{% else %}bg-primary{% endif %}">
-                                {% if loop.first %}Start{% else %}{{ item.jumps_from_prev }}J{% endif %}
-                            </span>
-                            {% endif %}
                         </li>
                         {% endfor %}
                     </ol>
@@ -382,13 +382,20 @@
                     const isIntermediate = item.is_intermediate;
                     const isFirst = index === 0;
                     const bridgeTitle = escapeHtml(item.bridge_label || 'Jump Bridge');
-                    const bridgeBadges = `${item.bridge_outgoing ? `<span class="badge bg-info text-dark ms-1" title="${bridgeTitle}">&rarr; Bridge</span>` : ''}${item.bridge_incoming ? `<span class="badge bg-info text-dark ms-1" title="${bridgeTitle}">&larr; Bridge</span>` : ''}`;
+                    const bridgeBadge = item.bridge_outgoing
+                        ? `<span class="badge bg-info text-dark" title="${bridgeTitle}">&rarr; Bridge</span>`
+                        : item.bridge_incoming
+                            ? `<span class="badge bg-info text-dark" title="${bridgeTitle}">&larr; Bridge</span>`
+                            : '<span class="small text-muted">&mdash;</span>';
+                    const killBadge = item.system_id
+                        ? `<span class="kill-badge" data-sys-id="${item.system_id}"></span>`
+                        : '<span class="small text-muted">&mdash;</span>';
                     if (!isIntermediate) waypointIndex += 1;
                     const numberLabel = isIntermediate ? '&nbsp;' : `${waypointIndex}.`;
                     if (isIntermediate) {
-                        return `<li class="list-group-item py-1 border-0 opacity-75 bg-transparent text-light"><div class="d-flex align-items-center gap-2"><span class="text-muted" style="min-width:2rem;">${numberLabel}</span><i class="bi bi-arrow-down text-muted" style="font-size:.7rem;min-width:14px;"></i><span class="small text-muted">${escapeHtml(item.system_name)}</span><span class="kill-badge" data-sys-id="${item.system_id}"></span>${bridgeBadges}</div></li>`;
+                        return `<li class="list-group-item py-1 border-0 opacity-75 bg-transparent text-light"><div class="d-flex justify-content-between align-items-center gap-3"><div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width:0;"><span class="text-muted" style="min-width:2rem;">${numberLabel}</span><i class="bi bi-arrow-down text-muted" style="font-size:.7rem;min-width:14px;"></i><span class="small text-muted text-truncate">${escapeHtml(item.system_name)}</span></div><div class="d-flex justify-content-center" style="min-width:7.5rem;">${bridgeBadge}</div><div class="d-flex justify-content-end" style="min-width:6rem;">${killBadge}</div></div></li>`;
                     }
-                    return `<li class="list-group-item d-flex justify-content-between align-items-center eve-list-item bg-transparent text-light border-secondary"><div class="d-flex align-items-center gap-2"><span class="text-muted" style="min-width:2rem;">${numberLabel}</span><span class="fw-bold">${escapeHtml(item.system_name)}</span><span class="kill-badge" data-sys-id="${item.system_id}"></span>${bridgeBadges}<span class="text-muted small">${isFirst ? 'Ausgangspunkt' : '&rarr; ' + item.jumps_from_prev + ' Spruenge'}</span></div><span class="badge ${isFirst ? 'bg-secondary' : 'bg-primary'}">${isFirst ? 'Start' : item.jumps_from_prev + 'J'}</span></li>`;
+                    return `<li class="list-group-item eve-list-item bg-transparent text-light border-secondary"><div class="d-flex justify-content-between align-items-center gap-3"><div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width:0;"><span class="text-muted" style="min-width:2rem;">${numberLabel}</span><span class="fw-bold text-truncate">${escapeHtml(item.system_name)}</span><span class="text-muted small">${isFirst ? 'Ausgangspunkt' : '&rarr; ' + item.jumps_from_prev + ' Spruenge'}</span></div><div class="d-flex justify-content-center" style="min-width:7.5rem;">${bridgeBadge}</div><div class="d-flex justify-content-end align-items-center gap-2" style="min-width:6rem;">${killBadge}<span class="badge ${isFirst ? 'bg-secondary' : 'bg-primary'}">${isFirst ? 'Start' : item.jumps_from_prev + 'J'}</span></div></div></li>`;
                 }).join('');
             }
             loadKillBadges();

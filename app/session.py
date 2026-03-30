@@ -21,7 +21,7 @@ def create_impersonate_session(response: Response, target_id: int, real_owner_id
         max_age=SESSION_MAX_AGE,
         httponly=True,
         samesite="lax",
-        secure=not settings.debug,
+        secure=settings.cookie_secure,
     )
 
 
@@ -34,7 +34,7 @@ def create_session(response: Response, account_id: int) -> None:
         max_age=SESSION_MAX_AGE,
         httponly=True,
         samesite="lax",
-        secure=not settings.debug,
+        secure=settings.cookie_secure,
     )
 
 

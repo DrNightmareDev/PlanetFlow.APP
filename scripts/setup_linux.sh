@@ -213,6 +213,10 @@ SECRET_KEY=${SECRET_KEY}
 # Server (native install: Nginx listens on port 80, Gunicorn on 8000 internally)
 APP_PORT=${APP_PORT}
 DEBUG=false
+# Set COOKIE_SECURE=true only if you serve the app over HTTPS.
+# With HTTP (default) this MUST be false or the browser drops the session
+# cookie and every login redirects back to the login page.
+COOKIE_SECURE=false
 WEB_WORKERS=2
 
 # RabbitMQ / Celery

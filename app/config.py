@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # Server
     app_port: int = Field(default=8000, alias="APP_PORT")
     debug: bool = Field(default=False, alias="DEBUG")
+    # Set to true only when the app is served over HTTPS.
+    # Leave false (default) for plain HTTP installs — the browser will
+    # otherwise silently drop the session cookie and every login redirects
+    # back to the login page.
+    cookie_secure: bool = Field(default=False, alias="COOKIE_SECURE")
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

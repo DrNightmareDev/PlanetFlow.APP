@@ -14,7 +14,9 @@ from app.database import get_db
 from app.dependencies import require_account
 from app.esi import ensure_valid_token, get_character_location
 from app.models import Character
-from app.routers.dashboard import _compute_storage_value, _load_colony_cache
+from app.market import PI_TYPE_IDS
+from app.models import MarketCache
+from app.routers.dashboard import _load_colony_cache
 from app.templates_env import templates
 
 logger = logging.getLogger(__name__)
@@ -42,21 +44,66 @@ def _storage_summary(storage: list[dict] | None) -> tuple[list[str], int]:
     return shown, max(len(items) - len(shown), 0)
 
 
+def _storage_value_details(storage: list[dict] | None, price_mode: str, db: Session) -> tuple[float, list[dict]]:
+    breakdown = []
+    total = 0.0
+    for entry in storage or []:
+        for item in entry.get("items") or []:
+            amount = float(item.get("amount") or 0.0)
+            if amount <= 0:
+                continue
+            name = str(item.get("name") or "").strip()
+            if not name:
+                continue
+            type_id = PI_TYPE_IDS.get(name) or sde.find_type_id_by_name(name)
+            if not type_id:
+                continue
+            row = db.get(MarketCache, int(type_id))
+            if not row:
+                continue
+            unit_price = float(getattr(row, "best_sell" if price_mode == "sell" else "best_buy") or 0.0)
+            line_value = unit_price * amount
+            total += line_value
+            breakdown.append({
+                "name": name,
+                "amount": int(amount),
+                "unit_price": unit_price,
+                "line_value": line_value,
+            })
+    breakdown.sort(key=lambda item: item["line_value"], reverse=True)
+    return total, breakdown
+
+
+def _storage_fill_stats(storage: list[dict] | None) -> tuple[float, float, float, int]:
+    total_capacity = 0.0
+    total_used = 0.0
+    for entry in storage or []:
+        total_capacity += float(entry.get("capacity") or 0.0)
+        total_used += float(entry.get("used_m3") or 0.0)
+    fill_pct = (total_used / total_capacity * 100.0) if total_capacity > 0 else 0.0
+    return total_used, total_capacity, max(0.0, min(100.0, fill_pct)), len(storage or [])
+
+
 def _urgency_score(colony: dict) -> float:
-    expiry_hours = float(colony.get("expiry_hours") or 0.0)
-    storage_value = float(colony.get("storage_value") or 0.0)
-    active_factor = 1.0 if colony.get("is_active") else 0.5
-    return (storage_value / max(expiry_hours, 0.1)) * active_factor
+    fill_pct = float(colony.get("storage_fill_pct") or 0.0)
+    highest_tier_num = int(colony.get("highest_tier_num") or 0)
+    tier_weight = {0: 1.0, 1: 1.0, 2: 1.08, 3: 1.16, 4: 1.28}.get(highest_tier_num, 1.0)
+    return fill_pct * tier_weight
 
 
-def _urgency_percent(expiry_hours: float | None) -> int:
-    if expiry_hours is None:
+def _urgency_percent(fill_pct: float | None) -> int:
+    if fill_pct is None:
         return 0
-    if expiry_hours <= 2:
-        return 100
-    if expiry_hours >= 48:
-        return 0
-    return max(0, min(100, int(((48 - expiry_hours) / 46) * 100)))
+    return max(0, min(100, int(round(float(fill_pct)))))
+
+
+def _storage_breakdown_title(breakdown: list[dict]) -> str:
+    if not breakdown:
+        return ""
+    return "\n".join(
+        f"{item['name']}: {item['amount']} x {item['unit_price']:.0f} = {item['line_value']:.0f} ISK"
+        for item in breakdown[:10]
+    )
 
 
 def _system_name(system_id: int) -> str:
@@ -143,14 +190,21 @@ def hauling_page(
             continue
         if not _storage_has_items(colony.get("storage")):
             continue
-        storage_value = _compute_storage_value(colony.get("storage") or [], getattr(account, "price_mode", "sell"), db)
+        storage_value, storage_breakdown = _storage_value_details(colony.get("storage") or [], getattr(account, "price_mode", "sell"), db)
         summary_items, extra_count = _storage_summary(colony.get("storage"))
+        total_used, total_capacity, fill_pct, storage_slots = _storage_fill_stats(colony.get("storage"))
         entry = dict(colony)
         entry["storage_value"] = storage_value
+        entry["storage_breakdown"] = storage_breakdown
+        entry["storage_breakdown_title"] = _storage_breakdown_title(storage_breakdown)
         entry["storage_summary_items"] = summary_items
         entry["storage_extra_count"] = extra_count
+        entry["storage_used_m3"] = total_used
+        entry["storage_capacity_m3"] = total_capacity
+        entry["storage_fill_pct"] = fill_pct
+        entry["storage_slot_count"] = storage_slots
         entry["urgency_score"] = _urgency_score(entry)
-        entry["urgency_pct"] = _urgency_percent(entry.get("expiry_hours"))
+        entry["urgency_pct"] = _urgency_percent(fill_pct)
         hauling_colonies.append(entry)
 
     hauling_colonies.sort(key=lambda colony: colony.get("urgency_score", 0.0), reverse=True)

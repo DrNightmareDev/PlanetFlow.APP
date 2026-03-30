@@ -62,7 +62,7 @@
                                     <td>{{ colony.planet_name }}</td>
                                     <td>{{ t('planet_type.' ~ (colony.planet_type | lower), default=colony.planet_type) }}</td>
                                     <td>{% if colony.expiry_hours is not none %}{{ colony.expiry_hours | format_expiry }}{% else %}—{% endif %}</td>
-                                    <td>
+                                    <td title="{{ colony.storage_breakdown_title }}">
                                         {% if colony.storage_summary_items %}
                                             {{ colony.storage_summary_items | join(', ') }}
                                             {% if colony.storage_extra_count > 0 %}<span class="text-muted">+{{ colony.storage_extra_count }} mehr</span>{% endif %}
@@ -70,9 +70,9 @@
                                             <span class="text-muted">{{ t('hauling.no_items') }}</span>
                                         {% endif %}
                                     </td>
-                                    <td>{{ colony.storage_value | format_isk }}</td>
+                                    <td title="{{ colony.storage_breakdown_title }}">{{ colony.storage_value | format_isk }}</td>
                                     <td style="min-width:110px;">
-                                        <div class="progress" style="height:6px;background:rgba(255,255,255,.08);">
+                                        <div class="progress" style="height:6px;background:rgba(255,255,255,.08);" title="{{ colony.storage_fill_pct | round(1) }}% · {{ colony.storage_used_m3 | round(1) }}/{{ colony.storage_capacity_m3 | round(1) }} m3 · {{ colony.highest_tier or 'P0' }}">
                                             <div class="progress-bar {% if colony.urgency_pct > 66 %}bg-danger{% elif colony.urgency_pct > 33 %}bg-warning{% else %}bg-success{% endif %}" style="width:{{ colony.urgency_pct }}%"></div>
                                         </div>
                                     </td>
@@ -188,10 +188,11 @@
 
     function renderKillBadge(data) {
         if (!data || data.danger_level === 'safe' || !data.kill_count) return '';
+        const href = data.system_url || `https://zkillboard.com/system/${data.system_id}/`;
         if (data.danger_level === 'danger') {
-            return `<span class="badge bg-danger ms-1" title="${data.kill_count} {{ t('killboard.kills_last_hour') }}"><i class="bi bi-skull-fill me-1"></i>${data.kill_count}</span>`;
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-decoration-none"><span class="badge bg-danger ms-1" title="${data.kill_count} {{ t('killboard.kills_last_hour') }}"><i class="bi bi-skull-fill me-1"></i>${data.kill_count}</span></a>`;
         }
-        return `<span class="badge bg-warning text-dark ms-1" title="${data.kill_count} {{ t('killboard.kills_last_hour') }}"><i class="bi bi-exclamation-triangle-fill me-1"></i>${data.kill_count}</span>`;
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-decoration-none"><span class="badge bg-warning text-dark ms-1" title="${data.kill_count} {{ t('killboard.kills_last_hour') }}"><i class="bi bi-exclamation-triangle-fill me-1"></i>${data.kill_count}</span></a>`;
     }
 
     async function loadKillBadges() {

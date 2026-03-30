@@ -40,6 +40,7 @@ def get_system_kills(system_id: int, account=Depends(require_account), db: Sessi
                 "kill_count": int(row.kill_count or 0),
                 "fetched_at_iso": fetched_at.astimezone(timezone.utc).isoformat(),
                 "danger_level": _danger_level(int(row.kill_count or 0)),
+                "system_url": f"https://zkillboard.com/system/{int(system_id)}/",
             })
 
     kill_count = 0
@@ -61,6 +62,7 @@ def get_system_kills(system_id: int, account=Depends(require_account), db: Sessi
                 "kill_count": int(row.kill_count or 0),
                 "fetched_at_iso": fetched_at.astimezone(timezone.utc).isoformat(),
                 "danger_level": _danger_level(int(row.kill_count or 0)),
+                "system_url": f"https://zkillboard.com/system/{int(system_id)}/",
             })
         raise HTTPException(status_code=502, detail="Killboard unavailable")
 
@@ -77,4 +79,5 @@ def get_system_kills(system_id: int, account=Depends(require_account), db: Sessi
         "kill_count": int(kill_count),
         "fetched_at_iso": now.astimezone(timezone.utc).isoformat(),
         "danger_level": _danger_level(int(kill_count)),
+        "system_url": f"https://zkillboard.com/system/{int(system_id)}/",
     })

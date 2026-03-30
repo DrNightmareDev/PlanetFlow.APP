@@ -21,10 +21,20 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 APP_DIR="/opt/eve-pi-manager"
 APP_USER="evepi"
-APP_PORT="8000"
+APP_PORT="80"
+GUNICORN_PORT="8000"
 SERVICE_NAME="eve-pi-manager"
 RABBITMQ_USER="evepi"
+
+# All ESI scopes required by this application:
+#   esi-planets.manage_planets.v1          – read/write PI colonies
+#   esi-planets.read_customs_offices.v1    – customs office tax rates
+#   esi-location.read_location.v1          – character location (route planner)
+#   esi-characters.read_corporation_roles.v1 – corp-manager access checks
+#   esi-skills.read_skills.v1              – skill queue / SP display
+#   esi-fittings.read_fittings.v1          – fittings comparison page
 FITTINGS_SCOPE="esi-fittings.read_fittings.v1"
+REQUIRED_SCOPES="esi-planets.manage_planets.v1 esi-planets.read_customs_offices.v1 esi-location.read_location.v1 esi-characters.read_corporation_roles.v1 esi-skills.read_skills.v1 ${FITTINGS_SCOPE}"
 
 echo ""
 echo -e "${BLUE}╔══════════════════════════════════════════════╗${NC}"
@@ -149,7 +159,7 @@ SECRET_KEY=$(openssl rand -base64 48 | tr -d '/+=\n' | head -c 48)
 EVE_CLIENT_ID_VAL="BITTE_AUSFULLEN"
 EVE_CLIENT_SECRET_VAL="BITTE_AUSFULLEN"
 EVE_CALLBACK_URL_VAL="http://$(hostname -I | awk '{print $1}')/auth/callback"
-EVE_SCOPES_VAL="esi-planets.manage_planets.v1 esi-planets.read_customs_offices.v1 esi-location.read_location.v1 esi-search.search_structures.v1 esi-characters.read_corporation_roles.v1 esi-skills.read_skills.v1 ${FITTINGS_SCOPE}"
+EVE_SCOPES_VAL="${REQUIRED_SCOPES}"
 
 if [[ -f "${_src_env}" ]]; then
     _id=$(grep  "^EVE_CLIENT_ID="     "${_src_env}" | cut -d= -f2- | tr -d '[:space:]')
@@ -164,10 +174,13 @@ if [[ -f "${_src_env}" ]]; then
     [[ -n "$_sc"                                   ]] && EVE_SCOPES_VAL="$_sc"
 fi
 
-if [[ " ${EVE_SCOPES_VAL} " != *" ${FITTINGS_SCOPE} "* ]]; then
-    EVE_SCOPES_VAL="${EVE_SCOPES_VAL} ${FITTINGS_SCOPE}"
-    log_info "Fittings-Scope zur EVE_SCOPES Konfiguration hinzugefuegt"
-fi
+# Ensure all required scopes are present (e.g. when reusing an existing .env)
+for _scope in ${REQUIRED_SCOPES}; do
+    if [[ " ${EVE_SCOPES_VAL} " != *" ${_scope} "* ]]; then
+        EVE_SCOPES_VAL="${EVE_SCOPES_VAL} ${_scope}"
+        log_info "Fehlenden Scope hinzugefuegt: ${_scope}"
+    fi
+done
 
 if [[ "$EVE_CLIENT_ID_VAL" != "BITTE_AUSFULLEN" ]]; then
     log_ok "EVE-Credentials aus bestehender .env übernommen"
@@ -197,7 +210,7 @@ EVE_SCOPES=${EVE_SCOPES_VAL}
 # Sicherheit
 SECRET_KEY=${SECRET_KEY}
 
-# Server
+# Server (native install: Nginx listens on port 80, Gunicorn on 8000 internally)
 APP_PORT=${APP_PORT}
 DEBUG=false
 WEB_WORKERS=2
@@ -252,7 +265,7 @@ EnvironmentFile=${APP_DIR}/.env
 ExecStart=${APP_DIR}/venv/bin/gunicorn app.main:app \
     -k uvicorn.workers.UvicornWorker \
     --workers ${WEB_WORKERS_VAL} \
-    --bind 127.0.0.1:${APP_PORT} \
+    --bind 127.0.0.1:${GUNICORN_PORT} \
     --timeout 120 \
     --access-logfile - \
     --error-logfile -
@@ -403,9 +416,16 @@ echo -e "  ${CYAN}RabbitMQ PW:${NC}   ${RABBITMQ_PASS}"
 echo ""
 echo -e "  ${YELLOW}⚠  Nächste Schritte:${NC}"
 echo -e "  1. EVE App registrieren: https://developers.eveonline.com"
+echo -e "     Callback URL: http://${IP_ADDR}/auth/callback"
+echo -e "     Benötigte Scopes (alle eintragen):"
+echo -e "       esi-planets.manage_planets.v1"
+echo -e "       esi-planets.read_customs_offices.v1"
+echo -e "       esi-location.read_location.v1"
+echo -e "       esi-characters.read_corporation_roles.v1"
+echo -e "       esi-skills.read_skills.v1"
+echo -e "       esi-fittings.read_fittings.v1"
 echo -e "  2. .env bearbeiten:      nano ${APP_DIR}/.env"
 echo -e "     EVE_CLIENT_ID / EVE_CLIENT_SECRET eintragen"
-echo -e "     EVE_CALLBACK_URL auf http://${IP_ADDR}/auth/callback setzen"
 echo -e "  3. Services neu starten: systemctl restart ${SERVICE_NAME} ${SERVICE_NAME}-worker ${SERVICE_NAME}-beat"
 echo -e "  4. Browser öffnen:       http://${IP_ADDR}"
 echo -e "  5. Erster Login = Admin"

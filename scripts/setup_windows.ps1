@@ -54,7 +54,22 @@ Ensure-EnvKey $envPath "SENTRY_DSN" ""
 Ensure-EnvKey $envPath "FLOWER_USER" "admin"
 Ensure-EnvKey $envPath "FLOWER_PASS" "change_me_flower"
 Ensure-EnvKey $envPath "NGINX_PORT" "80"
-Ensure-EnvScope $envPath "esi-fittings.read_fittings.v1"
+# Ensure all required ESI scopes are present:
+#   esi-planets.manage_planets.v1          - read/write PI colonies
+#   esi-planets.read_customs_offices.v1    - customs office tax rates
+#   esi-location.read_location.v1          - character location (route planner)
+#   esi-characters.read_corporation_roles.v1 - corp-manager access checks
+#   esi-skills.read_skills.v1              - skill queue / SP display
+#   esi-fittings.read_fittings.v1          - fittings comparison page
+$requiredScopes = @(
+    "esi-planets.manage_planets.v1",
+    "esi-planets.read_customs_offices.v1",
+    "esi-location.read_location.v1",
+    "esi-characters.read_corporation_roles.v1",
+    "esi-skills.read_skills.v1",
+    "esi-fittings.read_fittings.v1"
+)
+foreach ($scope in $requiredScopes) { Ensure-EnvScope $envPath $scope }
 
 if (-not (Test-Path $venvPath)) {
     Write-Info "Erstelle Virtual Environment..."
@@ -81,7 +96,8 @@ Write-Host "Naechste Schritte:" -ForegroundColor Cyan
 Write-Host "  1. PostgreSQL muss lokal laufen und DATABASE_URL in .env gesetzt sein."
 Write-Host "  2. EVE SSO Werte in .env eintragen."
 Write-Host "  3. Starten mit:"
-Write-Host "     .\$VenvDir\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000"
+Write-Host "     .\$VenvDir\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 80"
+Write-Host "     (Port 80 erfordert ggf. Admin-Rechte. Alternativ: --port 8000 fuer lokale Entwicklung)"
 Write-Host ""
 Write-Host "Optional mit winget:" -ForegroundColor Cyan
 Write-Host "  winget install Python.Python.3.11"

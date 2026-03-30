@@ -12,12 +12,19 @@
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 <label class="small text-muted mb-0">{{ t('common.character', default='Charakter') }}</label>
                 <select id="haulingCharacterSelect" class="form-select form-select-sm eve-input" style="min-width:220px;max-width:320px;">
+                    <option value="-1"{% if selected_character_id is none %} selected{% endif %}>Alle Charaktere</option>
                     {% for char in characters %}
                     <option value="{{ char.id }}"{% if char.id == selected_character_id %} selected{% endif %}>{{ char.character_name }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="d-flex align-items-center gap-2 flex-wrap">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="useAnsiblex" checked>
+                    <label class="form-check-label small text-muted" for="useAnsiblex">
+                        <i class="bi bi-lightning-fill me-1 text-info"></i>AnsibleX Bridges
+                    </label>
+                </div>
                 <span class="small text-muted"><i class="bi bi-geo-alt me-1"></i>{{ t('common.location', default='Standort') }}: {{ t('hauling.location_unknown') if not location_name else location_name }}</span>
                 <button type="button" id="refreshLocationBtn" class="btn btn-sm btn-outline-secondary">
                     <i class="bi bi-arrow-repeat me-1"></i>{{ t('hauling.refresh_location') }}
@@ -39,41 +46,110 @@
                         <table class="table table-dark table-hover table-sm mb-0">
                             <thead>
                                 <tr>
-                                    <th>{{ t('common.character', default='Charakter') }}</th>
-                                    <th>{{ t('common.system', default='System') }}</th>
-                                    <th>{{ t('common.planet', default='Planet') }}</th>
-                                    <th>{{ t('common.type', default='Typ') }}</th>
-                                    <th>{{ t('common.expires', default='Ablauf') }}</th>
-                                    <th>{{ t('hauling.storage_contents', default='Lager-Inhalt') }}</th>
-                                    <th>{{ t('hauling.storage_value') }}</th>
-                                    <th>{{ t('hauling.urgency') }}</th>
+                                    <th class="small text-muted">Charakter</th>
+                                    <th class="small text-muted">System</th>
+                                    <th class="small text-muted">Typ</th>
+                                    <th class="small text-muted">Ablauf</th>
+                                    <th class="small text-muted">Lager</th>
+                                    <th class="small text-muted">Wert</th>
+                                    <th class="small text-muted">Dringlichkeit</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for colony in hauling_colonies %}
-                                <tr data-route-system-id="{{ colony.solar_system_id or '' }}"{% if colony.expiry_hours is not none and colony.expiry_hours < 0 %} class="table-danger"{% elif colony.is_stalled %} class="table-warning"{% endif %} onclick="window.open('https://evemaps.dotlan.net/system/{{ (colony.solar_system_name or '') | replace(' ', '_') }}', '_blank')" style="cursor:pointer;">
-                                    <td>{{ colony.character_name }}</td>
+                                <tr
+                                    data-route-system-id="{{ colony.solar_system_id or '' }}"
+                                    class="{% if colony.expiry_hours is not none and colony.expiry_hours < 0 %}table-danger{% elif colony.is_stalled %}table-warning{% endif %}"
+                                    onclick="window.open('https://evemaps.dotlan.net/system/{{ (colony.solar_system_name or '') | replace(' ', '_') }}', '_blank')"
+                                    style="cursor:pointer;">
                                     <td>
-                                        {{ colony.solar_system_name }}
-                                        {% if colony.solar_system_id %}
-                                        <span class="kill-badge" data-sys-id="{{ colony.solar_system_id }}"></span>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle"
+                                                 onerror="this.src='/static/img/default_char.svg'" width="28" height="28">
+                                            <span class="small">{{ colony.character_name }}</span>
+                                        </div>
+                                    </td>
+                                    <td class="small">
+                                        <div>
+                                            {{ colony.solar_system_name }}
+                                            {% if colony.solar_system_id %}
+                                            <span class="kill-badge" data-sys-id="{{ colony.solar_system_id }}"></span>
+                                            {% endif %}
+                                        </div>
+                                        {% if colony.planet_name and colony.planet_name != '—' %}
+                                        <div style="color:#7a8a9a;font-size:.65rem;">{{ colony.planet_name }}</div>
+                                        {% endif %}
+                                        {% if colony.region_name and colony.region_name != '—' %}
+                                        <div style="color:#3a5a7a;font-size:.65rem;">{{ colony.region_name }}</div>
                                         {% endif %}
                                     </td>
-                                    <td>{{ colony.planet_name }}</td>
-                                    <td>{{ t('planet_type.' ~ (colony.planet_type | lower), default=colony.planet_type) }}</td>
-                                    <td>{% if colony.expiry_hours is not none %}{{ colony.expiry_hours | format_expiry }}{% else %}—{% endif %}</td>
-                                    <td title="{{ colony.storage_breakdown_title }}">
-                                        {% if colony.storage_summary_items %}
-                                            {{ colony.storage_summary_items | join(', ') }}
-                                            {% if colony.storage_extra_count > 0 %}<span class="text-muted">+{{ colony.storage_extra_count }} mehr</span>{% endif %}
+                                    <td>
+                                        <span class="badge eve-planet-badge"
+                                              style="background-color:{{ colony.color }}20;color:{{ colony.color }};border:1px solid {{ colony.color }}40;">
+                                            {{ t('planet_type.' ~ (colony.planet_type | lower), default=colony.planet_type) }}
+                                        </span>
+                                    </td>
+                                    <td class="small">
+                                        {% if colony.expiry_hours is not none %}
+                                            {% if colony.expiry_hours < 0 %}
+                                                <span class="eve-expiry-expired"><i class="bi bi-exclamation-circle me-1"></i>Abgelaufen</span>
+                                            {% elif colony.expiry_hours < 12 %}
+                                                <span class="eve-expiry-crit"><i class="bi bi-clock me-1"></i>{{ colony.expiry_hours | format_expiry }}</span>
+                                            {% elif colony.expiry_hours < 24 %}
+                                                <span class="eve-expiry-warn"><i class="bi bi-clock me-1"></i>{{ colony.expiry_hours | format_expiry }}</span>
+                                            {% else %}
+                                                <span class="eve-expiry-ok"><i class="bi bi-clock me-1"></i>{{ colony.expiry_hours | format_expiry }}</span>
+                                            {% endif %}
+                                        {% elif colony.is_stalled %}
+                                            <span class="eve-expiry-warn"><i class="bi bi-pause-circle me-1"></i>Stalled</span>
                                         {% else %}
-                                            <span class="text-muted">{{ t('hauling.no_items') }}</span>
+                                            <span class="text-muted">—</span>
                                         {% endif %}
                                     </td>
-                                    <td title="{{ colony.storage_breakdown_title }}">{{ colony.storage_value | format_isk }}</td>
-                                    <td style="min-width:110px;">
-                                        <div class="progress" style="height:6px;background:rgba(255,255,255,.08);" title="{{ colony.storage_fill_pct | round(1) }}% · {{ colony.storage_used_m3 | round(1) }}/{{ colony.storage_capacity_m3 | round(1) }} m3 · {{ colony.highest_tier or 'P0' }}">
-                                            <div class="progress-bar {% if colony.urgency_pct > 66 %}bg-danger{% elif colony.urgency_pct > 33 %}bg-warning{% else %}bg-success{% endif %}" style="width:{{ colony.urgency_pct }}%"></div>
+                                    <td>
+                                        {% if colony.storage_breakdown %}
+                                        <div class="eve-hover-wrap">
+                                            <span class="eve-storage-badge" style="cursor:default;color:
+                                                {% if colony.storage_fill_pct > 85 %}#e74c3c
+                                                {% elif colony.storage_fill_pct > 60 %}#f4a300
+                                                {% else %}#2dc653{% endif %};">
+                                                {{ colony.storage_breakdown | length }}×
+                                                {% if colony.storage_fill_pct == 0 %}leer{% else %}{{ colony.storage_fill_pct | round(0) | int }}%{% endif %}
+                                            </span>
+                                            <div class="eve-hover-card eve-hover-card-right">
+                                                <div style="color:#586e75;font-size:.65rem;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">Lager</div>
+                                                {% for item in colony.storage_breakdown[:8] %}
+                                                <div class="d-flex justify-content-between gap-3" style="{% if not loop.last %}margin-bottom:3px;{% endif %}">
+                                                    <span style="color:#b0c4d4;">{{ item.name }}</span>
+                                                    <span style="color:#7a9a6a;font-weight:600;">{{ "{:,}".format(item.amount) }}</span>
+                                                </div>
+                                                {% endfor %}
+                                                {% if colony.storage_breakdown | length > 8 %}
+                                                <div class="text-muted small mt-1">+{{ (colony.storage_breakdown | length) - 8 }} mehr</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {% else %}
+                                        <span class="text-muted small">leer</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="small">
+                                        {% if colony.storage_value > 0 %}
+                                            {{ colony.storage_value | format_isk }}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td style="min-width:90px;">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="progress flex-grow-1" style="height:5px;background:rgba(255,255,255,.08);">
+                                                <div class="progress-bar
+                                                    {% if colony.urgency_pct > 66 %}bg-danger
+                                                    {% elif colony.urgency_pct > 33 %}bg-warning
+                                                    {% else %}bg-success{% endif %}"
+                                                    style="width:{{ colony.urgency_pct }}%"></div>
+                                            </div>
+                                            <span class="small text-muted" style="min-width:32px;">{{ colony.urgency_pct }}%</span>
                                         </div>
                                     </td>
                                 </tr>
@@ -98,19 +174,36 @@
                     {% if route_ordered %}
                     <ol class="list-group list-group-numbered" id="routeList">
                         {% for item in route_ordered %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center eve-list-item bg-transparent text-light border-secondary">
-                            <div>
+                        <li class="list-group-item d-flex justify-content-between align-items-center {% if item.is_intermediate %}py-1 border-0 opacity-75{% else %}eve-list-item border-secondary{% endif %} bg-transparent text-light">
+                            <div class="d-flex align-items-center gap-2">
+                                {% if item.is_intermediate %}
+                                <i class="bi bi-arrow-down text-muted" style="font-size:.7rem;min-width:14px;"></i>
+                                <span class="small text-muted">{{ item.system_name }}</span>
+                                {% if item.system_id %}
+                                <span class="kill-badge" data-sys-id="{{ item.system_id }}"></span>
+                                {% endif %}
+                                {% else %}
                                 <span class="fw-bold">{{ item.system_name }}</span>
                                 {% if item.system_id %}
                                 <span class="kill-badge" data-sys-id="{{ item.system_id }}"></span>
                                 {% endif %}
+                                {% if item.via_bridge %}
+                                <span class="badge bg-info text-dark ms-1" title="Jump Bridge (AnsibleX)">
+                                    <i class="bi bi-lightning-fill me-1"></i>Bridge
+                                </span>
+                                {% endif %}
                                 {% if loop.first %}
-                                <span class="text-muted small ms-2">{{ t('hauling.start_point', default='Ausgangspunkt') }}</span>
+                                <span class="text-muted small">Ausgangspunkt</span>
                                 {% else %}
-                                <span class="text-muted small ms-2">{{ item.jumps_from_prev }} {{ t('hauling.jumps') }}</span>
+                                <span class="text-muted small">→ {{ item.jumps_from_prev }} Sprünge</span>
+                                {% endif %}
                                 {% endif %}
                             </div>
-                            <span class="badge bg-secondary">{% if loop.first %}{{ t('common.start', default='Start') }}{% else %}{{ item.jumps_from_prev }}{% endif %}</span>
+                            {% if not item.is_intermediate %}
+                            <span class="badge {% if loop.first %}bg-secondary{% else %}bg-primary{% endif %}">
+                                {% if loop.first %}Start{% else %}{{ item.jumps_from_prev }}J{% endif %}
+                            </span>
+                            {% endif %}
                         </li>
                         {% endfor %}
                     </ol>
@@ -134,11 +227,11 @@
 (function () {
     const charSelect = document.getElementById('haulingCharacterSelect');
     const refreshBtn = document.getElementById('refreshLocationBtn');
+    const useAnsiblex = document.getElementById('useAnsiblex');
 
     if (charSelect) {
         charSelect.addEventListener('change', () => {
-            const value = charSelect.value;
-            window.location.href = `/hauling?character_id=${encodeURIComponent(value)}`;
+            window.location.href = '/hauling?character_id=' + charSelect.value;
         });
     }
 
@@ -157,7 +250,11 @@
             const routeResp = await fetch('/hauling/api/route', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({origin_system_id: locationData.solar_system_id, system_ids: systemIds}),
+                body: JSON.stringify({
+                    origin_system_id: locationData.solar_system_id,
+                    system_ids: systemIds,
+                    use_ansiblex: useAnsiblex ? useAnsiblex.checked : true,
+                }),
             });
             const routeData = await routeResp.json();
             if (!routeData.ordered || !routeData.ordered.length) {
@@ -166,16 +263,28 @@
             }
             const routeList = document.getElementById('routeList');
             if (routeList) {
-                routeList.innerHTML = routeData.ordered.map((item, index) => `
-                    <li class="list-group-item d-flex justify-content-between align-items-center eve-list-item bg-transparent text-light border-secondary">
-                        <div>
+                routeList.innerHTML = routeData.ordered.map((item, index) => {
+                    const isIntermediate = item.is_intermediate;
+                    const isFirst = index === 0;
+                    if (isIntermediate) {
+                        return `<li class="list-group-item py-1 border-0 opacity-75 bg-transparent text-light">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="bi bi-arrow-down text-muted" style="font-size:.7rem;min-width:14px;"></i>
+                                <span class="small text-muted">${item.system_name}</span>
+                                <span class="kill-badge" data-sys-id="${item.system_id}"></span>
+                            </div>
+                        </li>`;
+                    }
+                    return `<li class="list-group-item d-flex justify-content-between align-items-center eve-list-item bg-transparent text-light border-secondary">
+                        <div class="d-flex align-items-center gap-2">
                             <span class="fw-bold">${item.system_name}</span>
                             <span class="kill-badge" data-sys-id="${item.system_id}"></span>
-                            <span class="text-muted small ms-2">${index === 0 ? {{ t("hauling.start_point", default="Ausgangspunkt") | tojson }} : `${item.jumps_from_prev} {{ t("hauling.jumps") }}`}</span>
+                            ${item.via_bridge ? '<span class="badge bg-info text-dark ms-1"><i class="bi bi-lightning-fill me-1"></i>Bridge</span>' : ''}
+                            <span class="text-muted small">${isFirst ? 'Ausgangspunkt' : '→ ' + item.jumps_from_prev + ' Sprünge'}</span>
                         </div>
-                        <span class="badge bg-secondary">${index === 0 ? {{ t("common.start", default="Start") | tojson }} : item.jumps_from_prev}</span>
-                    </li>
-                `).join('');
+                        <span class="badge ${isFirst ? 'bg-secondary' : 'bg-primary'}">${isFirst ? 'Start' : item.jumps_from_prev + 'J'}</span>
+                    </li>`;
+                }).join('');
             }
             loadKillBadges();
         } catch {

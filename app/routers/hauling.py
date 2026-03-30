@@ -9,6 +9,7 @@ from fastapi import APIRouter, Body, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
+from app import ansiblex as _ansiblex
 from app import sde
 from app.database import get_db
 from app.dependencies import require_account
@@ -26,7 +27,7 @@ router = APIRouter(prefix="/hauling", tags=["hauling"])
 _LOCATION_CACHE_TTL = 300
 _ROUTE_CACHE_TTL = 3600
 _location_cache: dict[int, tuple[dict, float]] = {}
-_route_cache: dict[tuple[int, int], tuple[int, float]] = {}
+_route_cache: dict[tuple[int, int], tuple[list[int], float]] = {}
 
 
 def _storage_has_items(storage: list[dict] | None) -> bool:
@@ -124,9 +125,9 @@ def _get_cached_location(character: Character, db: Session) -> dict | None:
     return location or None
 
 
-def _jump_count(origin_system_id: int, destination_system_id: int) -> int:
+def _get_route_systems(origin_system_id: int, destination_system_id: int) -> list[int]:
     if origin_system_id == destination_system_id:
-        return 0
+        return [int(origin_system_id)]
     key = (int(origin_system_id), int(destination_system_id))
     cached = _route_cache.get(key)
     if cached and time.time() - cached[1] < _ROUTE_CACHE_TTL:
@@ -138,31 +139,68 @@ def _jump_count(origin_system_id: int, destination_system_id: int) -> int:
         timeout=15,
     )
     resp.raise_for_status()
-    route = resp.json() or []
-    jumps = max(len(route) - 1, 0) if isinstance(route, list) else 0
-    _route_cache[key] = (jumps, time.time())
-    _route_cache[(key[1], key[0])] = (jumps, time.time())
-    return jumps
+    systems = [int(system_id) for system_id in (resp.json() or [])]
+    _route_cache[key] = (systems, time.time())
+    _route_cache[(key[1], key[0])] = (list(reversed(systems)), time.time())
+    return systems
 
 
-def _build_route(origin_system_id: int, system_ids: list[int]) -> tuple[list[dict], int]:
+def _jump_count(origin_system_id: int, destination_system_id: int, use_ansiblex: bool = True) -> int:
+    if origin_system_id == destination_system_id:
+        return 0
+    if use_ansiblex:
+        bridge = _ansiblex.bridge_jumps(origin_system_id, destination_system_id)
+        if bridge is not None:
+            return bridge
+    return max(len(_get_route_systems(origin_system_id, destination_system_id)) - 1, 0)
+
+
+def _build_route(origin_system_id: int, system_ids: list[int], use_ansiblex: bool = True) -> tuple[list[dict], int]:
     remaining = list(dict.fromkeys(int(system_id) for system_id in system_ids if system_id and int(system_id) != int(origin_system_id)))[:20]
     ordered: list[dict] = [{
         "system_id": int(origin_system_id),
         "system_name": _system_name(int(origin_system_id)),
         "jumps_from_prev": 0,
+        "is_waypoint": True,
+        "is_intermediate": False,
+        "via_bridge": False,
     }]
     total_jumps = 0
     current = int(origin_system_id)
     while remaining:
-        next_id = min(remaining, key=lambda candidate: _jump_count(current, candidate))
-        jumps = _jump_count(current, next_id)
-        total_jumps += jumps
-        ordered.append({
-            "system_id": int(next_id),
-            "system_name": _system_name(int(next_id)),
-            "jumps_from_prev": int(jumps),
-        })
+        next_id = min(remaining, key=lambda candidate: _jump_count(current, candidate, use_ansiblex=use_ansiblex))
+        bridge = _ansiblex.bridge_jumps(current, next_id) if use_ansiblex else None
+        if bridge is not None:
+            total_jumps += 1
+            ordered.append({
+                "system_id": int(next_id),
+                "system_name": _system_name(int(next_id)),
+                "jumps_from_prev": 1,
+                "is_waypoint": True,
+                "is_intermediate": False,
+                "via_bridge": True,
+            })
+        else:
+            route_systems = _get_route_systems(current, next_id)
+            for sys_id in route_systems[1:-1]:
+                ordered.append({
+                    "system_id": int(sys_id),
+                    "system_name": _system_name(int(sys_id)),
+                    "jumps_from_prev": 1,
+                    "is_waypoint": False,
+                    "is_intermediate": True,
+                    "via_bridge": False,
+                })
+            jumps = max(len(route_systems) - 1, 0)
+            total_jumps += jumps
+            ordered.append({
+                "system_id": int(next_id),
+                "system_name": _system_name(int(next_id)),
+                "jumps_from_prev": int(jumps),
+                "is_waypoint": True,
+                "is_intermediate": False,
+                "via_bridge": False,
+            })
         remaining.remove(next_id)
         current = next_id
     return ordered, total_jumps
@@ -178,15 +216,16 @@ def hauling_page(
     characters = db.query(Character).filter(Character.account_id == account.id).all()
     selected_character = None
     if character_id:
-        selected_character = next((char for char in characters if char.id == character_id), None)
-    if selected_character is None:
-        selected_character = next((char for char in characters if char.id == account.main_character_id), None) or (characters[0] if characters else None)
+        if character_id == -1:
+            selected_character = None
+        else:
+            selected_character = next((char for char in characters if char.id == character_id), None)
 
     cached = _load_colony_cache(account.id, db) or {}
     colonies = list(cached.get("colonies") or [])
     hauling_colonies = []
     for colony in colonies:
-        if selected_character and colony.get("character_name") != selected_character.character_name:
+        if selected_character is not None and colony.get("character_name") != selected_character.character_name:
             continue
         if not _storage_has_items(colony.get("storage")):
             continue
@@ -217,6 +256,7 @@ def hauling_page(
             route_ordered, route_total_jumps = _build_route(
                 int(location.get("solar_system_id") or 0),
                 [int(colony.get("solar_system_id") or 0) for colony in hauling_colonies if colony.get("solar_system_id")],
+                use_ansiblex=True,
             )
         except Exception:
             logger.exception("hauling: failed to build initial route")
@@ -252,6 +292,8 @@ def get_location(
     db: Session = Depends(get_db),
 ):
     characters = db.query(Character).filter(Character.account_id == account.id).all()
+    if character_id == -1:
+        return JSONResponse({"ok": False, "location": None})
     character = next((char for char in characters if char.id == character_id), None) if character_id else None
     if character is None:
         character = next((char for char in characters if char.id == account.main_character_id), None) or (characters[0] if characters else None)
@@ -277,10 +319,11 @@ def get_route(
 ):
     origin_system_id = int(payload.get("origin_system_id") or 0)
     system_ids = [int(system_id) for system_id in (payload.get("system_ids") or []) if system_id]
+    use_ansiblex = bool(payload.get("use_ansiblex", True))
     if not origin_system_id or not system_ids:
         return JSONResponse({"ordered": [], "total_jumps": 0})
     try:
-        ordered, total_jumps = _build_route(origin_system_id, system_ids)
+        ordered, total_jumps = _build_route(origin_system_id, system_ids, use_ansiblex=use_ansiblex)
     except Exception:
         logger.exception("hauling: route rebuild failed")
         return JSONResponse({"ordered": [], "total_jumps": 0})

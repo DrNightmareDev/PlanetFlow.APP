@@ -43,7 +43,7 @@
                 <div class="card-body">
                     {% if hauling_colonies %}
                     <div class="table-responsive">
-                        <table class="table table-dark table-hover table-sm mb-0">
+                        <table id="haulingStorageTable" class="table table-dark table-hover table-sm mb-0">
                             <thead>
                                 <tr>
                                     <th class="small text-muted">Charakter</th>
@@ -402,10 +402,64 @@
         }
     }
 
+    function initHaulingHoverCards() {
+        const wraps = Array.from(document.querySelectorAll('#haulingStorageTable .eve-hover-wrap'));
+        if (!wraps.length) return;
+
+        let globalCard = document.getElementById('eveGlobalHoverCard');
+        if (!globalCard) {
+            globalCard = document.createElement('div');
+            globalCard.id = 'eveGlobalHoverCard';
+            globalCard.className = 'eve-global-hover-card';
+            document.body.appendChild(globalCard);
+        }
+
+        const hideCard = () => {
+            globalCard.style.display = 'none';
+            globalCard.innerHTML = '';
+        };
+
+        const showCard = (wrap) => {
+            const source = wrap.querySelector('.eve-hover-card');
+            if (!source) return;
+
+            globalCard.innerHTML = source.innerHTML;
+            globalCard.style.display = 'block';
+            globalCard.style.visibility = 'hidden';
+
+            const wrapRect = wrap.getBoundingClientRect();
+            const cardWidth = globalCard.offsetWidth;
+            const cardHeight = globalCard.offsetHeight;
+            const alignRight = source.classList.contains('eve-hover-card-right');
+
+            let left = alignRight ? wrapRect.right - cardWidth : wrapRect.left;
+            left = Math.max(8, Math.min(left, window.innerWidth - cardWidth - 8));
+
+            let top = wrapRect.bottom + 6;
+            if (top + cardHeight > window.innerHeight - 8) top = wrapRect.top - cardHeight - 6;
+            if (top < 8) top = Math.min(window.innerHeight - cardHeight - 8, wrapRect.bottom + 6);
+
+            globalCard.style.left = `${left}px`;
+            globalCard.style.top = `${top}px`;
+            globalCard.style.visibility = 'visible';
+        };
+
+        wraps.forEach(wrap => {
+            if (wrap.dataset.hoverBound === '1') return;
+            wrap.dataset.hoverBound = '1';
+            wrap.addEventListener('mouseenter', () => showCard(wrap));
+            wrap.addEventListener('mouseleave', hideCard);
+        });
+
+        window.addEventListener('scroll', hideCard, true);
+        window.addEventListener('resize', hideCard);
+    }
+
     refreshBtn?.addEventListener('click', refreshRouteLocation);
     useAnsiblex?.addEventListener('change', () => updateAnsiblexStatus(null, useAnsiblex.checked));
     updateAnsiblexStatus({state: {{ ansiblex_status.state | tojson }}, last_error: {{ ansiblex_status.last_error | tojson }}}, useAnsiblex ? useAnsiblex.checked : true);
     loadKillBadges();
+    initHaulingHoverCards();
 })();
 </script>
 {% endblock %}

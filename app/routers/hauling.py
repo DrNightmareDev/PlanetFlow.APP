@@ -17,7 +17,7 @@ from app.esi import ensure_valid_token, get_character_location
 from app.models import Character
 from app.market import PI_TYPE_IDS
 from app.models import MarketCache
-from app.routers.dashboard import _load_colony_cache
+from app.routers.dashboard import _apply_price_mode, _load_colony_cache, _recompute_expiry
 from app.templates_env import templates
 
 logger = logging.getLogger(__name__)
@@ -232,6 +232,10 @@ def hauling_page(
 
     cached = _load_colony_cache(account.id, db) or {}
     colonies = list(cached.get("colonies") or [])
+    cache_meta = dict(cached.get("meta") or {})
+    if colonies:
+        _recompute_expiry(colonies)
+        colonies, _ = _apply_price_mode(colonies, cache_meta, getattr(account, "price_mode", "sell"))
     hauling_colonies = []
     for colony in colonies:
         if selected_character is not None and colony.get("character_name") != selected_character.character_name:

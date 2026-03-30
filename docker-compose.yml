@@ -59,6 +59,7 @@ services:
 
   app:
     build: .
+    user: "0:0"
     restart: unless-stopped
     depends_on:
       db:
@@ -85,6 +86,7 @@ services:
 
   celery_worker:
     build: .
+    user: "0:0"
     restart: unless-stopped
     entrypoint: ["/app/docker/celery_entrypoint.sh"]
     command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "--concurrency=4", "-Q", "celery"]
@@ -102,6 +104,7 @@ services:
 
   celery_beat:
     build: .
+    user: "0:0"
     restart: unless-stopped
     entrypoint: ["/app/docker/celery_entrypoint.sh"]
     command: ["celery", "-A", "app.celery_app", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]

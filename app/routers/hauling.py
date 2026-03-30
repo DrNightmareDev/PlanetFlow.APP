@@ -384,6 +384,8 @@ def _fallback_esi_leg(origin_system_id: int, destination_system_id: int) -> tupl
             "bridge_label": None,
             "bridge_source": None,
             "bridge_corporation_name": None,
+            "bridge_incoming": False,
+            "bridge_outgoing": False,
         })
     return items, total_jumps
 
@@ -464,7 +466,16 @@ def _steps_to_items(steps: list[dict], destination_system_id: int) -> tuple[list
             "bridge_label": step.get("bridge_label"),
             "bridge_source": step.get("bridge_source"),
             "bridge_corporation_name": step.get("bridge_corporation_name"),
+            "bridge_incoming": step.get("type") == "bridge",
+            "bridge_outgoing": False,
         })
+    for index, step in enumerate(steps):
+        if step.get("type") != "bridge":
+            continue
+        if index == 0:
+            continue
+        items[index - 1]["bridge_outgoing"] = True
+        items[index - 1]["bridge_label"] = step.get("bridge_label")
     return items, total_jumps
 
 
@@ -506,11 +517,17 @@ def _build_route(origin_system_id: int, system_ids: list[int], db: Session, use_
         "bridge_label": None,
         "bridge_source": None,
         "bridge_corporation_name": None,
+        "bridge_incoming": False,
+        "bridge_outgoing": False,
     }]
     total_jumps = 0
     current = int(origin_system_id)
     while remaining:
         next_id = min(remaining, key=lambda candidate: _jump_count(current, candidate, db, use_ansiblex=use_ansiblex))
+        steps = _graph_steps(current, next_id, db, use_ansiblex=use_ansiblex)
+        if steps and steps[0].get("type") == "bridge":
+            ordered[-1]["bridge_outgoing"] = True
+            ordered[-1]["bridge_label"] = steps[0].get("bridge_label")
         leg_items, jumps = _best_leg(current, next_id, db, use_ansiblex=use_ansiblex)
         total_jumps += jumps
         ordered.extend(leg_items)

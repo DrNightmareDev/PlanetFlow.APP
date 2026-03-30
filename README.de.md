@@ -174,7 +174,7 @@ docker compose --profile nginx up -d
 ### Update
 
 ```bash
-bash scripts/update_linux.sh --compose
+bash scripts/update_compose.sh
 ```
 
 Oder manuell:

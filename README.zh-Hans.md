@@ -174,7 +174,7 @@ docker compose --profile nginx up -d
 ### 更新
 
 ```bash
-bash scripts/update_linux.sh --compose
+bash scripts/update_compose.sh
 ```
 
 或手动更新：

@@ -55,6 +55,7 @@ Handles RabbitMQ install, new `.env` keys, uvicorn → gunicorn migration, Celer
 | `scripts/setup_linux.sh` | Fresh native Linux install |
 | `scripts/upgrade_to_latest.sh` | Upgrade any version to latest (native Linux) |
 | `scripts/update_linux.sh` | Regular update (native or `--compose`) |
+| `scripts/update_compose.sh` | Regular update for Docker Compose installs |
 | `scripts/update_windows.ps1` | Update on Windows (native or `-Compose`) |
 
 ## Health check

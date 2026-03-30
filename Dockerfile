@@ -5,6 +5,7 @@ WORKDIR /app
 # System dependencies for psycopg2
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies

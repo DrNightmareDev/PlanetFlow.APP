@@ -1,5 +1,5 @@
-{% extends "base.html" %}
-{% block title %}Manager - EVE PI Manager{% endblock %}
+﻿{% extends "base.html" %}
+{% block title %}{{ t('admin.title', default='Manager') }} - {{ t('app.name') }}{% endblock %}
 
 {% block content %}
 <!-- Manager Header -->
@@ -67,22 +67,22 @@
         <div class="d-flex gap-2 flex-wrap align-items-center">
             <!-- Reload All -->
             <button class="btn btn-sm eve-btn-outline" onclick="openAdminReloadAll()"
-                    title="Alle Accounts neu laden">
-                <i class="bi bi-arrow-repeat me-1"></i>Alle neu laden
+                    title="{{ t('admin.reload_all_title', default='Reload all accounts') }}">
+                <i class="bi bi-arrow-repeat me-1"></i>{{ t('admin.reload_all', default='Reload all') }}
             </button>
             <!-- Suche nach Charaktername -->
             <div class="input-group input-group-sm" style="width:220px;">
                 <span class="input-group-text eve-input-prefix"><i class="bi bi-search"></i></span>
                 <input type="text" id="charSearch" class="form-control eve-input"
-                       placeholder="Char-Name suchen…">
+                       placeholder="{{ t('admin.search_character_placeholder', default='Search character name...') }}">
             </div>
             <!-- Filter: Manager -->
             <button id="adminFilterBtn" class="btn btn-sm eve-tier-filter-btn" onclick="toggleAdminFilter()">
-                <i class="bi bi-shield me-1"></i>Nur Manager
+                <i class="bi bi-shield me-1"></i>{{ t('admin.only_managers', default='Managers only') }}
             </button>
             <!-- Sort -->
             <button id="sortNameBtn" class="btn btn-sm eve-tier-filter-btn" onclick="toggleSort()">
-                <i class="bi bi-sort-alpha-down me-1"></i>Nach Name
+                <i class="bi bi-sort-alpha-down me-1"></i>{{ t('admin.sort_by_name', default='By name') }}
             </button>
         </div>
     </div>
@@ -953,3 +953,4 @@ async function adminResetCharErrors(charId, charName, btn) {
 }
 </script>
 {% endblock %}
+

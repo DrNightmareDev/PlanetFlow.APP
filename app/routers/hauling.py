@@ -28,6 +28,7 @@ _LOCATION_CACHE_TTL = 300
 _ROUTE_CACHE_TTL = 3600
 _location_cache: dict[int, tuple[dict, float]] = {}
 _route_cache: dict[tuple[int, int], tuple[list[int], float]] = {}
+_best_route_cache: dict[tuple[int, int, bool], tuple[dict, float]] = {}
 
 
 def _storage_has_items(storage: list[dict] | None) -> bool:
@@ -157,11 +158,102 @@ def _get_route_systems(origin_system_id: int, destination_system_id: int) -> lis
 def _jump_count(origin_system_id: int, destination_system_id: int, use_ansiblex: bool = True) -> int:
     if origin_system_id == destination_system_id:
         return 0
+    leg, total_jumps = _best_leg(origin_system_id, destination_system_id, use_ansiblex=use_ansiblex)
+    return total_jumps
+
+
+def _build_plain_leg(origin_system_id: int, destination_system_id: int) -> tuple[list[dict], int]:
+    route_systems = _get_route_systems(origin_system_id, destination_system_id)
+    jumps = max(len(route_systems) - 1, 0)
+    items: list[dict] = []
+    for sys_id in route_systems[1:-1]:
+        items.append({
+            "system_id": int(sys_id),
+            "system_name": _system_name(int(sys_id)),
+            "jumps_from_prev": 1,
+            "is_waypoint": False,
+            "is_intermediate": True,
+            "via_bridge": False,
+        })
+    items.append({
+        "system_id": int(destination_system_id),
+        "system_name": _system_name(int(destination_system_id)),
+        "jumps_from_prev": int(jumps),
+        "is_waypoint": True,
+        "is_intermediate": False,
+        "via_bridge": False,
+    })
+    return items, jumps
+
+
+def _append_gate_segment(items: list[dict], route_systems: list[int], destination_system_id: int) -> None:
+    for sys_id in route_systems[1:]:
+        items.append({
+            "system_id": int(sys_id),
+            "system_name": _system_name(int(sys_id)),
+            "jumps_from_prev": 1,
+            "is_waypoint": int(sys_id) == int(destination_system_id),
+            "is_intermediate": int(sys_id) != int(destination_system_id),
+            "via_bridge": False,
+        })
+
+
+def _build_one_bridge_leg(origin_system_id: int, destination_system_id: int, bridge_start: int, bridge_end: int) -> tuple[list[dict], int]:
+    items: list[dict] = []
+    total_jumps = 0
+
+    to_bridge = _get_route_systems(origin_system_id, bridge_start)
+    total_jumps += max(len(to_bridge) - 1, 0)
+    _append_gate_segment(items, to_bridge, bridge_start)
+
+    total_jumps += 1
+    items.append({
+        "system_id": int(bridge_end),
+        "system_name": _system_name(int(bridge_end)),
+        "jumps_from_prev": 1,
+        "is_waypoint": int(bridge_end) == int(destination_system_id),
+        "is_intermediate": int(bridge_end) != int(destination_system_id),
+        "via_bridge": True,
+    })
+
+    if int(bridge_end) != int(destination_system_id):
+        from_bridge = _get_route_systems(bridge_end, destination_system_id)
+        total_jumps += max(len(from_bridge) - 1, 0)
+        _append_gate_segment(items, from_bridge, destination_system_id)
+
+    for idx in range(len(items) - 1, -1, -1):
+        if items[idx]["is_waypoint"]:
+            items[idx]["jumps_from_prev"] = total_jumps
+            break
+    return items, total_jumps
+
+
+def _best_leg(origin_system_id: int, destination_system_id: int, use_ansiblex: bool = True) -> tuple[list[dict], int]:
+    if origin_system_id == destination_system_id:
+        return [], 0
+    cache_key = (int(origin_system_id), int(destination_system_id), bool(use_ansiblex))
+    cached = _best_route_cache.get(cache_key)
+    if cached and time.time() - cached[1] < _ROUTE_CACHE_TTL:
+        data = cached[0]
+        return list(data["items"]), int(data["jumps"])
+
+    best_items, best_jumps = _build_plain_leg(origin_system_id, destination_system_id)
     if use_ansiblex:
-        bridge = _ansiblex.bridge_jumps(origin_system_id, destination_system_id)
-        if bridge is not None:
-            return bridge
-    return max(len(_get_route_systems(origin_system_id, destination_system_id)) - 1, 0)
+        base_route = _get_route_systems(origin_system_id, destination_system_id)
+        for gate in _ansiblex.bridges_touching_systems(base_route):
+            from_id = int(gate.get("from") or 0)
+            to_id = int(gate.get("to") or 0)
+            if not from_id or not to_id:
+                continue
+            candidate_a, jumps_a = _build_one_bridge_leg(origin_system_id, destination_system_id, from_id, to_id)
+            if jumps_a < best_jumps:
+                best_items, best_jumps = candidate_a, jumps_a
+            candidate_b, jumps_b = _build_one_bridge_leg(origin_system_id, destination_system_id, to_id, from_id)
+            if jumps_b < best_jumps:
+                best_items, best_jumps = candidate_b, jumps_b
+
+    _best_route_cache[cache_key] = ({"items": list(best_items), "jumps": int(best_jumps)}, time.time())
+    return best_items, best_jumps
 
 
 def _build_route(origin_system_id: int, system_ids: list[int], use_ansiblex: bool = True) -> tuple[list[dict], int]:
@@ -178,38 +270,9 @@ def _build_route(origin_system_id: int, system_ids: list[int], use_ansiblex: boo
     current = int(origin_system_id)
     while remaining:
         next_id = min(remaining, key=lambda candidate: _jump_count(current, candidate, use_ansiblex=use_ansiblex))
-        bridge = _ansiblex.bridge_jumps(current, next_id) if use_ansiblex else None
-        if bridge is not None:
-            total_jumps += 1
-            ordered.append({
-                "system_id": int(next_id),
-                "system_name": _system_name(int(next_id)),
-                "jumps_from_prev": 1,
-                "is_waypoint": True,
-                "is_intermediate": False,
-                "via_bridge": True,
-            })
-        else:
-            route_systems = _get_route_systems(current, next_id)
-            for sys_id in route_systems[1:-1]:
-                ordered.append({
-                    "system_id": int(sys_id),
-                    "system_name": _system_name(int(sys_id)),
-                    "jumps_from_prev": 1,
-                    "is_waypoint": False,
-                    "is_intermediate": True,
-                    "via_bridge": False,
-                })
-            jumps = max(len(route_systems) - 1, 0)
-            total_jumps += jumps
-            ordered.append({
-                "system_id": int(next_id),
-                "system_name": _system_name(int(next_id)),
-                "jumps_from_prev": int(jumps),
-                "is_waypoint": True,
-                "is_intermediate": False,
-                "via_bridge": False,
-            })
+        leg_items, jumps = _best_leg(current, next_id, use_ansiblex=use_ansiblex)
+        total_jumps += jumps
+        ordered.extend(leg_items)
         remaining.remove(next_id)
         current = next_id
     return ordered, total_jumps

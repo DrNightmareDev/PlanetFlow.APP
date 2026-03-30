@@ -9,6 +9,7 @@ _ANSIBLEX_URL = "https://ansiblex.com/api/gates"
 _HEADERS = {"User-Agent": "EVE-PI-Manager/1.0 github.com/DrNightmareDev/PI_Manager"}
 _CACHE_TTL = 3600
 _cache: dict[tuple[int, int], bool] = {}
+_gates: list[dict] = []
 _cache_loaded_at: float = 0.0
 _last_attempt_at: float = 0.0
 _last_success_at: float = 0.0
@@ -16,7 +17,7 @@ _last_error: str | None = None
 
 
 def _ensure_loaded() -> None:
-    global _cache_loaded_at, _cache, _last_attempt_at, _last_success_at, _last_error
+    global _cache_loaded_at, _cache, _gates, _last_attempt_at, _last_success_at, _last_error
     if time.time() - _cache_loaded_at < _CACHE_TTL:
         return
     _last_attempt_at = time.time()
@@ -25,14 +26,23 @@ def _ensure_loaded() -> None:
         resp.raise_for_status()
         gates = resp.json() or []
         new_cache: dict[tuple[int, int], bool] = {}
+        normalized_gates: list[dict] = []
         for gate in gates:
             if isinstance(gate, dict):
                 from_id = gate.get("from") or gate.get("from_solar_system_id")
                 to_id = gate.get("to") or gate.get("to_solar_system_id")
                 if from_id and to_id:
+                    from_int = int(from_id)
+                    to_int = int(to_id)
                     new_cache[(int(from_id), int(to_id))] = True
                     new_cache[(int(to_id), int(from_id))] = True
+                    normalized_gates.append({
+                        "from": from_int,
+                        "to": to_int,
+                        "name": gate.get("name") or "",
+                    })
         _cache = new_cache
+        _gates = normalized_gates
         _cache_loaded_at = time.time()
         _last_success_at = _cache_loaded_at
         _last_error = None
@@ -49,6 +59,17 @@ def has_bridge(from_system: int, to_system: int) -> bool:
 
 def bridge_jumps(from_system: int, to_system: int) -> int | None:
     return 1 if has_bridge(from_system, to_system) else None
+
+
+def bridges_touching_systems(system_ids: list[int]) -> list[dict]:
+    _ensure_loaded()
+    system_set = {int(system_id) for system_id in system_ids if system_id}
+    if not system_set:
+        return []
+    return [
+        gate for gate in _gates
+        if int(gate.get("from") or 0) in system_set or int(gate.get("to") or 0) in system_set
+    ]
 
 
 def status(ensure_loaded: bool = False) -> dict:

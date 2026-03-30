@@ -177,6 +177,15 @@ docker compose --profile nginx up -d
 bash scripts/update_compose.sh
 ```
 
+Useful options:
+
+```bash
+bash scripts/update_compose.sh --branch main
+bash scripts/update_compose.sh --no-pull
+```
+
+This script updates the git checkout, pulls/builds images, restarts the stack, and runs Alembic migrations inside the `app` container.
+
 Or manually:
 ```bash
 git pull origin main

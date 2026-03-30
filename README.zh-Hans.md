@@ -177,6 +177,15 @@ docker compose --profile nginx up -d
 bash scripts/update_compose.sh
 ```
 
+常用参数：
+
+```bash
+bash scripts/update_compose.sh --branch main
+bash scripts/update_compose.sh --no-pull
+```
+
+该脚本会更新 Git 检出、拉取或构建镜像、重启整个栈，并在 `app` 容器内执行 Alembic 迁移。
+
 或手动更新：
 ```bash
 git pull origin main

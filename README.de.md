@@ -177,6 +177,15 @@ docker compose --profile nginx up -d
 bash scripts/update_compose.sh
 ```
 
+Nützliche Optionen:
+
+```bash
+bash scripts/update_compose.sh --branch main
+bash scripts/update_compose.sh --no-pull
+```
+
+Das Skript aktualisiert den Git-Checkout, zieht bzw. baut Images, startet den Stack neu und führt Alembic-Migrationen im `app`-Container aus.
+
 Oder manuell:
 ```bash
 git pull origin main

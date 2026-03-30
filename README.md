@@ -48,6 +48,21 @@ sudo bash scripts/upgrade_to_latest.sh
 
 Handles RabbitMQ install, new `.env` keys, uvicorn → gunicorn migration, Celery systemd units, pip deps, and DB migrations automatically.
 
+## Update Docker Compose installation
+
+```bash
+bash scripts/update_compose.sh
+```
+
+Useful options:
+
+```bash
+bash scripts/update_compose.sh --branch main
+bash scripts/update_compose.sh --no-pull
+```
+
+The script updates the git checkout, pulls/builds images, restarts the stack, and runs Alembic migrations inside the `app` container.
+
 ## Scripts
 
 | Script | Purpose |

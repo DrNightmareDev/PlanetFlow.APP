@@ -107,6 +107,7 @@ const intelState = {
     window: INTEL_BOOTSTRAP.selectedWindow,
     killType: INTEL_BOOTSTRAP.selectedKillType,
     layout: INTEL_BOOTSTRAP.selectedLayout,
+    systemDetails: {},
     viewBox: null,
     dragging: false,
     dragOrigin: null,
@@ -244,6 +245,7 @@ function renderMap() {
             renderMap();
             renderFeed();
             renderSystemDetails();
+            loadSystemDetails(system.id);
         });
 
         const core = document.createElementNS(ns, 'circle');
@@ -289,6 +291,59 @@ function renderSystemDetails() {
             <a href="https://zkillboard.com/system/${system.id}/" target="_blank" rel="noopener">${system.name}</a>
         </div>
         <div class="intel-system-meta">Security ${system.security} · ${(system.constellation_name || 'Unknown constellation')} · ${activity.kill_count} kills</div>
+        <div class="intel-heatbar"><span style="width:${Math.max(6, activity.heat * 100)}%"></span></div>
+        <div class="intel-mini-list">
+            ${relatedKills.map(item => `
+                <div class="intel-mini-row${intelState.selectedKillmailId === item.killmail_id ? ' is-active' : ''}">
+                    <a href="${item.kill_url}" target="_blank" rel="noopener"><img src="${item.ship_image_url}" alt="${item.ship_type}"></a>
+                    <div>
+                        <div class="intel-mini-top">
+                            <a href="${item.kill_url}" target="_blank" rel="noopener">${item.pilot_name}</a>
+                            <span>${item.timestamp_utc}</span>
+                        </div>
+                        <div class="text-muted">${item.ship_type}</div>
+                    </div>
+                </div>
+            `).join('') || '<div class="intel-empty">No recent kills in this system.</div>'}
+        </div>
+    `;
+}
+
+async function loadSystemDetails(systemId) {
+    try {
+        const response = await fetch(`/intel/system/${systemId}?window=${encodeURIComponent(intelState.window)}`);
+        if (!response.ok) return;
+        const payload = await response.json();
+        intelState.systemDetails[String(systemId)] = payload;
+        if (intelState.selectedSystemId === Number(systemId)) {
+            renderSystemDetails();
+        }
+    } catch {
+        // Keep the region feed fallback visible.
+    }
+}
+
+function renderSystemDetails() {
+    const container = document.getElementById('intelSystemDetails');
+    const fallbackSystem = intelState.region.systems[0];
+    const system = systemById(intelState.selectedSystemId || fallbackSystem?.id);
+    if (!system) {
+        container.innerHTML = '<div class="intel-empty">No systems available for this region.</div>';
+        return;
+    }
+    intelState.selectedSystemId = system.id;
+    const activity = activityFor(system.id);
+    const detailState = intelState.systemDetails[String(system.id)] || null;
+    const regionFallback = intelState.feed.filter(item => item.system_id === system.id);
+    const relatedKills = (detailState?.latest_kills || regionFallback).slice(0, 5);
+    const cacheState = detailState?.cache_state || '';
+    const fetchedAt = detailState?.fetched_at_iso ? new Date(detailState.fetched_at_iso).toLocaleTimeString() : '';
+    container.innerHTML = `
+        <div class="intel-system-name">
+            <a href="https://zkillboard.com/system/${system.id}/" target="_blank" rel="noopener">${system.name}</a>
+        </div>
+        <div class="intel-system-meta">Security ${system.security} · ${(system.constellation_name || 'Unknown constellation')} · ${activity.kill_count} kills</div>
+        <div class="intel-subtle">${cacheState ? `Source ${cacheState}${fetchedAt ? ` · ${fetchedAt}` : ''}` : 'Loading system details on demand.'}</div>
         <div class="intel-heatbar"><span style="width:${Math.max(6, activity.heat * 100)}%"></span></div>
         <div class="intel-mini-list">
             ${relatedKills.map(item => `
@@ -417,6 +472,9 @@ async function refreshIntel() {
     refreshAll();
     renderLoadStatus((intelState.sourceMeta.raw_kills || 0) > 0 ? 'ok' : 'empty');
     syncQueryParams();
+    if (intelState.selectedSystemId) {
+        loadSystemDetails(intelState.selectedSystemId);
+    }
 }
 
 async function changeRegion(regionKey) {
@@ -434,6 +492,7 @@ document.getElementById('intelLayoutSelect').addEventListener('change', event =>
 });
 document.getElementById('intelWindowSelect').addEventListener('change', async event => {
     intelState.window = event.target.value;
+    intelState.systemDetails = {};
     await refreshIntel();
 });
 document.getElementById('intelKillTypeSelect').addEventListener('change', async event => {
@@ -480,6 +539,11 @@ document.getElementById('intelKillTypeSelect').value = intelState.killType;
 refreshAll();
 renderLoadStatus((intelState.sourceMeta?.raw_kills || 0) > 0 ? 'ok' : 'empty');
 syncQueryParams();
+if (intelState.region.systems[0]?.id) {
+    intelState.selectedSystemId = intelState.region.systems[0].id;
+    renderSystemDetails();
+    loadSystemDetails(intelState.selectedSystemId);
+}
 setInterval(refreshIntel, 20000);
 </script>
 <style>

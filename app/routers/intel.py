@@ -1,21 +1,26 @@
 from __future__ import annotations
 
+import json
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from sqlalchemy.orm import Session
 
 from app import sde
+from app.database import get_db
 from app.dependencies import require_owner
+from app.models import KillActivityCache
 from app.templates_env import templates
-from app.zkill import get_region_kills, normalize_kill, resolve_kill_names
+from app.zkill import get_region_kills, get_system_kill_summary, normalize_kill, resolve_kill_names
 
 router = APIRouter(prefix="/intel", tags=["intel"])
 
 logger = logging.getLogger(__name__)
 WINDOW_SECONDS = {"5m": 300, "15m": 900, "60m": 3600, "24h": 86400}
+SYSTEM_DETAIL_TTL = timedelta(minutes=5)
 
 
 def _resolve_region(region: str) -> dict:
@@ -245,3 +250,76 @@ def intel_map_live(
         "source_meta": source_meta,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     })
+
+
+@router.get("/system/{system_id}")
+def intel_system_details(
+    system_id: int,
+    window: str = Query("60m"),
+    account=Depends(require_owner),
+    db: Session = Depends(get_db),
+):
+    selected_window = window if window in WINDOW_SECONDS else "60m"
+    now = datetime.now(timezone.utc)
+    row = db.get(KillActivityCache, int(system_id))
+    if row and row.fetched_at:
+        fetched_at = row.fetched_at if row.fetched_at.tzinfo else row.fetched_at.replace(tzinfo=timezone.utc)
+        if row.window == selected_window and now - fetched_at <= SYSTEM_DETAIL_TTL:
+            try:
+                latest_kills = json.loads(row.latest_kills_json or "[]")
+            except Exception:
+                latest_kills = []
+            return JSONResponse({
+                "system_id": int(system_id),
+                "kill_count": int(row.kill_count or 0),
+                "window": selected_window,
+                "latest_kills": latest_kills,
+                "fetched_at_iso": fetched_at.astimezone(timezone.utc).isoformat(),
+                "cache_state": "db",
+            })
+
+    try:
+        summary = get_system_kill_summary(int(system_id), window=selected_window, limit=5)
+        latest_kills = summary.get("latest_kills") or []
+        if row is None:
+            row = KillActivityCache(
+                system_id=int(system_id),
+                kill_count=int(summary.get("kill_count") or 0),
+                latest_kills_json=json.dumps(latest_kills),
+                window=selected_window,
+                fetched_at=now,
+            )
+            db.add(row)
+        else:
+            row.kill_count = int(summary.get("kill_count") or 0)
+            row.latest_kills_json = json.dumps(latest_kills)
+            row.window = selected_window
+            row.fetched_at = now
+        db.commit()
+        summary["fetched_at_iso"] = now.astimezone(timezone.utc).isoformat()
+        summary["cache_state"] = "fresh"
+        return JSONResponse(summary)
+    except Exception:
+        logger.exception("intel: failed system detail refresh for %s", system_id)
+        if row and row.fetched_at:
+            fetched_at = row.fetched_at if row.fetched_at.tzinfo else row.fetched_at.replace(tzinfo=timezone.utc)
+            try:
+                latest_kills = json.loads(row.latest_kills_json or "[]")
+            except Exception:
+                latest_kills = []
+            return JSONResponse({
+                "system_id": int(system_id),
+                "kill_count": int(row.kill_count or 0),
+                "window": row.window or selected_window,
+                "latest_kills": latest_kills,
+                "fetched_at_iso": fetched_at.astimezone(timezone.utc).isoformat(),
+                "cache_state": "stale_db",
+            })
+        return JSONResponse({
+            "system_id": int(system_id),
+            "kill_count": 0,
+            "window": selected_window,
+            "latest_kills": [],
+            "fetched_at_iso": now.astimezone(timezone.utc).isoformat(),
+            "cache_state": "empty",
+        })

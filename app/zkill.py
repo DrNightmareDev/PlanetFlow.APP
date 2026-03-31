@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 HEADERS = {"User-Agent": "EVE-PI-Manager/1.0 github.com/DrNightmareDev/PI_Manager"}
 WINDOW_SECONDS = {"5m": 300, "15m": 900, "60m": 3600, "24h": 86400}
-_CACHE_TTL = 120.0
+_SYSTEM_CACHE_TTL = 300.0
+_REGION_CACHE_TTL = 900.0
 _SYSTEM_CACHE: dict[tuple[int, int], tuple[float, dict]] = {}
 _REGION_CACHE: dict[tuple[int, int], tuple[float, list[dict]]] = {}
 _LAST_REGION_FETCH: dict[int, float] = {}
@@ -171,7 +172,7 @@ def get_system_kill_summary(system_id: int, window: str = "60m", limit: int = 10
     cache_key = (int(system_id), past_seconds)
     cached = _SYSTEM_CACHE.get(cache_key)
     now = time.time()
-    if cached and now - cached[0] <= _CACHE_TTL:
+    if cached and now - cached[0] <= _SYSTEM_CACHE_TTL:
         return cached[1]
 
     stubs = _fetch_json(
@@ -207,7 +208,7 @@ def get_region_kills(region_id: int, window: str = "60m", limit: int = 200) -> l
     cache_key = (int(region_id), past_seconds)
     cached = _REGION_CACHE.get(cache_key)
     now = time.time()
-    if cached and now - cached[0] <= _CACHE_TTL:
+    if cached and now - cached[0] <= _REGION_CACHE_TTL:
         return cached[1]
     last = _LAST_REGION_FETCH.get(int(region_id), 0.0)
     if now - last < ZKILL_MIN_INTERVAL:

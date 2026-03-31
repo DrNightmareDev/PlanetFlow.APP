@@ -125,6 +125,8 @@ class KillActivityCache(Base):
 
     system_id = Column(BigInteger, primary_key=True)
     kill_count = Column(Integer, nullable=False, default=0, server_default="0")
+    latest_kills_json = Column(Text, nullable=False, default="[]", server_default="[]")
+    window = Column(String(10), nullable=False, default="60m", server_default="60m")
     fetched_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 

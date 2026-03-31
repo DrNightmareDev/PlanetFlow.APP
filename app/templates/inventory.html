@@ -20,7 +20,13 @@
             </div>
             <div class="inventory-stat">
                 <div class="inventory-stat-label">Estimated Stock Value</div>
-                <div class="inventory-stat-value">{{ "{:,.2f}".format(inventory_stats.estimated_value) }} ISK</div>
+                <div
+                    class="inventory-stat-value"
+                    id="inventoryEstimatedStockValue"
+                    data-value-buy="{{ inventory_stats.estimated_value_buy }}"
+                    data-value-sell="{{ inventory_stats.estimated_value_sell }}"
+                    data-value-split="{{ inventory_stats.estimated_value_split }}"
+                >{{ "{:,.2f}".format(inventory_stats.estimated_value_split) }} ISK</div>
             </div>
         </div>
     </section>
@@ -111,6 +117,11 @@
             <div class="inventory-panel-title">Current Stock</div>
             <div class="inventory-table-actions">
                 <input type="search" id="inventorySearch" class="form-control eve-input" placeholder="Filter stock by item">
+                <select id="inventoryValueMode" class="form-select eve-input inventory-value-mode">
+                    <option value="split" selected>Jita Split</option>
+                    <option value="sell">Jita Sell</option>
+                    <option value="buy">Jita Buy</option>
+                </select>
                 <div class="btn-group">
                     <a href="/inventory" class="btn btn-sm {% if not selected_tier %}eve-btn-primary{% else %}eve-btn-ghost{% endif %}">All</a>
                     {% for tier in inventory_tiers %}
@@ -132,12 +143,21 @@
                 </thead>
                 <tbody>
                     {% for row in inventory_rows %}
-                    <tr data-item-name="{{ row.item_name | lower }}">
+                    <tr
+                        class="inventory-summary-row"
+                        data-item-name="{{ row.item_name | lower }}"
+                        data-type-id="{{ row.type_id }}"
+                    >
                         <td><span class="inventory-tier inventory-tier-{{ row.tier | lower }}">{{ row.tier }}</span></td>
                         <td>{{ row.item_name }}</td>
                         <td class="text-end">{{ "{:,}".format(row.quantity_on_hand) }}</td>
                         <td class="text-end">{% if row.weighted_average_cost is not none %}{{ "{:,.2f}".format(row.weighted_average_cost) }} ISK{% else %}<span class="text-muted">n/a</span>{% endif %}</td>
-                        <td class="text-end">{% if row.estimated_value is not none %}{{ "{:,.2f}".format(row.estimated_value) }} ISK{% else %}<span class="text-muted">n/a</span>{% endif %}</td>
+                        <td
+                            class="text-end inventory-estimated-value"
+                            data-value-buy="{{ row.estimated_value_buy if row.estimated_value_buy is not none else '' }}"
+                            data-value-sell="{{ row.estimated_value_sell if row.estimated_value_sell is not none else '' }}"
+                            data-value-split="{{ row.estimated_value_split if row.estimated_value_split is not none else '' }}"
+                        >{% if row.estimated_value_split is not none %}{{ "{:,.2f}".format(row.estimated_value_split) }} ISK{% else %}<span class="text-muted">n/a</span>{% endif %}</td>
                     </tr>
                     {% else %}
                     <tr><td colspan="5" class="text-center text-muted py-4">No PI stock tracked yet.</td></tr>
@@ -209,16 +229,181 @@
         </div>
     </section>
 </div>
+
+<div class="modal fade" id="inventoryItemModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content inventory-modal">
+            <div class="modal-header border-0 pb-0">
+                <div>
+                    <div class="inventory-kicker mb-2">Stock Transactions</div>
+                    <h5 class="modal-title mb-0" id="inventoryItemModalTitle">Inventory Item</h5>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="inventory-modal-toolbar">
+                    <div class="inventory-modal-stats">
+                        <div class="inventory-modal-stat">
+                            <span>On Hand</span>
+                            <strong id="inventoryModalOnHand">0</strong>
+                        </div>
+                        <div class="inventory-modal-stat">
+                            <span>Weighted Avg Cost</span>
+                            <strong id="inventoryModalWeighted">n/a</strong>
+                        </div>
+                        <div class="inventory-modal-stat">
+                            <span>Estimated Value</span>
+                            <strong id="inventoryModalEstimated">n/a</strong>
+                        </div>
+                    </div>
+                    <div class="inventory-modal-actions">
+                        <select id="inventoryModalValueMode" class="form-select eve-input inventory-value-mode">
+                            <option value="split" selected>Jita Split</option>
+                            <option value="sell">Jita Sell</option>
+                            <option value="buy">Jita Buy</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="inventory-price-grid">
+                    <div class="inventory-price-card">
+                        <div class="inventory-price-label">Jita Buy</div>
+                        <div class="inventory-price-value" id="inventoryModalBuy">n/a</div>
+                    </div>
+                    <div class="inventory-price-card">
+                        <div class="inventory-price-label">Jita Sell</div>
+                        <div class="inventory-price-value" id="inventoryModalSell">n/a</div>
+                    </div>
+                    <div class="inventory-price-card">
+                        <div class="inventory-price-label">Jita Split</div>
+                        <div class="inventory-price-value" id="inventoryModalSplit">n/a</div>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover align-middle inventory-modal-table">
+                        <thead>
+                            <tr>
+                                <th>Created UTC</th>
+                                <th>Type</th>
+                                <th>Label</th>
+                                <th class="text-end">Delta</th>
+                                <th class="text-end">Remaining</th>
+                                <th class="text-end">Unit Cost</th>
+                                <th class="text-end">Total Cost</th>
+                                <th>Note</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryModalTransactions">
+                            <tr><td colspan="8" class="text-center text-muted py-4">Select a current stock row to inspect transactions.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-document.getElementById('inventorySearch')?.addEventListener('input', (event) => {
-    const query = String(event.target.value || '').trim().toLowerCase();
-    document.querySelectorAll('#inventorySummaryTable tbody tr[data-item-name]').forEach((row) => {
-        row.style.display = !query || row.getAttribute('data-item-name').includes(query) ? '' : 'none';
+(() => {
+    const searchInput = document.getElementById('inventorySearch');
+    const valueModeSelect = document.getElementById('inventoryValueMode');
+    const modalValueModeSelect = document.getElementById('inventoryModalValueMode');
+    const estimatedStockValue = document.getElementById('inventoryEstimatedStockValue');
+    const modalElement = document.getElementById('inventoryItemModal');
+    const modal = modalElement ? new bootstrap.Modal(modalElement) : null;
+    let currentItemDetail = null;
+
+    const formatIsk = (value) => {
+        const number = Number(value);
+        if (!Number.isFinite(number) || number <= 0) {
+            return 'n/a';
+        }
+        return `${number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ISK`;
+    };
+
+    const formatInteger = (value) => Number(value || 0).toLocaleString();
+
+    const applyValueMode = (mode) => {
+        document.querySelectorAll('.inventory-estimated-value').forEach((cell) => {
+            const raw = cell.dataset[`value${mode.charAt(0).toUpperCase()}${mode.slice(1)}`];
+            cell.innerHTML = raw ? formatIsk(raw) : '<span class="text-muted">n/a</span>';
+        });
+        if (estimatedStockValue) {
+            const raw = estimatedStockValue.dataset[`value${mode.charAt(0).toUpperCase()}${mode.slice(1)}`];
+            estimatedStockValue.textContent = raw ? formatIsk(raw) : 'n/a';
+        }
+    };
+
+    const renderModal = () => {
+        if (!currentItemDetail) {
+            return;
+        }
+        const mode = modalValueModeSelect?.value || 'split';
+        document.getElementById('inventoryItemModalTitle').textContent = `${currentItemDetail.tier} - ${currentItemDetail.item_name}`;
+        document.getElementById('inventoryModalOnHand').textContent = formatInteger(currentItemDetail.quantity_on_hand);
+        document.getElementById('inventoryModalWeighted').textContent = formatIsk(currentItemDetail.weighted_average_cost);
+        document.getElementById('inventoryModalBuy').textContent = formatIsk(currentItemDetail.jita_buy);
+        document.getElementById('inventoryModalSell').textContent = formatIsk(currentItemDetail.jita_sell);
+        document.getElementById('inventoryModalSplit').textContent = formatIsk(currentItemDetail.jita_split);
+        document.getElementById('inventoryModalEstimated').textContent = formatIsk(currentItemDetail[`estimated_value_${mode}`]);
+
+        const body = document.getElementById('inventoryModalTransactions');
+        const rows = currentItemDetail.transactions || [];
+        if (!rows.length) {
+            body.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No transactions found for this stock item.</td></tr>';
+            return;
+        }
+        body.innerHTML = rows.map((entry) => `
+            <tr>
+                <td>${entry.created_at || ''}</td>
+                <td>${entry.kind === 'batch' ? 'Batch' : 'Adjustment'}</td>
+                <td>${entry.label || ''}</td>
+                <td class="text-end ${Number(entry.quantity_delta || 0) < 0 ? 'text-danger' : 'text-success'}">${Number(entry.quantity_delta || 0).toLocaleString(undefined, { signDisplay: 'always' })}</td>
+                <td class="text-end">${entry.quantity_remaining === null || entry.quantity_remaining === undefined ? '<span class="text-muted">n/a</span>' : Number(entry.quantity_remaining).toLocaleString()}</td>
+                <td class="text-end">${formatIsk(entry.unit_cost)}</td>
+                <td class="text-end">${formatIsk(entry.total_cost)}</td>
+                <td>${entry.note ? entry.note : '<span class="text-muted">-</span>'}</td>
+            </tr>
+        `).join('');
+    };
+
+    searchInput?.addEventListener('input', (event) => {
+        const query = String(event.target.value || '').trim().toLowerCase();
+        document.querySelectorAll('#inventorySummaryTable tbody tr[data-item-name]').forEach((row) => {
+            row.style.display = !query || row.getAttribute('data-item-name').includes(query) ? '' : 'none';
+        });
     });
-});
+
+    valueModeSelect?.addEventListener('change', () => {
+        applyValueMode(valueModeSelect.value || 'split');
+    });
+
+    modalValueModeSelect?.addEventListener('change', renderModal);
+
+    document.querySelectorAll('.inventory-summary-row').forEach((row) => {
+        row.addEventListener('click', async () => {
+            const typeId = row.dataset.typeId;
+            if (!typeId || !modal) return;
+            try {
+                const response = await fetch(`/inventory/item/${typeId}`, { headers: { Accept: 'application/json' } });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                currentItemDetail = await response.json();
+                renderModal();
+                modal.show();
+            } catch (_error) {
+                currentItemDetail = null;
+                document.getElementById('inventoryItemModalTitle').textContent = 'Inventory Item';
+                document.getElementById('inventoryModalTransactions').innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">Could not load transaction details for this item.</td></tr>';
+                modal.show();
+            }
+        });
+    });
+
+    applyValueMode(valueModeSelect?.value || 'split');
+})();
 </script>
 <style>
 .inventory-shell { display:grid; gap:1.35rem; }
@@ -240,13 +425,24 @@ document.getElementById('inventorySearch')?.addEventListener('input', (event) =>
 .inventory-table-header { display:flex; justify-content:space-between; gap:.8rem; align-items:center; margin-bottom:.85rem; flex-wrap:wrap; }
 .inventory-table-actions { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; }
 .inventory-table-actions input { min-width:220px; }
+.inventory-value-mode { min-width:150px; }
 .inventory-tier { display:inline-flex; align-items:center; padding:.22rem .48rem; border-radius:999px; font-size:.74rem; border:1px solid rgba(255,255,255,.08); }
 .inventory-tier-p0 { color:#7ec8e3; background:rgba(0,180,216,.08); }
 .inventory-tier-p1 { color:#73d483; background:rgba(45,198,83,.08); }
 .inventory-tier-p2 { color:#f0c36d; background:rgba(244,163,0,.08); }
 .inventory-tier-p3 { color:#e9a1ff; background:rgba(171,104,255,.08); }
 .inventory-tier-p4 { color:#ff8a7c; background:rgba(220,70,70,.08); }
+.inventory-summary-row { cursor:pointer; }
+.inventory-summary-row:hover td { background:rgba(0,180,216,.06); }
+.inventory-modal { background:linear-gradient(180deg, rgba(14,23,31,0.99), rgba(11,18,25,0.99)); color:#e8f7ff; border:1px solid rgba(0,180,216,0.18); }
+.inventory-modal-toolbar { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; flex-wrap:wrap; margin-bottom:1rem; }
+.inventory-modal-stats { display:flex; gap:.8rem; flex-wrap:wrap; }
+.inventory-modal-stat,.inventory-price-card { min-width:150px; padding:.8rem .9rem; border:1px solid rgba(255,255,255,.06); border-radius:1rem; background:rgba(255,255,255,.03); }
+.inventory-modal-stat span,.inventory-price-label { display:block; font-size:.75rem; color:var(--eve-text-muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:.3rem; }
+.inventory-modal-stat strong,.inventory-price-value { font-size:1.05rem; color:#dff7ff; }
+.inventory-price-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:.8rem; margin-bottom:1rem; }
+.inventory-modal-table td,.inventory-modal-table th { vertical-align:middle; }
 @media (max-width: 1100px) { .inventory-actions,.inventory-history-grid { grid-template-columns:1fr; } }
-@media (max-width: 720px) { .inventory-form-grid { grid-template-columns:1fr; } }
+@media (max-width: 720px) { .inventory-form-grid,.inventory-price-grid { grid-template-columns:1fr; } }
 </style>
 {% endblock %}

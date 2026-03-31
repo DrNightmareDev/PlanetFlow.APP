@@ -11,6 +11,7 @@ from app.inventory_service import (
     add_inventory_lot,
     adjust_inventory,
     format_utc_compact,
+    get_inventory_item_detail,
     get_inventory_rows,
     get_inventory_summary_map,
     get_pi_catalog_maps,
@@ -79,6 +80,9 @@ def inventory_page(
     distinct_items = len(rows)
     total_units = sum(int(item["quantity_on_hand"] or 0) for item in rows)
     estimated_value = sum(float(item["estimated_value"] or 0.0) for item in rows)
+    estimated_value_buy = sum(float(item["estimated_value_buy"] or 0.0) for item in rows)
+    estimated_value_sell = sum(float(item["estimated_value_sell"] or 0.0) for item in rows)
+    estimated_value_split = sum(float(item["estimated_value_split"] or 0.0) for item in rows)
 
     return templates.TemplateResponse("inventory.html", {
         "request": request,
@@ -95,6 +99,9 @@ def inventory_page(
             "distinct_items": distinct_items,
             "total_units": total_units,
             "estimated_value": estimated_value,
+            "estimated_value_buy": estimated_value_buy,
+            "estimated_value_sell": estimated_value_sell,
+            "estimated_value_split": estimated_value_split,
         },
     })
 
@@ -165,3 +172,12 @@ def adjust_inventory_stock(
 def inventory_summary(account=Depends(require_account), db: Session = Depends(get_db)):
     sync_inventory_summaries(db, int(account.id))
     return JSONResponse(get_inventory_summary_map(db, int(account.id)))
+
+
+@router.get("/item/{type_id}")
+def inventory_item_detail(type_id: int, account=Depends(require_account), db: Session = Depends(get_db)):
+    sync_inventory_summaries(db, int(account.id))
+    detail = get_inventory_item_detail(db, int(account.id), int(type_id))
+    if detail is None:
+        return JSONResponse({"error": "Inventory item not found."}, status_code=404)
+    return JSONResponse(detail)

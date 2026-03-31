@@ -5,6 +5,7 @@ from datetime import timezone
 
 from sqlalchemy.orm import Session
 
+from app.market import get_prices_by_type_ids
 from app import sde
 from app.models import InventoryAdjustment, InventoryItemSummary, InventoryLot
 from app.pi_data import ALL_P1, ALL_P2, ALL_P3, ALL_P4, P0_TO_P1
@@ -66,6 +67,20 @@ def format_utc_compact(value) -> str:
         return ""
     dt = value if getattr(value, "tzinfo", None) else value.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc).strftime("%Y.%m.%d %H:%M")
+
+
+def _price_value_map(type_id: int, quantity: int, price_entry: dict | None) -> dict[str, float | None]:
+    best_buy = float((price_entry or {}).get("best_buy") or 0.0)
+    best_sell = float((price_entry or {}).get("best_sell") or 0.0)
+    split = ((best_buy + best_sell) / 2.0) if (best_buy or best_sell) else 0.0
+    return {
+        "buy": best_buy if best_buy > 0 else None,
+        "sell": best_sell if best_sell > 0 else None,
+        "split": split if split > 0 else None,
+        "value_buy": (best_buy * quantity) if best_buy > 0 and quantity > 0 else None,
+        "value_sell": (best_sell * quantity) if best_sell > 0 and quantity > 0 else None,
+        "value_split": (split * quantity) if split > 0 and quantity > 0 else None,
+    }
 
 
 def recalculate_inventory_summary(db: Session, account_id: int, type_id: int, fallback_item: dict | None = None) -> InventoryItemSummary | None:
@@ -274,10 +289,12 @@ def get_inventory_rows(db: Session, account_id: int, tier: str | None = None) ->
     if tier and tier in TIER_SORT:
         query = query.filter(InventoryItemSummary.tier == tier)
     rows = query.all()
+    price_map = get_prices_by_type_ids([int(row.type_id) for row in rows], db) if rows else {}
     result = []
     for row in rows:
         weighted = _decimal_or_none(row.weighted_average_cost)
         quantity = int(row.quantity_on_hand or 0)
+        price_values = _price_value_map(int(row.type_id), quantity, price_map.get(int(row.type_id)))
         estimated = weighted * Decimal(quantity) if weighted is not None else None
         result.append({
             "type_id": int(row.type_id),
@@ -286,6 +303,12 @@ def get_inventory_rows(db: Session, account_id: int, tier: str | None = None) ->
             "quantity_on_hand": quantity,
             "weighted_average_cost": float(weighted) if weighted is not None else None,
             "estimated_value": float(estimated) if estimated is not None else None,
+            "jita_buy": price_values["buy"],
+            "jita_sell": price_values["sell"],
+            "jita_split": price_values["split"],
+            "estimated_value_buy": price_values["value_buy"],
+            "estimated_value_sell": price_values["value_sell"],
+            "estimated_value_split": price_values["value_split"],
         })
     result.sort(key=lambda item: (TIER_SORT.get(item["tier"], 99), item["item_name"].casefold()))
     return result
@@ -302,6 +325,85 @@ def get_inventory_summary_map(db: Session, account_id: int) -> dict[str, dict]:
             "estimated_value": row["estimated_value"],
         }
         for row in rows
+    }
+
+
+def get_inventory_item_detail(db: Session, account_id: int, type_id: int) -> dict | None:
+    summary = (
+        db.query(InventoryItemSummary)
+        .filter(
+            InventoryItemSummary.account_id == int(account_id),
+            InventoryItemSummary.type_id == int(type_id),
+        )
+        .first()
+    )
+    if summary is None:
+        return None
+
+    quantity_on_hand = int(summary.quantity_on_hand or 0)
+    weighted = _decimal_or_none(summary.weighted_average_cost)
+    price_entry = get_prices_by_type_ids([int(type_id)], db).get(int(type_id), {})
+    price_values = _price_value_map(int(type_id), quantity_on_hand, price_entry)
+
+    lots = (
+        db.query(InventoryLot)
+        .filter(
+            InventoryLot.account_id == int(account_id),
+            InventoryLot.type_id == int(type_id),
+        )
+        .order_by(InventoryLot.created_at.desc(), InventoryLot.id.desc())
+        .all()
+    )
+    adjustments = (
+        db.query(InventoryAdjustment)
+        .filter(
+            InventoryAdjustment.account_id == int(account_id),
+            InventoryAdjustment.type_id == int(type_id),
+        )
+        .order_by(InventoryAdjustment.created_at.desc(), InventoryAdjustment.id.desc())
+        .all()
+    )
+
+    transactions: list[dict] = []
+    for lot in lots:
+        transactions.append({
+            "kind": "batch",
+            "label": lot.source_kind.replace("_", " ").title(),
+            "quantity_delta": int(lot.quantity_added or 0),
+            "quantity_remaining": int(lot.quantity_remaining or 0),
+            "unit_cost": float(_decimal_or_none(lot.unit_cost)) if _decimal_or_none(lot.unit_cost) is not None else None,
+            "total_cost": float(_decimal_or_none(lot.total_cost)) if _decimal_or_none(lot.total_cost) is not None else None,
+            "note": lot.note or "",
+            "created_at": format_utc_compact(lot.created_at),
+            "created_sort": lot.created_at.isoformat() if lot.created_at else "",
+        })
+    for adjustment in adjustments:
+        transactions.append({
+            "kind": "adjustment",
+            "label": adjustment.reason.replace("_", " ").title(),
+            "quantity_delta": int(adjustment.delta_quantity or 0),
+            "quantity_remaining": None,
+            "unit_cost": None,
+            "total_cost": None,
+            "note": adjustment.note or "",
+            "created_at": format_utc_compact(adjustment.created_at),
+            "created_sort": adjustment.created_at.isoformat() if adjustment.created_at else "",
+        })
+    transactions.sort(key=lambda entry: entry["created_sort"], reverse=True)
+
+    return {
+        "type_id": int(summary.type_id),
+        "item_name": summary.item_name,
+        "tier": summary.tier,
+        "quantity_on_hand": quantity_on_hand,
+        "weighted_average_cost": float(weighted) if weighted is not None else None,
+        "jita_buy": price_values["buy"],
+        "jita_sell": price_values["sell"],
+        "jita_split": price_values["split"],
+        "estimated_value_buy": price_values["value_buy"],
+        "estimated_value_sell": price_values["value_sell"],
+        "estimated_value_split": price_values["value_split"],
+        "transactions": transactions,
     }
 
 

@@ -42,6 +42,9 @@ def _fetch_json(url: str) -> list[dict]:
         )
         response.raise_for_status()
         payload = response.json()
+        if isinstance(payload, dict) and payload.get("error"):
+            logger.warning("zkill: api error for %s: %s", url, payload.get("error"))
+            return []
         return payload if isinstance(payload, list) else []
     except Exception:
         logger.exception("zkill: failed request for %s", url)
@@ -172,7 +175,7 @@ def get_system_kill_summary(system_id: int, window: str = "60m", limit: int = 10
         return cached[1]
 
     stubs = _fetch_json(
-        f"https://zkillboard.com/api/kills/solarSystemID/{int(system_id)}/pastSeconds/{past_seconds}/limit/{max(limit, 50)}/"
+        f"https://zkillboard.com/api/kills/solarSystemID/{int(system_id)}/pastSeconds/{past_seconds}/"
     )
     data = _resolve_stubs(stubs, hydrate_limit=limit)
     name_map = _resolve_names(data)
@@ -212,7 +215,7 @@ def get_region_kills(region_id: int, window: str = "60m", limit: int = 200) -> l
     _LAST_REGION_FETCH[int(region_id)] = now
 
     stubs = _fetch_json(
-        f"https://zkillboard.com/api/kills/regionID/{int(region_id)}/pastSeconds/{past_seconds}/limit/{limit}/"
+        f"https://zkillboard.com/api/kills/regionID/{int(region_id)}/pastSeconds/{past_seconds}/"
     )
     data = _resolve_stubs(stubs)
     _REGION_CACHE[cache_key] = (now, data)

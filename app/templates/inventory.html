@@ -218,6 +218,7 @@
                             <th>Reason</th>
                             <th class="text-end">Delta</th>
                             <th>Created</th>
+                            <th class="text-end">Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -227,9 +228,17 @@
                             <td>{{ entry.reason }}{% if entry.note %}<div class="text-muted small">{{ entry.note }}</div>{% endif %}</td>
                             <td class="text-end {% if entry.delta_quantity < 0 %}text-danger{% else %}text-success{% endif %}">{{ "{:+,}".format(entry.delta_quantity) }}</td>
                             <td>{{ entry.created_at }}</td>
+                            <td class="text-end">
+                                <form method="post" action="/inventory/transaction/remove-page" class="inventory-remove-form">
+                                    <input type="hidden" name="transaction_kind" value="adjustment">
+                                    <input type="hidden" name="transaction_id" value="{{ entry.id }}">
+                                    <input type="hidden" name="tier" value="{{ selected_tier }}">
+                                    <button type="submit" class="btn btn-sm eve-btn-ghost inventory-remove-btn">Remove</button>
+                                </form>
+                            </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="4" class="text-center text-muted py-4">No adjustments yet.</td></tr>
+                        <tr><td colspan="5" class="text-center text-muted py-4">No adjustments yet.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>

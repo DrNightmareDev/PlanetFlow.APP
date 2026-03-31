@@ -76,6 +76,7 @@ def inventory_page(
     ]
     adjustment_rows = [
         {
+            "id": int(row.id),
             "tier": row.tier,
             "item_name": row.item_name,
             "reason": row.reason,
@@ -211,6 +212,26 @@ def remove_inventory_transaction(
     except Exception as exc:
         db.rollback()
         return JSONResponse({"error": str(exc)}, status_code=400)
+
+
+@router.post("/transaction/remove-page")
+def remove_inventory_transaction_page(
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+    transaction_kind: str = Form(...),
+    transaction_id: int = Form(...),
+    tier: str = Form(""),
+):
+    try:
+        type_id = soft_delete_inventory_transaction(db, int(account.id), str(transaction_kind), int(transaction_id))
+        if type_id is None:
+            db.rollback()
+            return _status_redirect("Transaction not found.", "danger", tier=tier or None)
+        db.commit()
+        return _status_redirect("Transaction hidden.", "success", tier=tier or None)
+    except Exception as exc:
+        db.rollback()
+        return _status_redirect(str(exc), "danger", tier=tier or None)
 
 
 @router.get("/summary")

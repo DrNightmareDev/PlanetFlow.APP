@@ -80,7 +80,7 @@
                 <button type="button" class="btn btn-sm eve-btn-ghost" id="intelZoomOut">-</button>
                 <button type="button" class="btn btn-sm eve-btn-ghost" id="intelZoomReset">Reset</button>
                 <span class="intel-load-status" id="intelLoadStatus"></span>
-                <span class="intel-ws-status" id="intelWsStatus" title="zKillboard WebSocket feed status"></span>
+                <span class="intel-ws-status" id="intelWsStatus" title="zKillboard live feed status"></span>
                 <span class="intel-visible-note" id="intelVisibleNote"></span>
             </div>
 
@@ -255,14 +255,14 @@ function renderWsStatus(status, lastKillAgo) {
     const node = document.getElementById('intelWsStatus');
     node.className = `intel-ws-status ws-${status}`;
     if (status === 'connected') {
-        node.textContent = `Live - ${lastKillAgo}s ago`;
+        node.textContent = `Feed live - ${lastKillAgo}s ago`;
         return;
     }
     if (status === 'degraded') {
-        node.textContent = `Degraded - ${Math.max(1, Math.round(lastKillAgo / 60))}m ago`;
+        node.textContent = `Feed delayed - ${Math.max(1, Math.round(lastKillAgo / 60))}m ago`;
         return;
     }
-    node.textContent = 'WS offline';
+    node.textContent = 'Feed idle';
 }
 
 function syncQueryParams() {

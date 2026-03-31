@@ -347,7 +347,7 @@ EOF
 
 cat > "/etc/systemd/system/${SERVICE_NAME}-ws.service" << EOF
 [Unit]
-Description=EVE PI Manager - zKillboard WebSocket Subscriber
+Description=EVE PI Manager - zKillboard R2Z2 Poller
 After=rabbitmq-server.service postgresql.service network.target
 Wants=rabbitmq-server.service postgresql.service
 

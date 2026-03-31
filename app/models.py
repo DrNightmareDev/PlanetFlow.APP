@@ -166,6 +166,16 @@ class CombatIntelPreference(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class IntelStreamState(Base):
+    __tablename__ = "intel_stream_state"
+
+    stream_key = Column(String(50), primary_key=True)
+    last_sequence_id = Column(BigInteger, nullable=True)
+    last_success_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(String(255), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class DashboardCache(Base):
     """Persistenter Colony-Cache pro Account — überlebt Server-Neustarts."""
     __tablename__ = "dashboard_cache_db"

@@ -561,29 +561,32 @@ def _autostart_zkill_ws(sender=None, **kwargs):
     _ws_task_started = True
     try:
         sender.app.send_task("app.tasks.zkill_websocket_subscriber", queue="ws")
-        logger.info("zkill_ws: queued subscriber task on worker startup")
+        logger.info("intel_live: queued R2Z2 poller task on worker startup")
     except Exception:
-        logger.exception("zkill_ws: failed to auto-start subscriber")
+        logger.exception("intel_live: failed to auto-start R2Z2 poller")
         _ws_task_started = False
 
 
 @celery_app.task(name="app.tasks.zkill_websocket_subscriber", bind=True)
 def zkill_websocket_subscriber(self):
-    import requests
-    import websocket
     from sqlalchemy import select
 
     from app import sde
     from app.database import SessionLocal
-    from app.models import IntelKillEvent, KillActivityCache, RegionKillCache
+    from app.models import IntelKillEvent, IntelStreamState, KillActivityCache, RegionKillCache
     from app.zkill import append_intel_event_to_region_cache, normalize_kill
 
-    ws_url = "wss://zkillboard.com/websocket/"
-    subscribe_msg = json.dumps({"action": "sub", "channel": "killstream"})
-    reconnect_delay = 10
+    import requests
+
+    base_url = "https://r2z2.zkillboard.com/ephemeral"
+    sequence_url = f"{base_url}/sequence.json"
+    stream_key = "r2z2"
+    empty_sleep = 6.0
+    iterate_sleep = 0.1
+    error_sleep = 15.0
     ring_buffer_max = 500
 
-    logger.info("zkill_ws: subscriber starting")
+    logger.info("intel_live: R2Z2 poller starting")
 
     def _prune_ring_buffer(db):
         total = db.query(IntelKillEvent).count()
@@ -599,6 +602,47 @@ def zkill_websocket_subscriber(self):
         ]
         if oldest_ids:
             db.query(IntelKillEvent).filter(IntelKillEvent.id.in_(oldest_ids)).delete(synchronize_session=False)
+
+    def _load_stream_sequence(db) -> int | None:
+        state = db.get(IntelStreamState, stream_key)
+        if state and state.last_sequence_id is not None:
+            return int(state.last_sequence_id)
+        return None
+
+    def _store_stream_state(last_sequence_id: int | None = None, last_error: str | None = None):
+        db = SessionLocal()
+        try:
+            state = db.get(IntelStreamState, stream_key)
+            if state is None:
+                state = IntelStreamState(stream_key=stream_key)
+                db.add(state)
+            if last_sequence_id is not None:
+                state.last_sequence_id = int(last_sequence_id)
+                state.last_success_at = datetime.now(timezone.utc)
+            if last_error is not None:
+                state.last_error = str(last_error)[:255]
+            db.commit()
+        except Exception:
+            logger.exception("intel_live: failed to persist stream state")
+            db.rollback()
+        finally:
+            db.close()
+
+    def _fetch_start_sequence() -> int | None:
+        try:
+            response = requests.get(
+                sequence_url,
+                headers={"User-Agent": "EVE-PI-Manager/1.0 github.com/DrNightmareDev/PI_Manager"},
+                timeout=20,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            sequence_id = int(payload.get("sequence") or 0)
+            return sequence_id or None
+        except Exception as exc:
+            logger.exception("intel_live: failed to fetch R2Z2 sequence: %s", exc)
+            _store_stream_state(last_error=f"sequence fetch failed: {exc}")
+            return None
 
     def _store_kill(payload: dict):
         killmail_id = int(payload.get("killmail_id") or payload.get("killID") or 0)
@@ -662,38 +706,52 @@ def zkill_websocket_subscriber(self):
         finally:
             db.close()
 
+    db = SessionLocal()
+    try:
+        sequence_id = _load_stream_sequence(db)
+    finally:
+        db.close()
+    if sequence_id is None:
+        sequence_id = _fetch_start_sequence()
+
     while True:
-        ws = None
         try:
-            ws = websocket.create_connection(
-                ws_url,
-                timeout=30,
-                header=[
-                    "User-Agent: EVE-PI-Manager/1.0 github.com/DrNightmareDev/PI_Manager",
-                    "Origin: https://zkillboard.com",
-                ],
+            if sequence_id is None:
+                time.sleep(empty_sleep)
+                sequence_id = _fetch_start_sequence()
+                continue
+
+            response = requests.get(
+                f"{base_url}/{int(sequence_id)}.json",
+                headers={"User-Agent": "EVE-PI-Manager/1.0 github.com/DrNightmareDev/PI_Manager"},
+                timeout=20,
             )
-            ws.send(subscribe_msg)
-            logger.info("zkill_ws: connected and subscribed")
-            while True:
-                raw = ws.recv()
-                if not raw:
-                    break
-                try:
-                    payload = json.loads(raw)
-                except Exception:
-                    logger.debug("zkill_ws: skipped non-json frame")
+            if response.status_code == 404:
+                latest_sequence = _fetch_start_sequence()
+                if latest_sequence is not None and int(latest_sequence) > int(sequence_id):
+                    sequence_id = int(latest_sequence)
                     continue
-                if isinstance(payload, dict):
-                    _store_kill(payload)
-        except (websocket.WebSocketException, requests.RequestException, OSError):
-            logger.exception("zkill_ws: connection failed, retrying in %ss", reconnect_delay)
+                time.sleep(empty_sleep)
+                continue
+            if response.status_code == 429:
+                logger.warning("intel_live: R2Z2 rate limited at sequence %s", sequence_id)
+                _store_stream_state(last_error=f"rate limited at {sequence_id}")
+                time.sleep(error_sleep)
+                continue
+            if response.status_code == 403:
+                logger.warning("intel_live: R2Z2 returned 403 at sequence %s", sequence_id)
+                _store_stream_state(last_error=f"forbidden at {sequence_id}")
+                time.sleep(error_sleep)
+                continue
+            response.raise_for_status()
+            payload = response.json()
+            if isinstance(payload, dict):
+                _store_kill(payload)
+            processed_sequence = int(payload.get("sequence_id") or sequence_id)
+            _store_stream_state(last_sequence_id=processed_sequence, last_error="")
+            sequence_id = processed_sequence + 1
+            time.sleep(iterate_sleep)
         except Exception:
-            logger.exception("zkill_ws: subscriber crashed, retrying in %ss", reconnect_delay)
-        finally:
-            try:
-                if ws is not None:
-                    ws.close()
-            except Exception:
-                pass
-        time.sleep(reconnect_delay)
+            logger.exception("intel_live: R2Z2 poller failed at sequence %s", sequence_id)
+            _store_stream_state(last_error=f"poller failure at {sequence_id}")
+            time.sleep(error_sleep)

@@ -303,7 +303,18 @@ def get_region_kills_db_first(region_id: int, window: str = "60m", limit: int = 
 
 def append_intel_event_to_region_cache(db, region_id: int, normalized_kill: dict) -> None:
     kill_time = str(normalized_kill.get("killmail_time_utc") or "")
-    for row in db.scalars(select(RegionKillCache).where(RegionKillCache.region_id == int(region_id))).all():
+    region_id = int(region_id)
+    stale_region_keys = [key for key in list(_REGION_CACHE.keys()) if len(key) >= 2 and int(key[1]) == region_id]
+    for key in stale_region_keys:
+        _REGION_CACHE.pop(key, None)
+
+    system_id = int(normalized_kill.get("system_id") or 0)
+    if system_id:
+        stale_system_keys = [key for key in list(_SYSTEM_CACHE.keys()) if int(key[0]) == system_id]
+        for key in stale_system_keys:
+            _SYSTEM_CACHE.pop(key, None)
+
+    for row in db.scalars(select(RegionKillCache).where(RegionKillCache.region_id == region_id)).all():
         try:
             existing = json.loads(row.kills_json or "[]")
         except Exception:

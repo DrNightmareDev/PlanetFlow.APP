@@ -566,11 +566,22 @@ def get_system_local(system_id: int) -> dict | None:
     data = _systems_by_id.get(system_id)
     if not data:
         try:
-            from app.esi import get_system_info
+            from app.esi import get_constellation_info, get_system_info
 
             esi_system = get_system_info(int(system_id))
             constellation_id = int(esi_system.get("constellation_id") or 0)
-            region_id = int((_constellations.get(constellation_id) or {}).get("region_id") or 0)
+            constellation = _constellations.get(constellation_id)
+            if not constellation and constellation_id:
+                esi_constellation = get_constellation_info(constellation_id)
+                region_id = int(esi_constellation.get("region_id") or 0)
+                if region_id:
+                    constellation = {
+                        "id": constellation_id,
+                        "name": str(esi_constellation.get("name") or f"Constellation {constellation_id}"),
+                        "region_id": region_id,
+                    }
+                    _constellations[constellation_id] = constellation
+            region_id = int((constellation or {}).get("region_id") or 0)
             if esi_system and region_id:
                 data = {
                     "name": str(esi_system.get("name") or f"System {int(system_id)}"),

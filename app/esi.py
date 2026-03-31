@@ -319,6 +319,20 @@ def get_system_info(system_id: int) -> dict:
         return {}
 
 
+def get_constellation_info(constellation_id: int) -> dict:
+    try:
+        response = requests.get(
+            f"{ESI_BASE}/universe/constellations/{constellation_id}/",
+            params={"datasource": "tranquility"},
+            headers=HEADERS,
+            timeout=15,
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception:
+        return {}
+
+
 def get_killmail(killmail_id: int, killmail_hash: str) -> dict:
     """Fetch a public killmail from ESI without auth."""
     if not killmail_id or not killmail_hash:

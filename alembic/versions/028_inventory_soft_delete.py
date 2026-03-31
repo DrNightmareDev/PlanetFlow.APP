@@ -1,6 +1,6 @@
 """add soft delete to inventory summaries
 
-Revision ID: 028_inventory_summary_soft_delete
+Revision ID: 028_inventory_soft_delete
 Revises: 027_inventory_stock
 Create Date: 2026-03-31
 """
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = "028_inventory_summary_soft_delete"
+revision = "028_inventory_soft_delete"
 down_revision = "027_inventory_stock"
 branch_labels = None
 depends_on = None

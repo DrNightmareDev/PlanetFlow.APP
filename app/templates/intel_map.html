@@ -5,7 +5,7 @@
 <div class="intel-shell">
     <section class="intel-hero">
         <div>
-            <div class="intel-kicker">Admin only</div>
+            <div class="intel-kicker">Combat intel</div>
             <h1>Combat Intel Map</h1>
             <p>Default layout follows the fixed region overview. Alternate layout stays available, while zoom and pan keep the visible-kill feed scoped to the area you are actually looking at.</p>
         </div>
@@ -41,6 +41,22 @@
                     <option value="ship" {% if selected_kill_type == 'ship' %}selected{% endif %}>Ship</option>
                     <option value="pod" {% if selected_kill_type == 'pod' %}selected{% endif %}>Pod</option>
                 </select>
+            </div>
+            <div class="intel-control-group">
+                <label for="intelCharacterSelect">Character</label>
+                <select id="intelCharacterSelect" class="form-select form-select-sm eve-input">
+                    <option value="">Select character</option>
+                    {% for character in intel_characters %}
+                    <option value="{{ character.id }}">{{ character.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="intel-control-group intel-control-actions">
+                <label>&nbsp;</label>
+                <div class="intel-action-row">
+                    <button type="button" class="btn btn-sm eve-btn-ghost" id="intelJumpCharacter">Jump</button>
+                    <button type="button" class="btn btn-sm eve-btn-ghost" id="intelFollowCharacter">Follow off</button>
+                </div>
             </div>
         </div>
     </section>
@@ -94,6 +110,7 @@ const INTEL_BOOTSTRAP = {
     activity: {{ initial_activity | tojson }},
     feed: {{ initial_feed | tojson }},
     sourceMeta: {{ initial_source_meta | tojson }},
+    characters: {{ intel_characters | tojson }},
 };
 
 const intelState = {
@@ -108,10 +125,24 @@ const intelState = {
     killType: INTEL_BOOTSTRAP.selectedKillType,
     layout: INTEL_BOOTSTRAP.selectedLayout,
     systemDetails: {},
+    characters: INTEL_BOOTSTRAP.characters,
+    trackedCharacterId: null,
+    followCharacter: false,
+    trackedSystemId: null,
     viewBox: null,
     dragging: false,
     dragOrigin: null,
 };
+
+{
+    const urlParams = new URLSearchParams(window.location.search);
+    const characterId = urlParams.get('character_id');
+    const follow = urlParams.get('follow');
+    if (characterId && /^\d+$/.test(characterId)) {
+        intelState.trackedCharacterId = Number(characterId);
+    }
+    intelState.followCharacter = follow === '1';
+}
 
 function parseViewBox() {
     const parts = (intelState.region.view_box || '0 0 1280 920').split(/\s+/).map(Number);
@@ -194,9 +225,65 @@ function syncQueryParams() {
     params.set('layout', intelState.layout);
     params.set('window', intelState.window);
     params.set('kill_type', intelState.killType);
+    if (intelState.trackedCharacterId) {
+        params.set('character_id', String(intelState.trackedCharacterId));
+    } else {
+        params.delete('character_id');
+    }
+    params.set('follow', intelState.followCharacter ? '1' : '0');
     const query = params.toString();
     const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}`;
     window.history.replaceState({}, '', nextUrl);
+}
+
+function updateCharacterButtonState() {
+    const followButton = document.getElementById('intelFollowCharacter');
+    followButton.textContent = intelState.followCharacter ? 'Follow on' : 'Follow off';
+    followButton.classList.toggle('is-active', intelState.followCharacter);
+}
+
+function focusSystem(systemId) {
+    const system = systemById(Number(systemId));
+    if (!system) return;
+    intelState.selectedSystemId = Number(systemId);
+    const pos = currentPosition(system);
+    const bounds = parseViewBox();
+    const box = intelState.viewBox || bounds;
+    intelState.viewBox = {
+        ...box,
+        x: pos.x - box.width / 2,
+        y: pos.y - box.height / 2,
+    };
+    clampViewBox();
+    renderMap();
+    renderFeed();
+    renderSystemDetails();
+    loadSystemDetails(system.id);
+}
+
+async function jumpToTrackedCharacter(forceCenter = false) {
+    if (!intelState.trackedCharacterId) return;
+    try {
+        const response = await fetch(`/intel/character-location?character_id=${encodeURIComponent(intelState.trackedCharacterId)}`);
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (!payload.ok || !payload.solar_system_id) return;
+        intelState.trackedSystemId = Number(payload.solar_system_id);
+        const targetRegionId = String(payload.region_id || '');
+        if (targetRegionId && targetRegionId !== String(intelState.selectedRegion)) {
+            intelState.selectedRegion = targetRegionId;
+            document.getElementById('intelRegionSelect').value = targetRegionId;
+            intelState.viewBox = null;
+            await refreshIntel();
+        }
+        if (forceCenter || intelState.followCharacter) {
+            focusSystem(intelState.trackedSystemId);
+        } else {
+            renderMap();
+        }
+    } catch {
+        // Keep the current map view unchanged if location lookup fails.
+    }
 }
 
 function renderNeighbors() {
@@ -253,6 +340,13 @@ function renderMap() {
         core.setAttribute('class', 'intel-node-core');
         core.setAttribute('style', `opacity:${0.82 + activity.heat * 0.16}`);
         group.appendChild(core);
+
+        if (intelState.trackedSystemId === system.id) {
+            const tracked = document.createElementNS(ns, 'circle');
+            tracked.setAttribute('r', 19);
+            tracked.setAttribute('class', 'intel-node-tracked');
+            group.appendChild(tracked);
+        }
 
         if (activity.kill_count > 0) {
             const kills = document.createElementNS(ns, 'text');
@@ -338,7 +432,7 @@ function renderSystemDetails() {
     const fetchedAt = detailState?.fetched_at_iso ? new Date(detailState.fetched_at_iso).toLocaleTimeString() : '';
     container.innerHTML = `
         <div class="intel-system-name">
-            <a href="https://zkillboard.com/system/${system.id}/" target="_blank" rel="noopener">${system.name}</a>
+            ${system.name}
         </div>
         <div class="intel-system-meta">Security ${system.security} · ${(system.constellation_name || 'Unknown constellation')} · ${activity.kill_count} kills</div>
         <div class="intel-subtle">${cacheState ? `Source ${cacheState}${fetchedAt ? ` · ${fetchedAt}` : ''}` : 'Loading system details on demand.'}</div>
@@ -470,6 +564,9 @@ async function refreshIntel() {
     refreshAll();
     renderLoadStatus((intelState.sourceMeta.raw_kills || 0) > 0 ? 'ok' : 'empty');
     syncQueryParams();
+    if (intelState.followCharacter && intelState.trackedCharacterId) {
+        await jumpToTrackedCharacter(false);
+    }
     if (intelState.selectedSystemId) {
         loadSystemDetails(intelState.selectedSystemId);
     }
@@ -496,6 +593,24 @@ document.getElementById('intelWindowSelect').addEventListener('change', async ev
 document.getElementById('intelKillTypeSelect').addEventListener('change', async event => {
     intelState.killType = event.target.value;
     await refreshIntel();
+});
+document.getElementById('intelCharacterSelect').addEventListener('change', event => {
+    const value = String(event.target.value || '');
+    intelState.trackedCharacterId = value && /^\d+$/.test(value) ? Number(value) : null;
+    intelState.trackedSystemId = null;
+    syncQueryParams();
+    updateCharacterButtonState();
+});
+document.getElementById('intelJumpCharacter').addEventListener('click', async () => {
+    await jumpToTrackedCharacter(true);
+});
+document.getElementById('intelFollowCharacter').addEventListener('click', async () => {
+    intelState.followCharacter = !intelState.followCharacter;
+    updateCharacterButtonState();
+    syncQueryParams();
+    if (intelState.followCharacter) {
+        await jumpToTrackedCharacter(true);
+    }
 });
 document.getElementById('intelZoomIn').addEventListener('click', () => zoom(0.8));
 document.getElementById('intelZoomOut').addEventListener('click', () => zoom(1.25));
@@ -534,13 +649,18 @@ document.getElementById('intelRegionSelect').value = String(intelState.selectedR
 document.getElementById('intelLayoutSelect').value = intelState.layout;
 document.getElementById('intelWindowSelect').value = intelState.window;
 document.getElementById('intelKillTypeSelect').value = intelState.killType;
+document.getElementById('intelCharacterSelect').value = intelState.trackedCharacterId ? String(intelState.trackedCharacterId) : '';
 refreshAll();
 renderLoadStatus((intelState.sourceMeta?.raw_kills || 0) > 0 ? 'ok' : 'empty');
+updateCharacterButtonState();
 syncQueryParams();
 if (intelState.region.systems[0]?.id) {
     intelState.selectedSystemId = intelState.region.systems[0].id;
     renderSystemDetails();
     loadSystemDetails(intelState.selectedSystemId);
+}
+if (intelState.trackedCharacterId) {
+    jumpToTrackedCharacter(Boolean(intelState.followCharacter));
 }
 setInterval(refreshIntel, 20000);
 </script>
@@ -562,6 +682,8 @@ setInterval(refreshIntel, 20000);
 .intel-kicker { color:#7ec8e3; text-transform:uppercase; letter-spacing:.18em; font-size:.74rem; margin-bottom:.5rem; }
 .intel-controls { display:flex; gap:.9rem; flex-wrap:wrap; align-items:end; }
 .intel-control-group { min-width:11rem; }
+.intel-control-actions { min-width:14rem; }
+.intel-action-row { display:flex; gap:.45rem; }
 .intel-control-group label { display:block; font-size:.75rem; text-transform:uppercase; letter-spacing:.12em; color:var(--eve-text-muted); margin-bottom:.35rem; }
 .intel-layout { display:grid; grid-template-columns:minmax(0, 2fr) minmax(340px, .95fr); gap:1.5rem; }
 .intel-map-card { padding:1.2rem; }
@@ -581,6 +703,7 @@ setInterval(refreshIntel, 20000);
 .intel-link { stroke:rgba(126, 200, 227, .15); stroke-width:1.6; }
 .intel-node { cursor:pointer; }
 .intel-node-core { fill:#1b4858; stroke:none; }
+.intel-node-tracked { fill:none; stroke:#56b8ff; stroke-width:2.2; }
 .intel-node.danger-warm .intel-node-core { fill:#c77c11; }
 .intel-node.danger-hot .intel-node-core { fill:#b93b3b; }
 .intel-node.is-selected .intel-node-core { stroke:#fff; stroke-width:2; }

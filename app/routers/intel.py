@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
@@ -12,6 +13,8 @@ from sqlalchemy.orm import Session
 from app import sde
 from app.database import get_db
 from app.dependencies import require_account
+from app.esi import ensure_valid_token, get_character_location
+from app.models import Character
 from app.models import KillActivityCache
 from app.templates_env import templates
 from app.zkill import get_region_kills, get_system_kill_summary, normalize_kill, resolve_kill_names
@@ -21,6 +24,21 @@ router = APIRouter(prefix="/intel", tags=["intel"])
 logger = logging.getLogger(__name__)
 WINDOW_SECONDS = {"5m": 300, "15m": 900, "60m": 3600, "24h": 86400}
 SYSTEM_DETAIL_TTL = timedelta(minutes=5)
+_CHAR_LOCATION_CACHE: dict[int, tuple[dict, float]] = {}
+_CHAR_LOCATION_CACHE_TTL = 60.0
+
+
+def _get_cached_character_location(character: Character, db: Session) -> dict | None:
+    cached = _CHAR_LOCATION_CACHE.get(int(character.id))
+    if cached and time.time() - cached[1] < _CHAR_LOCATION_CACHE_TTL:
+        return cached[0]
+    token = ensure_valid_token(character, db)
+    if not token:
+        return None
+    location = get_character_location(int(character.eve_character_id), token)
+    if location:
+        _CHAR_LOCATION_CACHE[int(character.id)] = (location, time.time())
+    return location or None
 
 
 def _resolve_region(region: str) -> dict:
@@ -223,8 +241,15 @@ def intel_map(
     kill_type: str = Query("all"),
     layout: str = Query("geo"),
     account=Depends(require_account),
+    db: Session = Depends(get_db),
 ):
     regions = sde.get_region_catalog()
+    characters = (
+        db.query(Character)
+        .filter(Character.account_id == account.id)
+        .order_by(Character.character_name.asc())
+        .all()
+    )
     selected_window = window if window in WINDOW_SECONDS else "60m"
     selected_kill_type = kill_type if kill_type in {"all", "ship", "pod"} else "all"
     selected_layout = layout if layout in {"geo", "alt"} else "geo"
@@ -241,6 +266,10 @@ def intel_map(
         "selected_window": selected_window,
         "selected_kill_type": selected_kill_type,
         "selected_layout": selected_layout,
+        "intel_characters": [
+            {"id": int(char.id), "name": char.character_name}
+            for char in characters
+        ],
         "region_data": graph,
         "initial_activity": system_activity,
         "initial_feed": kill_feed,
@@ -339,3 +368,32 @@ def intel_system_details(
             "fetched_at_iso": now.astimezone(timezone.utc).isoformat(),
             "cache_state": "empty",
         })
+
+
+@router.get("/character-location")
+def intel_character_location(
+    character_id: int = Query(...),
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    character = (
+        db.query(Character)
+        .filter(Character.account_id == account.id, Character.id == int(character_id))
+        .first()
+    )
+    if character is None:
+        return JSONResponse({"ok": False, "location": None})
+    location = _get_cached_character_location(character, db)
+    if not location or not location.get("solar_system_id"):
+        return JSONResponse({"ok": False, "location": None})
+    system_id = int(location.get("solar_system_id") or 0)
+    system_info = sde.get_system_local(system_id) or {}
+    return JSONResponse({
+        "ok": True,
+        "character_id": int(character.id),
+        "character_name": character.character_name,
+        "solar_system_id": system_id,
+        "system_name": system_info.get("name") or f"System {system_id}",
+        "region_id": int(system_info.get("region_id") or 0),
+        "region_name": system_info.get("region_name") or "",
+    })

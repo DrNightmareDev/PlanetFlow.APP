@@ -15,6 +15,7 @@ import tarfile
 import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 import requests
 
@@ -29,6 +30,7 @@ FUZZWORK_JUMPS_URL = "https://www.fuzzwork.co.uk/dump/latest/mapSolarSystemJumps
 FUZZWORK_REGIONS_URL = "https://www.fuzzwork.co.uk/dump/latest/mapRegions.sql.bz2"
 FUZZWORK_CONSTELLATIONS_URL = "https://www.fuzzwork.co.uk/dump/latest/mapConstellations.sql.bz2"
 FUZZWORK_DENORMALIZE_URL = "https://www.fuzzwork.co.uk/dump/latest/mapDenormalize.sql.bz2"
+DOTLAN_SVG_URL = "https://evemaps.dotlan.net/svg/{slug}.svg"
 SYSTEMS_UPDATE_DAYS = 30
 
 # In-memory stores
@@ -43,6 +45,8 @@ _regions: dict[int, str] = {}                       # region_id -> region_name
 _constellations: dict[int, dict] = {}               # constellation_id -> {name, region_id}
 _constellations_by_name: dict[str, dict] = {}       # name_lower -> {id, name, region_id}
 _static_planets: dict[int, dict] = {}               # planet_id -> {system_id, planet_name, planet_number, radius}
+_dotlan_layout_cache: dict[int, tuple[float, dict]] = {}
+_DOTLAN_LAYOUT_TTL = 86400.0
 
 
 # ─── Version & Update-Check ───────────────────────────────────────────────────
@@ -587,6 +591,90 @@ def get_region_catalog() -> list[dict]:
     ]
 
 
+def _dotlan_slug(region_name: str) -> str:
+    return str(region_name or "").strip().replace(" ", "_")
+
+
+def _dotlan_svg_dir() -> Path:
+    return DATA_DIR / "dotlan_svg"
+
+
+def _dotlan_svg_path(region_name: str) -> Path:
+    return _dotlan_svg_dir() / f"{_dotlan_slug(region_name)}.svg"
+
+
+def _parse_dotlan_layout(svg_text: str) -> dict:
+    ns = {"svg": "http://www.w3.org/2000/svg"}
+    root = ET.fromstring(svg_text)
+    positions: dict[int, tuple[float, float]] = {}
+
+    for use in root.findall(".//svg:use", ns):
+        raw_id = str(use.attrib.get("id") or "")
+        if not raw_id.startswith("sys"):
+            continue
+        try:
+            system_id = int(raw_id[3:])
+            base_x = float(use.attrib.get("x") or 0.0)
+            base_y = float(use.attrib.get("y") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        # DOTLAN symbols place the system label roughly around 28/14 inside the symbol.
+        positions[system_id] = (round(base_x + 28.0, 2), round(base_y + 14.0, 2))
+
+    if not positions:
+        return {"positions": {}, "view_box": "0 0 1024 768"}
+
+    padding = 48.0
+    xs = [point[0] for point in positions.values()]
+    ys = [point[1] for point in positions.values()]
+    min_x = min(xs) - padding
+    max_x = max(xs) + padding
+    min_y = min(ys) - padding
+    max_y = max(ys) + padding
+    width = max(320.0, max_x - min_x)
+    height = max(240.0, max_y - min_y)
+
+    return {
+        "positions": positions,
+        "view_box": f"{round(min_x, 2)} {round(min_y, 2)} {round(width, 2)} {round(height, 2)}",
+    }
+
+
+def _get_dotlan_layout(region_id: int, region_name: str) -> dict | None:
+    cached = _dotlan_layout_cache.get(int(region_id))
+    now = time.time()
+    if cached and now - cached[0] <= _DOTLAN_LAYOUT_TTL:
+        return cached[1]
+
+    path = _dotlan_svg_path(region_name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    layout: dict | None = None
+
+    try:
+        response = requests.get(
+            DOTLAN_SVG_URL.format(slug=_dotlan_slug(region_name)),
+            headers={"User-Agent": "EVE-PI-Manager/1.0 github.com/DrNightmareDev/PI_Manager"},
+            timeout=20,
+        )
+        response.raise_for_status()
+        svg_text = response.text
+        if svg_text:
+            path.write_text(svg_text, encoding="utf-8")
+            layout = _parse_dotlan_layout(svg_text)
+    except Exception as exc:
+        logger.warning("DOTLAN SVG fetch failed for %s (%s): %s", region_name, region_id, exc)
+        if path.exists():
+            try:
+                layout = _parse_dotlan_layout(path.read_text(encoding="utf-8"))
+            except Exception as file_exc:
+                logger.warning("DOTLAN SVG cache parse failed for %s: %s", region_name, file_exc)
+
+    if layout and layout.get("positions"):
+        _dotlan_layout_cache[int(region_id)] = (now, layout)
+        return layout
+    return None
+
+
 def get_region_system_graph(region_id: int) -> dict | None:
     region_id = int(region_id)
     region_name = _regions.get(region_id)
@@ -597,11 +685,15 @@ def get_region_system_graph(region_id: int) -> dict | None:
     system_ids = []
     raw_x_values: list[float] = []
     raw_y_values: list[float] = []
+    dotlan_layout = _get_dotlan_layout(region_id, region_name)
+    dotlan_positions = (dotlan_layout or {}).get("positions") or {}
+
     for system_id, data in _systems_by_id.items():
         if int(data.get("region_id") or 0) != region_id:
             continue
         raw_x = float(data.get("x") or 0.0)
         raw_y = float(data.get("y") or 0.0)
+        compact_x, compact_y = dotlan_positions.get(int(system_id), (None, None))
         systems.append({
             "id": system_id,
             "name": data.get("name") or f"System {system_id}",
@@ -610,6 +702,8 @@ def get_region_system_graph(region_id: int) -> dict | None:
             "constellation_name": _constellations.get(int(data.get("constellation_id") or 0), {}).get("name"),
             "raw_x": raw_x,
             "raw_y": raw_y,
+            "compact_x": compact_x,
+            "compact_y": compact_y,
         })
         system_ids.append(system_id)
         raw_x_values.append(raw_x)
@@ -661,6 +755,8 @@ def get_region_system_graph(region_id: int) -> dict | None:
         "connections": connections,
         "neighbors": neighbors,
         "view_box": f"0 0 {int(width)} {int(height)}",
+        "geo_view_box": f"0 0 {int(width)} {int(height)}",
+        "compact_view_box": (dotlan_layout or {}).get("view_box") or f"0 0 {int(width)} {int(height)}",
     }
 
 

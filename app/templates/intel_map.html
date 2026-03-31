@@ -7,7 +7,7 @@
         <div>
             <div class="intel-kicker">Combat intel</div>
             <h1>Combat Intel Map</h1>
-            <p>Default layout follows the fixed region overview. Alternate layout stays available, while zoom and pan keep the visible-kill feed scoped to the area you are actually looking at.</p>
+            <p>Default layout follows the fixed region overview. Compact overview uses DOTLAN system positioning, while zoom and pan keep the visible-kill feed scoped to the area you are actually looking at.</p>
         </div>
         <div class="intel-controls">
             <div class="intel-control-group">
@@ -158,7 +158,10 @@ let _sseSource = null;
 }
 
 function parseViewBox() {
-    const parts = (intelState.region.view_box || '0 0 1280 920').split(/\s+/).map(Number);
+    const source = intelState.layout === 'alt'
+        ? (intelState.region.compact_view_box || intelState.region.view_box || '0 0 1280 920')
+        : (intelState.region.geo_view_box || intelState.region.view_box || '0 0 1280 920');
+    const parts = String(source).split(/\s+/).map(Number);
     return { x: parts[0], y: parts[1], width: parts[2], height: parts[3] };
 }
 
@@ -598,7 +601,12 @@ async function changeRegion(regionKey) {
 }
 
 document.getElementById('intelRegionSelect').addEventListener('change', event => changeRegion(event.target.value));
-document.getElementById('intelLayoutSelect').addEventListener('change', event => { intelState.layout = event.target.value; refreshAll(); syncQueryParams(); });
+document.getElementById('intelLayoutSelect').addEventListener('change', event => {
+    intelState.layout = event.target.value;
+    intelState.viewBox = parseViewBox();
+    refreshAll();
+    syncQueryParams();
+});
 document.getElementById('intelWindowSelect').addEventListener('change', async event => { intelState.window = event.target.value; intelState.systemDetails = {}; await refreshIntel(); });
 document.getElementById('intelKillTypeSelect').addEventListener('change', async event => { intelState.killType = event.target.value; await refreshIntel(); });
 document.getElementById('intelCharacterSelect').addEventListener('change', event => {

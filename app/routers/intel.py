@@ -63,6 +63,14 @@ def _resolve_region(region: str) -> dict:
 
 
 def _build_alt_layout(graph: dict) -> dict[int, tuple[float, float]]:
+    compact_positions = {
+        int(system["id"]): (float(system["compact_x"]), float(system["compact_y"]))
+        for system in graph["systems"]
+        if system.get("compact_x") is not None and system.get("compact_y") is not None
+    }
+    if compact_positions:
+        return compact_positions
+
     systems = list(graph["systems"])
     constellation_groups: dict[int, list[dict]] = defaultdict(list)
     for system in systems:
@@ -174,6 +182,8 @@ def _build_live_snapshot(region_id: int, window: str, kill_type: str, force_refr
             "alt_y": alt_y,
         })
     graph = {**graph, "systems": systems}
+    graph["compact_view_box"] = graph.get("compact_view_box") or graph.get("view_box")
+    graph["geo_view_box"] = graph.get("geo_view_box") or graph.get("view_box")
 
     raw_kills, cache_meta = get_region_kills_db_first(region_id, window=window, limit=200, force_refresh=force_refresh)
     if not raw_kills:

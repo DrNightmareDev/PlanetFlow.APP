@@ -253,6 +253,7 @@
                         <tr>
                             <th>Item</th>
                             <th>Type</th>
+                            <th>Status</th>
                             <th>Reason</th>
                             <th class="text-end">Delta</th>
                             <th>Created</th>
@@ -261,23 +262,30 @@
                     </thead>
                     <tbody>
                         {% for entry in inventory_transactions %}
-                        <tr>
+                        <tr class="{% if entry.status != 'active' %}inventory-audit-removed{% endif %}">
                             <td>{{ entry.tier }} - {{ entry.item_name }}</td>
                             <td>{{ entry.kind }}</td>
+                            <td>
+                                <span class="inventory-audit-status inventory-audit-status-{{ entry.status }}">{{ entry.status }}</span>
+                            </td>
                             <td>{{ entry.reason }}{% if entry.note %}<div class="text-muted small">{{ entry.note }}</div>{% endif %}</td>
                             <td class="text-end {% if entry.delta_quantity < 0 %}text-danger{% else %}text-success{% endif %}">{{ "{:+,}".format(entry.delta_quantity) }}</td>
                             <td>{{ entry.created_at }}</td>
                             <td class="text-end">
+                                {% if entry.kind != 'stock' and entry.status == 'active' %}
                                 <form method="post" action="/inventory/transaction/remove-page" class="inventory-remove-form">
                                     <input type="hidden" name="transaction_kind" value="{{ entry.kind }}">
                                     <input type="hidden" name="transaction_id" value="{{ entry.id }}">
                                     <input type="hidden" name="tier" value="{{ selected_tier }}">
                                     <button type="submit" class="btn btn-sm eve-btn-ghost inventory-remove-btn">Remove</button>
                                 </form>
+                                {% else %}
+                                <span class="text-muted small">-</span>
+                                {% endif %}
                             </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="6" class="text-center text-muted py-4">No transactions yet.</td></tr>
+                        <tr><td colspan="7" class="text-center text-muted py-4">No transactions yet.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -604,6 +612,11 @@
 .inventory-history-grid tbody tr td:first-child { border-radius:.9rem 0 0 .9rem; }
 .inventory-table tbody tr td:last-child,
 .inventory-history-grid tbody tr td:last-child { border-radius:0 .9rem .9rem 0; }
+.inventory-audit-status { display:inline-flex; align-items:center; padding:.2rem .5rem; border-radius:999px; font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; border:1px solid rgba(255,255,255,.08); }
+.inventory-audit-status-active { color:#9deeff; background:rgba(0,180,216,.08); }
+.inventory-audit-status-removed,
+.inventory-audit-status-hidden { color:#f6c177; background:rgba(244,163,0,.1); }
+.inventory-audit-removed td { opacity:.78; }
 .inventory-summary-row { cursor:pointer; }
 .inventory-summary-row:hover td { background:rgba(0,180,216,.07); }
 .inventory-modal { background:linear-gradient(180deg, rgba(14,23,31,0.99), rgba(11,18,25,0.99)); color:#e8f7ff; border:1px solid rgba(0,180,216,0.18); }

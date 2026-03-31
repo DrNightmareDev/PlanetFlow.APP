@@ -19,7 +19,7 @@ from app.inventory_service import (
     soft_delete_inventory_summary,
     sync_inventory_summaries,
 )
-from app.models import InventoryAdjustment, InventoryLot
+from app.models import InventoryAdjustment, InventoryItemSummary, InventoryLot
 from app.templates_env import templates
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
@@ -42,7 +42,7 @@ def inventory_page(
     selectable_catalog = [item for item in catalog if int(item["type_id"] or 0)]
     sync_inventory_summaries(db, int(account.id))
     rows = get_inventory_rows(db, int(account.id), tier=tier if tier in TIERS else None)
-    lots = (
+    active_lots = (
         db.query(InventoryLot)
         .filter(
             InventoryLot.account_id == int(account.id),
@@ -52,14 +52,28 @@ def inventory_page(
         .limit(60)
         .all()
     )
+    lots = (
+        db.query(InventoryLot)
+        .filter(InventoryLot.account_id == int(account.id))
+        .order_by(InventoryLot.created_at.desc(), InventoryLot.id.desc())
+        .limit(60)
+        .all()
+    )
     adjustments = (
         db.query(InventoryAdjustment)
-        .filter(
-            InventoryAdjustment.account_id == int(account.id),
-            InventoryAdjustment.deleted_at.is_(None),
-        )
+        .filter(InventoryAdjustment.account_id == int(account.id))
         .order_by(InventoryAdjustment.created_at.desc(), InventoryAdjustment.id.desc())
         .limit(60)
+        .all()
+    )
+    hidden_summaries = (
+        db.query(InventoryItemSummary)
+        .filter(
+            InventoryItemSummary.account_id == int(account.id),
+            InventoryItemSummary.deleted_at.is_not(None),
+        )
+        .order_by(InventoryItemSummary.deleted_at.desc(), InventoryItemSummary.id.desc())
+        .limit(30)
         .all()
     )
     lot_rows = [
@@ -73,8 +87,9 @@ def inventory_page(
             "unit_cost": row.unit_cost,
             "created_at": format_utc_compact(row.created_at),
             "created_sort": row.created_at.isoformat() if row.created_at else "",
+            "deleted_at": format_utc_compact(row.deleted_at) if row.deleted_at else "",
         }
-        for row in lots
+        for row in active_lots
     ]
     transaction_rows = [
         {
@@ -85,8 +100,9 @@ def inventory_page(
             "reason": row.source_kind.replace("_", " ").title(),
             "note": row.note,
             "delta_quantity": int(row.quantity_added or 0),
-            "created_at": format_utc_compact(row.created_at),
-            "created_sort": row.created_at.isoformat() if row.created_at else "",
+            "created_at": format_utc_compact(row.deleted_at or row.created_at),
+            "created_sort": (row.deleted_at or row.created_at).isoformat() if (row.deleted_at or row.created_at) else "",
+            "status": "removed" if row.deleted_at else "active",
         }
         for row in lots
     ] + [
@@ -98,10 +114,25 @@ def inventory_page(
             "reason": row.reason.replace("_", " ").title(),
             "note": row.note,
             "delta_quantity": int(row.delta_quantity or 0),
-            "created_at": format_utc_compact(row.created_at),
-            "created_sort": row.created_at.isoformat() if row.created_at else "",
+            "created_at": format_utc_compact(row.deleted_at or row.created_at),
+            "created_sort": (row.deleted_at or row.created_at).isoformat() if (row.deleted_at or row.created_at) else "",
+            "status": "removed" if row.deleted_at else "active",
         }
         for row in adjustments
+    ] + [
+        {
+            "id": int(row.id),
+            "kind": "stock",
+            "tier": row.tier,
+            "item_name": row.item_name,
+            "reason": "Hidden From Current Stock",
+            "note": "",
+            "delta_quantity": int(row.quantity_on_hand or 0),
+            "created_at": format_utc_compact(row.deleted_at),
+            "created_sort": row.deleted_at.isoformat() if row.deleted_at else "",
+            "status": "hidden",
+        }
+        for row in hidden_summaries
     ]
     transaction_rows.sort(key=lambda row: row["created_sort"], reverse=True)
     distinct_items = len(rows)

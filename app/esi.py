@@ -319,6 +319,24 @@ def get_system_info(system_id: int) -> dict:
         return {}
 
 
+def get_killmail(killmail_id: int, killmail_hash: str) -> dict:
+    """Fetch a public killmail from ESI without auth."""
+    if not killmail_id or not killmail_hash:
+        return {}
+    try:
+        response = requests.get(
+            f"{ESI_BASE}/killmails/{int(killmail_id)}/{killmail_hash}/",
+            params={"datasource": "tranquility"},
+            headers=HEADERS,
+            timeout=15,
+        )
+        _update_esi_error_limit(response)
+        response.raise_for_status()
+        return response.json()
+    except Exception:
+        return {}
+
+
 def get_planet_info(planet_id: int) -> dict:
     entry = _planet_info_cache.get(planet_id)
     if entry is not None:

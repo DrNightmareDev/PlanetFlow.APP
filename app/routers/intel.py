@@ -4,20 +4,17 @@ import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-import requests
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from app import sde
 from app.dependencies import require_owner
-from app.esi import universe_names
 from app.templates_env import templates
-from app.zkill import normalize_kill
+from app.zkill import get_region_kills, normalize_kill, resolve_kill_names
 
 router = APIRouter(prefix="/intel", tags=["intel"])
 
 logger = logging.getLogger(__name__)
-HEADERS = {"User-Agent": "EVE-PI-Manager/1.0 github.com/DrNightmareDev/PI_Manager"}
 WINDOW_SECONDS = {"5m": 300, "15m": 900, "60m": 3600, "24h": 86400}
 
 
@@ -74,60 +71,19 @@ def _build_alt_layout(graph: dict) -> dict[int, tuple[float, float]]:
     return positions
 
 
-def _ship_image(type_id: int) -> str:
-    return f"https://images.evetech.net/types/{type_id}/render?size=64"
-
-
-def _fetch_region_kills(region_id: int, window: str) -> list[dict]:
-    past_seconds = int(WINDOW_SECONDS.get(window, 3600))
-    try:
-        response = requests.get(
-            f"https://zkillboard.com/api/kills/regionID/{region_id}/pastSeconds/{past_seconds}/limit/200/",
-            headers=HEADERS,
-            timeout=20,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        return payload if isinstance(payload, list) else []
-    except Exception:
-        logger.exception("intel: failed to fetch kills for region %s", region_id)
-        return []
-
-
-def _resolve_names(raw_kills: list[dict]) -> dict[int, str]:
-    ids: set[int] = set()
-    for kill in raw_kills:
-        victim = kill.get("victim") or {}
-        for key in ("character_id", "corporation_id", "alliance_id"):
-            value = int(victim.get(key) or 0)
-            if value:
-                ids.add(value)
-    names: dict[int, str] = {}
-    id_list = list(ids)
-    for start in range(0, len(id_list), 1000):
-        batch = id_list[start:start + 1000]
-        for item in universe_names(batch):
-            try:
-                names[int(item["id"])] = item["name"]
-            except Exception:
-                continue
-    return names
-
-
 def _normalize_feed_entry(kill: dict, graph: dict, name_map: dict[int, str]) -> dict | None:
     killmail_id = int(kill.get("killmail_id") or 0)
     solar_system_id = int(kill.get("solar_system_id") or 0)
     system_info = next((system for system in graph["systems"] if system["id"] == solar_system_id), None)
-    if not killmail_id or not system_info:
+    if not killmail_id:
         return None
+    system_name = system_info["name"] if system_info else f"System {solar_system_id}"
 
     normalized = normalize_kill(
         kill,
-        system_name=system_info["name"],
+        system_name=system_name,
         name_map=name_map,
     )
-    if not normalized["ship_image_url"] and normalized["ship_type_id"]:
-        normalized["ship_image_url"] = _ship_image(int(normalized["ship_type_id"]))
 
     return {
         "killmail_id": normalized["killmail_id"],
@@ -174,13 +130,13 @@ def _build_live_snapshot(region_id: int, window: str, kill_type: str) -> tuple[d
         **graph,
         "systems": systems,
     }
-    raw_kills = _fetch_region_kills(region_id, window)
+    raw_kills = get_region_kills(region_id, window=window, limit=200)
     if not raw_kills:
         activity, feed = _fallback_feed(graph, window, kill_type)
         return graph, activity, feed
 
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=WINDOW_SECONDS.get(window, 3600))
-    name_map = _resolve_names(raw_kills)
+    name_map = resolve_kill_names(raw_kills)
     activity_counter: dict[int, int] = defaultdict(int)
     feed: list[dict] = []
 

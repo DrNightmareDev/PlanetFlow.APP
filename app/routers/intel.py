@@ -162,34 +162,15 @@ def _normalize_feed_entry(kill: dict, graph: dict, name_map: dict[int, str]) -> 
 
 
 def _fallback_feed(graph: dict, window: str, kill_type: str) -> tuple[list[dict], list[dict]]:
-    now = datetime.now(timezone.utc)
     systems = []
-    feed = []
-    for index, system in enumerate(graph["systems"]):
-        seed = ((int(graph["id"]) * 131) + (int(system["id"]) * 17) + len(window) + len(kill_type) + index) % 2_147_483_647
-        count = (seed % 7) + (index % 3)
+    for system in graph["systems"]:
         systems.append({
             "system_id": system["id"],
-            "kill_count": count,
-            "heat": min(1.0, count / 10.0),
-            "danger": "hot" if count >= 7 else "warm" if count >= 3 else "cold",
+            "kill_count": 0,
+            "heat": 0.0,
+            "danger": "cold",
         })
-        feed.append({
-            "killmail_id": seed,
-            "kill_url": f"https://zkillboard.com/system/{system['id']}/",
-            "timestamp": (now - timedelta(minutes=index * 3)).isoformat(),
-            "system_id": system["id"],
-            "system_name": system["name"],
-            "region_name": graph["name"],
-            "victim_name": f"Pilot-{index + 1:02d}",
-            "ship_type": "Ishtar",
-            "ship_image_url": _ship_image(12005),
-            "alliance_name": "Fallback Intel",
-            "attackers": 2 + (index % 5),
-            "isk_value": 15_000_000 + index * 8_500_000,
-        })
-    feed.sort(key=lambda item: item["timestamp"], reverse=True)
-    return systems, feed[:200]
+    return systems, []
 
 
 def _build_live_snapshot(region_id: int, window: str, kill_type: str) -> tuple[dict, list[dict], list[dict]]:

@@ -1,23 +1,28 @@
 from __future__ import annotations
 
+import json
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
+from sqlalchemy import select
 
 from app import sde
+from app.database import SessionLocal
 from app.esi import get_killmail, universe_names
+from app.models import RegionKillCache
 
 logger = logging.getLogger(__name__)
 
 HEADERS = {"User-Agent": "EVE-PI-Manager/1.0 github.com/DrNightmareDev/PI_Manager"}
 WINDOW_SECONDS = {"5m": 300, "15m": 900, "60m": 3600, "24h": 86400}
+REGION_DB_TTL = 900.0
 _SYSTEM_CACHE_TTL = 300.0
 _REGION_CACHE_TTL = 900.0
 _SYSTEM_CACHE: dict[tuple[int, int], tuple[float, dict]] = {}
-_REGION_CACHE: dict[tuple[int, int], tuple[float, list[dict]]] = {}
+_REGION_CACHE: dict[tuple, tuple[float, list[dict]]] = {}
 _LAST_REGION_FETCH: dict[int, float] = {}
 ZKILL_MIN_INTERVAL = 12.0
 
@@ -138,6 +143,8 @@ def normalize_kill(kill: dict, system_name: str | None = None, name_map: dict[in
         "kill_url": f"https://zkillboard.com/kill/{killmail_id}/",
         "system_id": system_id,
         "system_name": system_name or resolved_system.get("name") or f"System {system_id}",
+        "region_id": int(resolved_system.get("region_id") or 0),
+        "region_name": resolved_system.get("region_name") or "",
         "ship_type_id": ship_type_id,
         "ship_type_name": sde.get_type_name(ship_type_id) or f"Type {ship_type_id}",
         "ship_image_url": _ship_image(ship_type_id) if ship_type_id else "",
@@ -156,6 +163,7 @@ def normalize_kill(kill: dict, system_name: str | None = None, name_map: dict[in
         "isk_value": float((kill.get("zkb") or {}).get("totalValue") or 0.0),
         "is_npc": bool((kill.get("zkb") or {}).get("npc", False)),
         "is_solo": bool((kill.get("zkb") or {}).get("solo", False)),
+        "is_pod": ship_type_id == 670,
     }
 
 
@@ -223,8 +231,7 @@ def get_region_kills(region_id: int, window: str = "60m", limit: int = 200) -> l
     return data
 
 
-def get_region_feed(region_id: int, window: str = "60m", limit: int = 200) -> list[dict]:
-    raw_kills = get_region_kills(region_id, window=window, limit=limit)
+def normalize_region_kills(raw_kills: list[dict], limit: int = 200) -> list[dict]:
     name_map = _resolve_names(raw_kills[:limit])
     normalized: list[dict] = []
     for kill in raw_kills[:limit]:
@@ -232,3 +239,96 @@ def get_region_feed(region_id: int, window: str = "60m", limit: int = 200) -> li
         system_info = sde.get_system_local(system_id) or {}
         normalized.append(normalize_kill(kill, system_name=system_info.get("name"), name_map=name_map))
     return normalized
+
+
+def get_region_kills_db_first(region_id: int, window: str = "60m", limit: int = 200) -> tuple[list[dict], dict]:
+    cache_key = ("db", int(region_id), window)
+    cached = _REGION_CACHE.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] <= _REGION_CACHE_TTL:
+        return cached[1], {
+            "source": "memory",
+            "cache_age_seconds": int(now - cached[0]),
+        }
+
+    db = SessionLocal()
+    try:
+        row = db.get(RegionKillCache, (int(region_id), window))
+        now_utc = datetime.now(timezone.utc)
+
+        if row and row.fetched_at:
+            fetched_at = row.fetched_at if row.fetched_at.tzinfo else row.fetched_at.replace(tzinfo=timezone.utc)
+            age = (now_utc - fetched_at).total_seconds()
+            if age <= REGION_DB_TTL:
+                try:
+                    kills = json.loads(row.kills_json or "[]")
+                    _REGION_CACHE[cache_key] = (time.time(), kills)
+                    return kills, {
+                        "source": "db",
+                        "cache_age_seconds": int(age),
+                    }
+                except Exception:
+                    logger.exception("zkill: failed to deserialize region cache for %s/%s", region_id, window)
+
+        raw_kills = get_region_kills(region_id, window=window, limit=limit)
+        kills = normalize_region_kills(raw_kills, limit=limit)
+        newest_time = max((str(item.get("killmail_time_utc") or "") for item in kills), default=None)
+        upsert = RegionKillCache(
+            region_id=int(region_id),
+            window=window,
+            kill_count=len(kills),
+            kills_json=json.dumps(kills),
+            newest_kill_time=newest_time,
+            fetched_at=now_utc,
+        )
+        db.merge(upsert)
+        db.commit()
+        _REGION_CACHE[cache_key] = (time.time(), kills)
+        return kills, {
+            "source": "fresh",
+            "cache_age_seconds": 0,
+        }
+    except Exception:
+        logger.exception("zkill: region DB cache upsert failed for %s/%s", region_id, window)
+        raw_kills = get_region_kills(region_id, window=window, limit=limit)
+        kills = normalize_region_kills(raw_kills, limit=limit)
+        _REGION_CACHE[cache_key] = (time.time(), kills)
+        return kills, {
+            "source": "fallback",
+            "cache_age_seconds": 0,
+        }
+    finally:
+        db.close()
+
+
+def append_intel_event_to_region_cache(db, region_id: int, normalized_kill: dict) -> None:
+    kill_time = str(normalized_kill.get("killmail_time_utc") or "")
+    for row in db.scalars(select(RegionKillCache).where(RegionKillCache.region_id == int(region_id))).all():
+        try:
+            existing = json.loads(row.kills_json or "[]")
+        except Exception:
+            existing = []
+        if any(int(item.get("killmail_id") or 0) == int(normalized_kill.get("killmail_id") or 0) for item in existing):
+            continue
+        window_seconds = WINDOW_SECONDS.get(row.window, 3600)
+        if kill_time:
+            try:
+                kill_dt = datetime.fromisoformat(kill_time.replace("Z", "+00:00"))
+                if kill_dt < datetime.now(timezone.utc) - timedelta(seconds=window_seconds):
+                    continue
+            except Exception:
+                pass
+        existing.insert(0, normalized_kill)
+        existing.sort(key=lambda item: str(item.get("killmail_time_utc") or ""), reverse=True)
+        row.kills_json = json.dumps(existing[:200])
+        row.kill_count = len(existing[:200])
+        row.newest_kill_time = max(
+            (str(item.get("killmail_time_utc") or "") for item in existing[:200]),
+            default=row.newest_kill_time,
+        )
+        row.fetched_at = datetime(2000, 1, 1, tzinfo=timezone.utc)
+
+
+def get_region_feed(region_id: int, window: str = "60m", limit: int = 200) -> list[dict]:
+    normalized, _meta = get_region_kills_db_first(region_id, window=window, limit=limit)
+    return normalized[:limit]

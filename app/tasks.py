@@ -3,8 +3,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
+
+from celery.signals import worker_ready
 
 from app.celery_app import celery_app
 
@@ -15,6 +19,8 @@ STALE_AFTER_MINUTES = 30        # refresh accounts whose cache is older than thi
 MAX_ACCOUNTS_PER_RUN = 60       # max accounts dispatched per auto_refresh run
 ESI_ERROR_BACKOFF_LIMIT = 3     # pause character after this many consecutive errors
 PLANET_FETCH_WORKERS = 10       # parallel ESI planet-detail threads per account
+
+_ws_task_started = False
 
 
 # ── ESI rate limit guard ───────────────────────────────────────────────────────
@@ -545,3 +551,149 @@ def cleanup_sso_states_task() -> dict:
         db.commit()
     logger.info("tasks: cleaned up %d expired SSO states", deleted)
     return {"deleted": deleted}
+
+
+@worker_ready.connect
+def _autostart_zkill_ws(sender=None, **kwargs):
+    global _ws_task_started
+    if _ws_task_started or os.getenv("CELERY_WS_AUTOSTART") != "1" or sender is None:
+        return
+    _ws_task_started = True
+    try:
+        sender.app.send_task("app.tasks.zkill_websocket_subscriber", queue="ws")
+        logger.info("zkill_ws: queued subscriber task on worker startup")
+    except Exception:
+        logger.exception("zkill_ws: failed to auto-start subscriber")
+        _ws_task_started = False
+
+
+@celery_app.task(name="app.tasks.zkill_websocket_subscriber", bind=True)
+def zkill_websocket_subscriber(self):
+    import requests
+    import websocket
+    from sqlalchemy import select
+
+    from app import sde
+    from app.database import SessionLocal
+    from app.models import IntelKillEvent, KillActivityCache, RegionKillCache
+    from app.zkill import append_intel_event_to_region_cache, normalize_kill
+
+    ws_url = "wss://zkillboard.com/websocket/"
+    subscribe_msg = json.dumps({"action": "sub", "channel": "killstream"})
+    reconnect_delay = 10
+    ring_buffer_max = 500
+
+    logger.info("zkill_ws: subscriber starting")
+
+    def _prune_ring_buffer(db):
+        total = db.query(IntelKillEvent).count()
+        overflow = total - ring_buffer_max
+        if overflow <= 0:
+            return
+        oldest_ids = [
+            row_id
+            for (row_id,) in db.query(IntelKillEvent.id)
+            .order_by(IntelKillEvent.created_at.asc(), IntelKillEvent.id.asc())
+            .limit(overflow)
+            .all()
+        ]
+        if oldest_ids:
+            db.query(IntelKillEvent).filter(IntelKillEvent.id.in_(oldest_ids)).delete(synchronize_session=False)
+
+    def _store_kill(payload: dict):
+        killmail_id = int(payload.get("killmail_id") or payload.get("killID") or 0)
+        system_id = int(payload.get("solar_system_id") or 0)
+        kill_time = str(payload.get("killmail_time") or "")
+        if not killmail_id or not system_id or not kill_time:
+            return
+
+        system_info = sde.get_system_local(system_id) or {}
+        region_id = int(system_info.get("region_id") or 0)
+        if not region_id:
+            return
+
+        normalized = normalize_kill(payload, system_name=system_info.get("name"), name_map={})
+        normalized_json = json.dumps(normalized)
+        now_utc = datetime.now(timezone.utc)
+
+        db = SessionLocal()
+        try:
+            if db.query(IntelKillEvent).filter_by(killmail_id=killmail_id).first():
+                return
+
+            db.add(IntelKillEvent(
+                killmail_id=killmail_id,
+                region_id=region_id,
+                solar_system_id=system_id,
+                killmail_time=kill_time,
+                kill_json=normalized_json,
+                created_at=now_utc,
+            ))
+
+            cache_row = db.get(KillActivityCache, system_id)
+            if cache_row is None:
+                db.add(KillActivityCache(
+                    system_id=system_id,
+                    kill_count=1,
+                    latest_kills_json=json.dumps([normalized]),
+                    window="ws",
+                    fetched_at=now_utc,
+                ))
+            else:
+                cache_row.kill_count = int(cache_row.kill_count or 0) + 1
+                try:
+                    latest_kills = json.loads(cache_row.latest_kills_json or "[]")
+                except Exception:
+                    latest_kills = []
+                latest_kills = [item for item in latest_kills if int(item.get("killmail_id") or 0) != killmail_id]
+                latest_kills.insert(0, normalized)
+                cache_row.latest_kills_json = json.dumps(latest_kills[:10])
+                cache_row.fetched_at = now_utc
+
+            append_intel_event_to_region_cache(db, region_id, normalized)
+            for row in db.scalars(select(RegionKillCache).where(RegionKillCache.region_id == region_id)).all():
+                row.fetched_at = datetime(2000, 1, 1, tzinfo=timezone.utc)
+
+            _prune_ring_buffer(db)
+            db.commit()
+        except Exception:
+            logger.exception("zkill_ws: failed to persist kill %s", killmail_id)
+            db.rollback()
+        finally:
+            db.close()
+
+    while True:
+        ws = None
+        try:
+            ws = websocket.create_connection(
+                ws_url,
+                timeout=30,
+                header=[
+                    "User-Agent: EVE-PI-Manager/1.0 github.com/DrNightmareDev/PI_Manager",
+                    "Origin: https://zkillboard.com",
+                ],
+            )
+            ws.send(subscribe_msg)
+            logger.info("zkill_ws: connected and subscribed")
+            while True:
+                raw = ws.recv()
+                if not raw:
+                    break
+                try:
+                    payload = json.loads(raw)
+                except Exception:
+                    logger.debug("zkill_ws: skipped non-json frame")
+                    continue
+                if isinstance(payload, dict):
+                    _store_kill(payload)
+        except (websocket.WebSocketException, requests.RequestException, OSError):
+            logger.exception("zkill_ws: connection failed, retrying in %ss", reconnect_delay)
+        except Exception:
+            logger.exception("zkill_ws: subscriber crashed, retrying in %ss", reconnect_delay)
+        finally:
+            try:
+                if ws is not None:
+                    ws.close()
+            except Exception:
+                pass
+        time.sleep(reconnect_delay)

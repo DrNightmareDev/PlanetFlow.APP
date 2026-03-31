@@ -130,6 +130,29 @@ class KillActivityCache(Base):
     fetched_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class RegionKillCache(Base):
+    __tablename__ = "region_kill_cache"
+
+    region_id = Column(BigInteger, primary_key=True)
+    window = Column(String(10), primary_key=True, nullable=False, default="60m", server_default="60m")
+    kill_count = Column(Integer, nullable=False, default=0, server_default="0")
+    kills_json = Column(Text, nullable=False, default="[]", server_default="[]")
+    newest_kill_time = Column(String(32), nullable=True)
+    fetched_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class IntelKillEvent(Base):
+    __tablename__ = "intel_kill_events"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    killmail_id = Column(BigInteger, nullable=False, unique=True, index=True)
+    region_id = Column(BigInteger, nullable=False, index=True)
+    solar_system_id = Column(BigInteger, nullable=False, index=True)
+    killmail_time = Column(String(32), nullable=False)
+    kill_json = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
 class DashboardCache(Base):
     """Persistenter Colony-Cache pro Account — überlebt Server-Neustarts."""
     __tablename__ = "dashboard_cache_db"

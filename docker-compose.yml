@@ -120,6 +120,25 @@ services:
     volumes:
       - sde_data:/app/data
 
+  celery_ws:
+    build: .
+    user: "0:0"
+    restart: unless-stopped
+    entrypoint: ["/app/docker/celery_entrypoint.sh"]
+    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "--concurrency=1", "-Q", "ws", "--hostname=ws@%h"]
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://evepi:${DB_PASSWORD:-evepi_secret}@db/evepi
+      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-evepi}:${RABBITMQ_PASS:-evepi_rabbit}@rabbitmq:5672//
+      CELERY_WS_AUTOSTART: "1"
+    volumes:
+      - sde_data:/app/data
+
   # ── Optional: Flower — Celery task monitor ─────────────────────────────────
   # Start with: docker compose --profile monitoring up
   flower:

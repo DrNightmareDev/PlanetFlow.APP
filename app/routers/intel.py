@@ -1,23 +1,24 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import math
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app import sde
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.dependencies import require_account
 from app.esi import ensure_valid_token, get_character_location
-from app.models import Character
-from app.models import KillActivityCache
+from app.models import Character, IntelKillEvent, KillActivityCache
 from app.templates_env import templates
-from app.zkill import get_region_kills, get_system_kill_summary, normalize_kill, resolve_kill_names
+from app.zkill import get_region_kills_db_first, get_system_kill_summary
 
 router = APIRouter(prefix="/intel", tags=["intel"])
 
@@ -79,67 +80,58 @@ def _build_alt_layout(graph: dict) -> dict[int, tuple[float, float]]:
     positions: dict[int, tuple[float, float]] = {}
 
     for group_index, (_, group_systems) in enumerate(ordered_groups):
-        angle = (group_index / group_count) * 6.28318
-        orbit_x = center_x + 320 * __import__("math").cos(angle)
-        orbit_y = center_y + 250 * __import__("math").sin(angle)
+        angle = (group_index / group_count) * math.tau
+        orbit_x = center_x + 320 * math.cos(angle)
+        orbit_y = center_y + 250 * math.sin(angle)
         group_systems = sorted(group_systems, key=lambda item: item["name"].lower())
         inner_count = max(1, len(group_systems))
         for system_index, system in enumerate(group_systems):
-            inner_angle = (system_index / inner_count) * 6.28318
+            inner_angle = (system_index / inner_count) * math.tau
             radius = 54 + (system_index % 5) * 16
             positions[int(system["id"])] = (
-                round(orbit_x + radius * __import__("math").cos(inner_angle), 2),
-                round(orbit_y + radius * __import__("math").sin(inner_angle), 2),
+                round(orbit_x + radius * math.cos(inner_angle), 2),
+                round(orbit_y + radius * math.sin(inner_angle), 2),
             )
     return positions
-
-
-def _normalize_feed_entry(kill: dict, graph: dict, name_map: dict[int, str]) -> dict | None:
-    killmail_id = int(kill.get("killmail_id") or 0)
-    solar_system_id = int(kill.get("solar_system_id") or 0)
-    system_info = next((system for system in graph["systems"] if system["id"] == solar_system_id), None)
-    if not killmail_id:
-        return None
-    system_name = system_info["name"] if system_info else f"System {solar_system_id}"
-
-    normalized = normalize_kill(
-        kill,
-        system_name=system_name,
-        name_map=name_map,
-    )
-
-    return {
-        "killmail_id": normalized["killmail_id"],
-        "kill_url": normalized["kill_url"],
-        "timestamp": normalized["killmail_time_utc"],
-        "timestamp_utc": normalized["killmail_time_utc_label"],
-        "system_id": normalized["system_id"],
-        "system_name": normalized["system_name"],
-        "region_name": graph["name"],
-        "pilot_name": normalized["pilot_name"],
-        "ship_type": normalized["ship_type_name"],
-        "ship_image_url": normalized["ship_image_url"],
-        "attackers": normalized["attackers"],
-        "isk_value": normalized["isk_value"],
-    }
 
 
 def _normalize_system_kill_entry(kill: dict) -> dict:
     return {
         "killmail_id": int(kill.get("killmail_id") or 0),
         "kill_url": str(kill.get("kill_url") or ""),
-        "timestamp": str(kill.get("killmail_time_utc") or ""),
-        "timestamp_utc": str(kill.get("killmail_time_utc_label") or ""),
+        "timestamp": str(kill.get("killmail_time_utc") or kill.get("timestamp") or ""),
+        "timestamp_utc": str(kill.get("killmail_time_utc_label") or kill.get("timestamp_utc") or ""),
         "system_id": int(kill.get("system_id") or 0),
         "system_name": str(kill.get("system_name") or ""),
         "pilot_name": str(kill.get("pilot_name") or "Unknown Pilot"),
-        "ship_type": str(kill.get("ship_type_name") or ""),
+        "ship_type": str(kill.get("ship_type_name") or kill.get("ship_type") or ""),
         "ship_image_url": str(kill.get("ship_image_url") or ""),
         "isk_value": float(kill.get("isk_value") or 0.0),
+        "attackers": int(kill.get("attackers") or 0),
+        "ship_type_id": int(kill.get("ship_type_id") or 0),
     }
 
 
-def _fallback_feed(graph: dict, window: str, kill_type: str) -> tuple[list[dict], list[dict]]:
+def _to_feed_entry(kill: dict, region_name: str) -> dict:
+    item = _normalize_system_kill_entry(kill)
+    return {
+        "killmail_id": item["killmail_id"],
+        "kill_url": item["kill_url"],
+        "timestamp": item["timestamp"],
+        "timestamp_utc": item["timestamp_utc"],
+        "system_id": item["system_id"],
+        "system_name": item["system_name"],
+        "region_name": region_name,
+        "pilot_name": item["pilot_name"],
+        "ship_type": item["ship_type"],
+        "ship_image_url": item["ship_image_url"],
+        "attackers": item["attackers"],
+        "isk_value": item["isk_value"],
+        "ship_type_id": item["ship_type_id"],
+    }
+
+
+def _fallback_feed(graph: dict) -> tuple[list[dict], list[dict]]:
     systems = []
     for system in graph["systems"]:
         systems.append({
@@ -149,6 +141,23 @@ def _fallback_feed(graph: dict, window: str, kill_type: str) -> tuple[list[dict]
             "danger": "cold",
         })
     return systems, []
+
+
+def _latest_ws_status() -> tuple[str, int]:
+    db = SessionLocal()
+    try:
+        latest_event = db.query(IntelKillEvent).order_by(IntelKillEvent.created_at.desc(), IntelKillEvent.id.desc()).first()
+        if not latest_event or not latest_event.created_at:
+            return "disconnected", -1
+        created_at = latest_event.created_at if latest_event.created_at.tzinfo else latest_event.created_at.replace(tzinfo=timezone.utc)
+        age = int((datetime.now(timezone.utc) - created_at).total_seconds())
+        if age < 60:
+            return "connected", age
+        if age < 300:
+            return "degraded", age
+        return "disconnected", age
+    finally:
+        db.close()
 
 
 def _build_live_snapshot(region_id: int, window: str, kill_type: str) -> tuple[dict, list[dict], list[dict], dict]:
@@ -164,50 +173,52 @@ def _build_live_snapshot(region_id: int, window: str, kill_type: str) -> tuple[d
             "alt_x": alt_x,
             "alt_y": alt_y,
         })
-    graph = {
-        **graph,
-        "systems": systems,
-    }
-    raw_kills = get_region_kills(region_id, window=window, limit=200)
+    graph = {**graph, "systems": systems}
+
+    raw_kills, cache_meta = get_region_kills_db_first(region_id, window=window, limit=200)
     if not raw_kills:
-        activity, feed = _fallback_feed(graph, window, kill_type)
+        activity, feed = _fallback_feed(graph)
         return graph, activity, feed, {
             "source_state": "empty",
+            "source": cache_meta.get("source", "db"),
             "raw_kills": 0,
             "feed_kills": 0,
             "activity_systems": 0,
+            "cache_age_seconds": int(cache_meta.get("cache_age_seconds") or 0),
             "message": "No kill data returned from zKill/ESI for this region and time window.",
         }
 
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=WINDOW_SECONDS.get(window, 3600))
-    name_map = resolve_kill_names(raw_kills)
     activity_counter: dict[int, int] = defaultdict(int)
     feed: list[dict] = []
 
     for kill in raw_kills:
-        if kill_type == "pod" and int((kill.get("victim") or {}).get("ship_type_id") or 0) != 670:
+        ship_type_id = int(kill.get("ship_type_id") or 0)
+        if kill_type == "pod" and ship_type_id != 670:
             continue
-        if kill_type == "ship" and int((kill.get("victim") or {}).get("ship_type_id") or 0) == 670:
+        if kill_type == "ship" and ship_type_id == 670:
             continue
         try:
-            kill_time = datetime.fromisoformat(str(kill.get("killmail_time")).replace("Z", "+00:00"))
+            kill_time = datetime.fromisoformat(str(kill.get("killmail_time_utc") or kill.get("timestamp") or "").replace("Z", "+00:00"))
         except Exception:
             continue
         if kill_time < cutoff:
             continue
-        entry = _normalize_feed_entry(kill, graph, name_map)
-        if not entry:
+        entry = _to_feed_entry(kill, graph["name"])
+        if not entry["killmail_id"]:
             continue
         feed.append(entry)
         activity_counter[int(entry["system_id"])] += 1
 
     if not feed:
-        activity, feed = _fallback_feed(graph, window, kill_type)
+        activity, feed = _fallback_feed(graph)
         return graph, activity, feed, {
             "source_state": "filtered_empty",
+            "source": cache_meta.get("source", "db"),
             "raw_kills": len(raw_kills),
             "feed_kills": 0,
             "activity_systems": 0,
+            "cache_age_seconds": int(cache_meta.get("cache_age_seconds") or 0),
             "message": "Kill data loaded, but nothing matched the selected filters.",
         }
 
@@ -226,9 +237,11 @@ def _build_live_snapshot(region_id: int, window: str, kill_type: str) -> tuple[d
         })
     return graph, activity, feed[:200], {
         "source_state": "ok",
+        "source": cache_meta.get("source", "db"),
         "raw_kills": len(raw_kills),
         "feed_kills": len(feed),
         "activity_systems": active_systems,
+        "cache_age_seconds": int(cache_meta.get("cache_age_seconds") or 0),
         "message": "Kill data loaded successfully.",
     }
 
@@ -258,6 +271,7 @@ def intel_map(
         selected_window,
         selected_kill_type,
     )
+    ws_status, ws_last_kill_ago = _latest_ws_status()
     return templates.TemplateResponse("intel_map.html", {
         "request": request,
         "account": account,
@@ -266,14 +280,13 @@ def intel_map(
         "selected_window": selected_window,
         "selected_kill_type": selected_kill_type,
         "selected_layout": selected_layout,
-        "intel_characters": [
-            {"id": int(char.id), "name": char.character_name}
-            for char in characters
-        ],
+        "intel_characters": [{"id": int(char.id), "name": char.character_name} for char in characters],
         "region_data": graph,
         "initial_activity": system_activity,
         "initial_feed": kill_feed,
         "initial_source_meta": source_meta,
+        "initial_ws_status": ws_status,
+        "initial_ws_last_kill_ago": ws_last_kill_ago,
     })
 
 
@@ -285,6 +298,7 @@ def intel_map_live(
     account=Depends(require_account),
 ):
     graph, system_activity, kill_feed, source_meta = _build_live_snapshot(int(region), window, kill_type)
+    ws_status, ws_last_kill_ago = _latest_ws_status()
     return JSONResponse({
         "region": graph,
         "window": window,
@@ -292,6 +306,8 @@ def intel_map_live(
         "activity": system_activity,
         "feed": kill_feed,
         "source_meta": source_meta,
+        "ws_status": ws_status,
+        "ws_last_kill_ago": ws_last_kill_ago,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     })
 
@@ -308,7 +324,8 @@ def intel_system_details(
     row = db.get(KillActivityCache, int(system_id))
     if row and row.fetched_at:
         fetched_at = row.fetched_at if row.fetched_at.tzinfo else row.fetched_at.replace(tzinfo=timezone.utc)
-        if row.window == selected_window and now - fetched_at <= SYSTEM_DETAIL_TTL:
+        age_seconds = int((now - fetched_at).total_seconds())
+        if now - fetched_at <= SYSTEM_DETAIL_TTL:
             try:
                 latest_kills = [_normalize_system_kill_entry(item) for item in json.loads(row.latest_kills_json or "[]")]
             except Exception:
@@ -319,6 +336,7 @@ def intel_system_details(
                 "window": selected_window,
                 "latest_kills": latest_kills,
                 "fetched_at_iso": fetched_at.astimezone(timezone.utc).isoformat(),
+                "cache_age_seconds": age_seconds,
                 "cache_state": "db",
             })
 
@@ -342,6 +360,7 @@ def intel_system_details(
             row.fetched_at = now
         db.commit()
         summary["fetched_at_iso"] = now.astimezone(timezone.utc).isoformat()
+        summary["cache_age_seconds"] = 0
         summary["cache_state"] = "fresh"
         return JSONResponse(summary)
     except Exception:
@@ -358,6 +377,7 @@ def intel_system_details(
                 "window": row.window or selected_window,
                 "latest_kills": latest_kills,
                 "fetched_at_iso": fetched_at.astimezone(timezone.utc).isoformat(),
+                "cache_age_seconds": int((now - fetched_at).total_seconds()),
                 "cache_state": "stale_db",
             })
         return JSONResponse({
@@ -366,8 +386,55 @@ def intel_system_details(
             "window": selected_window,
             "latest_kills": [],
             "fetched_at_iso": now.astimezone(timezone.utc).isoformat(),
+            "cache_age_seconds": 0,
             "cache_state": "empty",
         })
+
+
+@router.get("/events")
+async def intel_events(
+    region: str = Query("10000010"),
+    since_id: int = Query(0),
+    account=Depends(require_account),
+):
+    region_id = int(region)
+    loop = asyncio.get_event_loop()
+    deadline = loop.time() + 25
+
+    async def generate():
+        last_id = int(since_id)
+        while loop.time() < deadline:
+            db = SessionLocal()
+            try:
+                rows = (
+                    db.query(IntelKillEvent)
+                    .filter(IntelKillEvent.region_id == region_id, IntelKillEvent.id > last_id)
+                    .order_by(IntelKillEvent.id.asc())
+                    .limit(10)
+                    .all()
+                )
+                for row in rows:
+                    last_id = int(row.id)
+                    yield (
+                        f"id:{row.id}\n"
+                        f"data:{json.dumps({'id': row.id, 'killmail_id': row.killmail_id, 'solar_system_id': row.solar_system_id, 'kill': json.loads(row.kill_json)})}\n\n"
+                    )
+                if not rows:
+                    yield ": heartbeat\n\n"
+            except Exception:
+                logger.exception("intel: SSE generate failed")
+            finally:
+                db.close()
+            await asyncio.sleep(3)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/character-location")

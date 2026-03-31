@@ -658,20 +658,20 @@
         const unique = [...new Set(placeholders.map(el => el.dataset.sysId).filter(Boolean))];
         for (let i = 0; i < unique.length; i += 10) {
             const chunk = unique.slice(i, i + 10);
-            const responses = await Promise.all(chunk.map(async (systemId) => {
-                try {
-                    const response = await fetch(`/killboard/system/${systemId}`);
-                    if (!response.ok) return null;
-                    return await response.json();
-                } catch {
-                    return null;
-                }
-            }));
-            responses.forEach((data, index) => {
-                const systemId = chunk[index];
-                const html = renderKillBadge(data);
-                document.querySelectorAll(`.kill-badge[data-sys-id="${systemId}"]`).forEach(el => { el.innerHTML = html; });
-            });
+            try {
+                const response = await fetch(`/killboard/systems?system_ids=${chunk.join(',')}&window=60m&limit=1`);
+                if (!response.ok) continue;
+                const payload = await response.json();
+                const map = new Map((payload.systems || []).map(item => [String(item.system_id), item]));
+                chunk.forEach((systemId) => {
+                    const html = renderKillBadge(map.get(String(systemId)));
+                    document.querySelectorAll(`.kill-badge[data-sys-id="${systemId}"]`).forEach(el => { el.innerHTML = html; });
+                });
+            } catch {
+                chunk.forEach((systemId) => {
+                    document.querySelectorAll(`.kill-badge[data-sys-id="${systemId}"]`).forEach(el => { el.innerHTML = ''; });
+                });
+            }
         }
     }
     function initHaulingHoverCards() {

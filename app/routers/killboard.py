@@ -3,31 +3,20 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-import requests
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import require_account
 from app.models import KillActivityCache
+from app.zkill import get_system_kill_summaries, get_system_kill_summary
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/killboard", tags=["killboard"])
 
 _CACHE_TTL = timedelta(minutes=15)
-_HEADERS = {"User-Agent": "EVE-PI-Manager/1.0 github.com/DrNightmareDev/PI_Manager"}
-
-
-def _danger_level(kill_count: int) -> str:
-    if kill_count >= 5:
-        return "danger"
-    if kill_count >= 1:
-        return "caution"
-    return "safe"
-
-
 @router.get("/system/{system_id}")
 def get_system_kills(system_id: int, account=Depends(require_account), db: Session = Depends(get_db)):
     row = db.get(KillActivityCache, int(system_id))
@@ -35,25 +24,26 @@ def get_system_kills(system_id: int, account=Depends(require_account), db: Sessi
     if row and row.fetched_at:
         fetched_at = row.fetched_at if row.fetched_at.tzinfo else row.fetched_at.replace(tzinfo=timezone.utc)
         if now - fetched_at <= _CACHE_TTL:
-            return JSONResponse({
-                "system_id": int(system_id),
-                "kill_count": int(row.kill_count or 0),
-                "fetched_at_iso": fetched_at.astimezone(timezone.utc).isoformat(),
-                "danger_level": _danger_level(int(row.kill_count or 0)),
-                "system_url": f"https://zkillboard.com/system/{int(system_id)}/",
-            })
+            try:
+                summary = get_system_kill_summary(int(system_id), window="60m", limit=5)
+                summary["fetched_at_iso"] = fetched_at.astimezone(timezone.utc).isoformat()
+                return JSONResponse(summary)
+            except Exception:
+                logger.exception("killboard: failed to enrich cached system %s", system_id)
+                return JSONResponse({
+                    "system_id": int(system_id),
+                    "kill_count": int(row.kill_count or 0),
+                    "fetched_at_iso": fetched_at.astimezone(timezone.utc).isoformat(),
+                    "danger_level": "danger" if int(row.kill_count or 0) >= 5 else "caution" if int(row.kill_count or 0) >= 1 else "safe",
+                    "system_url": f"https://zkillboard.com/system/{int(system_id)}/",
+                    "window": "60m",
+                    "latest_kills": [],
+                })
 
-    kill_count = 0
     try:
-        resp = requests.get(
-            f"https://zkillboard.com/api/kills/solarSystemID/{int(system_id)}/pastSeconds/3600/",
-            headers=_HEADERS,
-            timeout=15,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        kill_count = len(data) if isinstance(data, list) else 0
-    except Exception as exc:
+        summary = get_system_kill_summary(int(system_id), window="60m", limit=5)
+        kill_count = int(summary["kill_count"])
+    except Exception:
         logger.exception("killboard: failed to fetch kills for system %s", system_id)
         if row and row.fetched_at:
             fetched_at = row.fetched_at if row.fetched_at.tzinfo else row.fetched_at.replace(tzinfo=timezone.utc)
@@ -61,8 +51,10 @@ def get_system_kills(system_id: int, account=Depends(require_account), db: Sessi
                 "system_id": int(system_id),
                 "kill_count": int(row.kill_count or 0),
                 "fetched_at_iso": fetched_at.astimezone(timezone.utc).isoformat(),
-                "danger_level": _danger_level(int(row.kill_count or 0)),
+                "danger_level": "danger" if int(row.kill_count or 0) >= 5 else "caution" if int(row.kill_count or 0) >= 1 else "safe",
                 "system_url": f"https://zkillboard.com/system/{int(system_id)}/",
+                "window": "60m",
+                "latest_kills": [],
             })
         raise HTTPException(status_code=502, detail="Killboard unavailable")
 
@@ -74,10 +66,20 @@ def get_system_kills(system_id: int, account=Depends(require_account), db: Sessi
         row.fetched_at = now
     db.commit()
 
+    summary["fetched_at_iso"] = now.astimezone(timezone.utc).isoformat()
+    return JSONResponse(summary)
+
+
+@router.get("/systems")
+def get_many_system_kills(
+    system_ids: str = Query(""),
+    window: str = Query("60m"),
+    limit: int = Query(3, ge=1, le=10),
+    account=Depends(require_account),
+):
+    ids = [int(part) for part in system_ids.split(",") if part.strip().isdigit()]
+    summaries = get_system_kill_summaries(ids, window=window, limit=limit)
     return JSONResponse({
-        "system_id": int(system_id),
-        "kill_count": int(kill_count),
-        "fetched_at_iso": now.astimezone(timezone.utc).isoformat(),
-        "danger_level": _danger_level(int(kill_count)),
-        "system_url": f"https://zkillboard.com/system/{int(system_id)}/",
+        "window": window,
+        "systems": [summaries[key] for key in sorted(summaries.keys())],
     })

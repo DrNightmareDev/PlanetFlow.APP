@@ -1958,22 +1958,25 @@ function _renderPiCheckBalance(p0, needed) {
     }
 
     async function fetchChunk(chunk) {
-        const results = await Promise.all(chunk.map(async (systemId) => {
-            try {
-                const response = await fetch(`/killboard/system/${systemId}`);
-                if (!response.ok) return null;
-                return await response.json();
-            } catch {
-                return null;
-            }
-        }));
-        results.forEach((data, index) => {
-            const systemId = chunk[index];
-            const html = renderBadge(data);
-            document.querySelectorAll(`.kill-badge[data-sys-id="${systemId}"]`).forEach(el => {
-                el.innerHTML = html;
+        try {
+            const response = await fetch(`/killboard/systems?system_ids=${chunk.join(',')}&window=60m&limit=1`);
+            if (!response.ok) return;
+            const payload = await response.json();
+            const map = new Map((payload.systems || []).map(item => [String(item.system_id), item]));
+            chunk.forEach((systemId) => {
+                const html = renderBadge(map.get(String(systemId)));
+                document.querySelectorAll(`.kill-badge[data-sys-id="${systemId}"]`).forEach(el => {
+                    el.innerHTML = html;
+                });
             });
-        });
+        } catch {
+            chunk.forEach((systemId) => {
+                const html = renderBadge(null);
+                document.querySelectorAll(`.kill-badge[data-sys-id="${systemId}"]`).forEach(el => {
+                    el.innerHTML = html;
+                });
+            });
+        }
     }
 
     (async () => {

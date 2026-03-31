@@ -259,8 +259,8 @@ function renderSystemDetails() {
                     <a href="${item.kill_url}" target="_blank" rel="noopener"><img src="${item.ship_image_url}" alt="${item.ship_type}"></a>
                     <div>
                         <div class="intel-mini-top">
-                            <a href="${item.kill_url}" target="_blank" rel="noopener">${item.victim_name}</a>
-                            <span>${minutesAgo(item.timestamp)}</span>
+                            <a href="${item.kill_url}" target="_blank" rel="noopener">${item.pilot_name}</a>
+                            <span>${item.timestamp_utc}</span>
                         </div>
                         <div class="text-muted">${item.ship_type}</div>
                     </div>
@@ -278,8 +278,8 @@ function renderFeed() {
             <a href="${item.kill_url}" target="_blank" rel="noopener" class="intel-feed-ship-link"><img src="${item.ship_image_url}" alt="${item.ship_type}" class="intel-feed-ship"></a>
             <div class="intel-feed-copy">
                 <div class="intel-feed-line">
-                    <a href="${item.kill_url}" target="_blank" rel="noopener" class="intel-feed-pilot">${item.victim_name}</a>
-                    <span>${minutesAgo(item.timestamp)}</span>
+                    <a href="${item.kill_url}" target="_blank" rel="noopener" class="intel-feed-pilot">${item.pilot_name}</a>
+                    <span>${item.timestamp_utc}</span>
                 </div>
                 <div class="intel-feed-line intel-feed-line-secondary">
                     <span>${item.ship_type}</span>

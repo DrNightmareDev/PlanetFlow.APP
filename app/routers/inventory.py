@@ -15,6 +15,7 @@ from app.inventory_service import (
     get_inventory_rows,
     get_inventory_summary_map,
     get_pi_catalog_maps,
+    soft_delete_inventory_summary,
     sync_inventory_summaries,
 )
 from app.models import InventoryAdjustment, InventoryLot
@@ -166,6 +167,24 @@ def adjust_inventory_stock(
     except Exception as exc:
         db.rollback()
         return _status_redirect(str(exc), "danger")
+
+
+@router.post("/remove")
+def remove_inventory_row(
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+    type_id: int = Form(...),
+    tier: str = Form(""),
+):
+    try:
+        if not soft_delete_inventory_summary(db, int(account.id), int(type_id)):
+            db.rollback()
+            return _status_redirect("Inventory row not found.", "danger", tier=tier or None)
+        db.commit()
+        return _status_redirect("Inventory row hidden from current stock.", "success", tier=tier or None)
+    except Exception as exc:
+        db.rollback()
+        return _status_redirect(str(exc), "danger", tier=tier or None)
 
 
 @router.get("/summary")

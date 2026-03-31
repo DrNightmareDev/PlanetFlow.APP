@@ -139,6 +139,7 @@
                         <th class="text-end">On Hand</th>
                         <th class="text-end">Weighted Avg Cost</th>
                         <th class="text-end">Estimated Value</th>
+                        <th class="text-end">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -158,9 +159,16 @@
                             data-value-sell="{{ row.estimated_value_sell if row.estimated_value_sell is not none else '' }}"
                             data-value-split="{{ row.estimated_value_split if row.estimated_value_split is not none else '' }}"
                         >{% if row.estimated_value_split is not none %}{{ "{:,.2f}".format(row.estimated_value_split) }} ISK{% else %}<span class="text-muted">n/a</span>{% endif %}</td>
+                        <td class="text-end">
+                            <form method="post" action="/inventory/remove" class="inventory-remove-form">
+                                <input type="hidden" name="type_id" value="{{ row.type_id }}">
+                                <input type="hidden" name="tier" value="{{ selected_tier }}">
+                                <button type="submit" class="btn btn-sm eve-btn-ghost inventory-remove-btn">Remove</button>
+                            </form>
+                        </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="5" class="text-center text-muted py-4">No PI stock tracked yet.</td></tr>
+                    <tr><td colspan="6" class="text-center text-muted py-4">No PI stock tracked yet.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -402,6 +410,20 @@
         });
     });
 
+    document.querySelectorAll('.inventory-remove-form').forEach((form) => {
+        form.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+    });
+
+    document.querySelectorAll('.inventory-remove-btn').forEach((button) => {
+        button.addEventListener('click', (event) => {
+            if (!window.confirm('Hide this line from Current Stock? Transactions stay available for audit.')) {
+                event.preventDefault();
+            }
+        });
+    });
+
     applyValueMode(valueModeSelect?.value || 'split');
 })();
 </script>
@@ -426,6 +448,8 @@
 .inventory-table-actions { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; }
 .inventory-table-actions input { min-width:220px; }
 .inventory-value-mode { min-width:150px; }
+.inventory-remove-form { display:inline-flex; margin:0; }
+.inventory-remove-btn { min-width:88px; }
 .inventory-tier { display:inline-flex; align-items:center; padding:.22rem .48rem; border-radius:999px; font-size:.74rem; border:1px solid rgba(255,255,255,.08); }
 .inventory-tier-p0 { color:#7ec8e3; background:rgba(0,180,216,.08); }
 .inventory-tier-p1 { color:#73d483; background:rgba(45,198,83,.08); }

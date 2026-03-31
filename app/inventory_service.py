@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
-from datetime import timezone
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -83,7 +83,14 @@ def _price_value_map(type_id: int, quantity: int, price_entry: dict | None) -> d
     }
 
 
-def recalculate_inventory_summary(db: Session, account_id: int, type_id: int, fallback_item: dict | None = None) -> InventoryItemSummary | None:
+def recalculate_inventory_summary(
+    db: Session,
+    account_id: int,
+    type_id: int,
+    fallback_item: dict | None = None,
+    *,
+    revive_hidden: bool = False,
+) -> InventoryItemSummary | None:
     active_lots = (
         db.query(InventoryLot)
         .filter(
@@ -133,6 +140,8 @@ def recalculate_inventory_summary(db: Session, account_id: int, type_id: int, fa
     summary.weighted_average_cost = _decimal_to_storage(
         total_cost_basis / Decimal(costed_quantity)
     ) if costed_quantity > 0 else None
+    if revive_hidden:
+        summary.deleted_at = None
 
     if fallback_item:
         summary.item_name = str(fallback_item["name"])
@@ -174,7 +183,13 @@ def add_inventory_lot(
         note=(note or "").strip() or None,
     )
     db.add(lot)
-    recalculate_inventory_summary(db, int(account_id), int(item["type_id"]), fallback_item=item)
+    recalculate_inventory_summary(
+        db,
+        int(account_id),
+        int(item["type_id"]),
+        fallback_item=item,
+        revive_hidden=True,
+    )
     return lot
 
 
@@ -285,6 +300,7 @@ def get_inventory_rows(db: Session, account_id: int, tier: str | None = None) ->
     query = db.query(InventoryItemSummary).filter(
         InventoryItemSummary.account_id == int(account_id),
         InventoryItemSummary.quantity_on_hand > 0,
+        InventoryItemSummary.deleted_at.is_(None),
     )
     if tier and tier in TIER_SORT:
         query = query.filter(InventoryItemSummary.tier == tier)
@@ -403,6 +419,7 @@ def get_inventory_item_detail(db: Session, account_id: int, type_id: int) -> dic
         "estimated_value_buy": price_values["value_buy"],
         "estimated_value_sell": price_values["value_sell"],
         "estimated_value_split": price_values["value_split"],
+        "deleted_at": format_utc_compact(summary.deleted_at) if summary.deleted_at else None,
         "transactions": transactions,
     }
 
@@ -421,3 +438,19 @@ def sync_inventory_summaries(db: Session, account_id: int) -> None:
         fallback = by_type_id.get(int(type_id)) or next((item for item in catalog if int(item["type_id"] or 0) == int(type_id)), None)
         recalculate_inventory_summary(db, int(account_id), int(type_id), fallback_item=fallback)
     db.flush()
+
+
+def soft_delete_inventory_summary(db: Session, account_id: int, type_id: int) -> bool:
+    summary = (
+        db.query(InventoryItemSummary)
+        .filter(
+            InventoryItemSummary.account_id == int(account_id),
+            InventoryItemSummary.type_id == int(type_id),
+        )
+        .first()
+    )
+    if summary is None:
+        return False
+    summary.deleted_at = datetime.now(timezone.utc)
+    db.flush()
+    return True

@@ -218,6 +218,7 @@ function renderMap() {
         const core = document.createElementNS(ns, 'circle');
         core.setAttribute('r', 10);
         core.setAttribute('class', 'intel-node-core');
+        core.setAttribute('style', `opacity:${0.82 + activity.heat * 0.16}`);
         group.appendChild(core);
 
         if (activity.kill_count > 0) {
@@ -355,10 +356,17 @@ async function refreshIntel() {
     const response = await fetch(`/intel/map/live?${params.toString()}`);
     if (!response.ok) return;
     const payload = await response.json();
+    const hadViewBox = !!intelState.viewBox;
+    const previousViewBox = intelState.viewBox ? { ...intelState.viewBox } : null;
     intelState.region = payload.region;
     intelState.activity = payload.activity;
     intelState.feed = payload.feed;
-    intelState.viewBox = parseViewBox();
+    if (hadViewBox && previousViewBox) {
+        intelState.viewBox = previousViewBox;
+        clampViewBox();
+    } else {
+        intelState.viewBox = parseViewBox();
+    }
     if (!intelState.selectedSystemId || !systemById(intelState.selectedSystemId)) {
         intelState.selectedSystemId = intelState.region.systems[0]?.id || null;
     }
@@ -369,6 +377,7 @@ async function refreshIntel() {
 async function changeRegion(regionKey) {
     intelState.selectedRegion = regionKey;
     document.getElementById('intelRegionSelect').value = regionKey;
+    intelState.viewBox = null;
     await refreshIntel();
 }
 
@@ -453,9 +462,11 @@ setInterval(refreshIntel, 20000);
 .intel-link { stroke:rgba(126, 200, 227, .15); stroke-width:1.6; }
 .intel-node { cursor:pointer; }
 .intel-node-glow { fill:#00b4d8; }
-.intel-node-core { fill:rgba(8, 17, 24, .95); stroke:rgba(157, 217, 236, .5); stroke-width:1.4; }
+.intel-node-core { fill:#1b4858; stroke:rgba(157, 217, 236, .45); stroke-width:1.4; }
 .intel-node.danger-warm .intel-node-glow { fill:#f4a300; }
+.intel-node.danger-warm .intel-node-core { fill:#c77c11; stroke:rgba(255, 220, 162, .45); }
 .intel-node.danger-hot .intel-node-glow { fill:#ff5e5b; }
+.intel-node.danger-hot .intel-node-core { fill:#b93b3b; stroke:rgba(255, 205, 205, .48); }
 .intel-node.is-selected .intel-node-core { stroke:#fff; stroke-width:2; }
 .intel-node-kills { fill:#f4fbff; font-weight:700; font-size:.42rem; }
 .intel-node-label { fill:#9fb4c3; font-size:.34rem; }

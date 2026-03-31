@@ -209,14 +209,8 @@ function renderMap() {
             renderSystemDetails();
         });
 
-        const glow = document.createElementNS(ns, 'circle');
-        glow.setAttribute('r', 18 + (activity.heat * 16));
-        glow.setAttribute('class', 'intel-node-glow');
-        glow.setAttribute('style', `opacity:${0.12 + activity.heat * 0.48}`);
-        group.appendChild(glow);
-
         const core = document.createElementNS(ns, 'circle');
-        core.setAttribute('r', 10);
+        core.setAttribute('r', 14);
         core.setAttribute('class', 'intel-node-core');
         core.setAttribute('style', `opacity:${0.82 + activity.heat * 0.16}`);
         group.appendChild(core);
@@ -461,12 +455,9 @@ setInterval(refreshIntel, 20000);
 .intel-map-svg { width:100%; min-height:760px; display:block; }
 .intel-link { stroke:rgba(126, 200, 227, .15); stroke-width:1.6; }
 .intel-node { cursor:pointer; }
-.intel-node-glow { fill:#00b4d8; }
-.intel-node-core { fill:#1b4858; stroke:rgba(157, 217, 236, .45); stroke-width:1.4; }
-.intel-node.danger-warm .intel-node-glow { fill:#f4a300; }
-.intel-node.danger-warm .intel-node-core { fill:#c77c11; stroke:rgba(255, 220, 162, .45); }
-.intel-node.danger-hot .intel-node-glow { fill:#ff5e5b; }
-.intel-node.danger-hot .intel-node-core { fill:#b93b3b; stroke:rgba(255, 205, 205, .48); }
+.intel-node-core { fill:#1b4858; stroke:none; }
+.intel-node.danger-warm .intel-node-core { fill:#c77c11; }
+.intel-node.danger-hot .intel-node-core { fill:#b93b3b; }
 .intel-node.is-selected .intel-node-core { stroke:#fff; stroke-width:2; }
 .intel-node-kills { fill:#f4fbff; font-weight:700; font-size:.42rem; }
 .intel-node-label { fill:#9fb4c3; font-size:.34rem; }

@@ -10,6 +10,7 @@ import bz2
 import io
 import json
 import logging
+import math
 import re
 import tarfile
 import time
@@ -45,8 +46,11 @@ _regions: dict[int, str] = {}                       # region_id -> region_name
 _constellations: dict[int, dict] = {}               # constellation_id -> {name, region_id}
 _constellations_by_name: dict[str, dict] = {}       # name_lower -> {id, name, region_id}
 _static_planets: dict[int, dict] = {}               # planet_id -> {system_id, planet_name, planet_number, radius}
+_static_stargates: dict[int, dict] = {}             # gate_id -> {system_id, gate_name, destination_system_id, x, y, z}
+_system_gate_distances: dict[tuple[int, int, int], dict] = {}  # (system_id, from_system_id, to_system_id) -> distance payload
 _dotlan_layout_cache: dict[int, tuple[float, dict]] = {}
 _DOTLAN_LAYOUT_TTL = 86400.0
+_STARGATE_DEST_RE = re.compile(r"^Stargate\s*\((.+)\)$", re.IGNORECASE)
 
 
 # ─── Version & Update-Check ───────────────────────────────────────────────────
@@ -463,6 +467,94 @@ def _load_static_planets() -> None:
         logger.error(f"Fehler beim Laden von mapDenormalize: {e}")
 
 
+def _extract_gate_destination_name(gate_name: str) -> str | None:
+    match = _STARGATE_DEST_RE.match(str(gate_name or "").strip())
+    if not match:
+        return None
+    return match.group(1).strip() or None
+
+
+def _load_static_stargates() -> None:
+    global _static_stargates, _system_gate_distances
+    path = _denormalize_path()
+    if not path.exists():
+        logger.warning("mapDenormalize.sql.bz2 nicht gefunden - statische Stargates unbekannt.")
+        return
+    try:
+        pattern = re.compile(
+            r"\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(NULL|\d+),"
+            r"(-?[\d.eE+\-]+),(-?[\d.eE+\-]+),(-?[\d.eE+\-]+),"
+            r"(-?[\d.eE+\-]+),'([^']+)',(-?[\d.eE+\-]+|NULL),(NULL|\d+),(NULL|\d+)\)"
+        )
+        gates: dict[int, dict] = {}
+        gates_by_system: dict[int, list[dict]] = {}
+        for line in bz2.open(str(path), "rt", encoding="utf-8", errors="replace"):
+            for m in pattern.finditer(line):
+                item_id = int(m.group(1))
+                group_id = int(m.group(3))
+                system_id = int(m.group(4))
+                item_name = m.group(12)
+                if group_id != 10 and not str(item_name or "").startswith("Stargate"):
+                    continue
+                destination_name = _extract_gate_destination_name(item_name)
+                destination_system_id = 0
+                destination_system_name = destination_name or ""
+                if destination_name:
+                    dest = find_system(destination_name)
+                    if dest:
+                        destination_system_id = int(dest["id"])
+                        destination_system_name = str(dest["name"] or destination_name)
+                gate = {
+                    "gate_id": item_id,
+                    "system_id": system_id,
+                    "system_name": (_systems_by_id.get(system_id) or {}).get("name", f"System {system_id}"),
+                    "gate_name": item_name,
+                    "destination_system_id": destination_system_id or None,
+                    "destination_system_name": destination_system_name or None,
+                    "x": float(m.group(8)),
+                    "y": float(m.group(9)),
+                    "z": float(m.group(10)),
+                }
+                gates[item_id] = gate
+                gates_by_system.setdefault(system_id, []).append(gate)
+
+        distances: dict[tuple[int, int, int], dict] = {}
+        au_in_m = 149_597_870_700.0
+        for system_id, gate_rows in gates_by_system.items():
+            valid = [gate for gate in gate_rows if gate.get("destination_system_id")]
+            for entry_gate in valid:
+                for exit_gate in valid:
+                    if int(entry_gate["gate_id"]) == int(exit_gate["gate_id"]):
+                        continue
+                    from_system_id = int(entry_gate["destination_system_id"] or 0)
+                    to_system_id = int(exit_gate["destination_system_id"] or 0)
+                    if not from_system_id or not to_system_id or from_system_id == to_system_id:
+                        continue
+                    dx = float(entry_gate["x"]) - float(exit_gate["x"])
+                    dy = float(entry_gate["y"]) - float(exit_gate["y"])
+                    dz = float(entry_gate["z"]) - float(exit_gate["z"])
+                    distance_m = math.sqrt(dx * dx + dy * dy + dz * dz)
+                    distances[(int(system_id), from_system_id, to_system_id)] = {
+                        "system_id": int(system_id),
+                        "system_name": entry_gate["system_name"],
+                        "entry_gate_id": int(entry_gate["gate_id"]),
+                        "exit_gate_id": int(exit_gate["gate_id"]),
+                        "from_system_id": from_system_id,
+                        "to_system_id": to_system_id,
+                        "from_system_name": entry_gate.get("destination_system_name") or f"System {from_system_id}",
+                        "to_system_name": exit_gate.get("destination_system_name") or f"System {to_system_id}",
+                        "distance_m": distance_m,
+                        "distance_au": distance_m / au_in_m,
+                    }
+
+        _static_stargates = gates
+        _system_gate_distances = distances
+        logger.info(f"SDE: {len(_static_stargates)} statische Stargates geladen.")
+        logger.info(f"SDE: {len(_system_gate_distances)} Gate-Distanzen vorkalkuliert.")
+    except Exception as e:
+        logger.error(f"Fehler beim Laden statischer Stargates: {e}")
+
+
 # ─── Öffentliche API ──────────────────────────────────────────────────────────
 
 def init():
@@ -495,6 +587,7 @@ def init():
     if _is_denormalize_update_needed():
         _download_denormalize()
     _load_static_planets()
+    _load_static_stargates()
 
 
 def find_system(query: str) -> dict | None:
@@ -864,3 +957,11 @@ def get_constellation_systems_local(constellation_id: int) -> list[dict]:
 
 def get_static_planets() -> dict[int, dict]:
     return dict(_static_planets)
+
+
+def get_static_stargates() -> dict[int, dict]:
+    return dict(_static_stargates)
+
+
+def get_system_gate_distances() -> dict[tuple[int, int, int], dict]:
+    return dict(_system_gate_distances)

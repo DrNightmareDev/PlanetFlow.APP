@@ -6,6 +6,7 @@ import time
 import io
 from collections import deque
 from functools import lru_cache
+from heapq import heappop, heappush
 from urllib.parse import unquote, urlparse
 
 import requests
@@ -20,7 +21,7 @@ from app.dependencies import require_account, require_manager_or_admin
 from app.esi import ensure_valid_token, get_character_location
 from app.i18n import translate
 from app.market import PI_TYPE_IDS
-from app.models import Character, CorpBridgeConnection, HaulingPreference, MarketCache
+from app.models import Character, CorpBridgeConnection, HaulingPreference, MarketCache, SystemGateDistance
 from app.routers.dashboard import _apply_price_mode, _load_colony_cache, _recompute_expiry
 from app.templates_env import templates
 
@@ -32,9 +33,11 @@ _LOCATION_CACHE_TTL = 300
 _ROUTE_CACHE_TTL = 600
 _location_cache: dict[int, tuple[dict, float]] = {}
 _route_cache: dict[tuple[int, int], tuple[list[int], float]] = {}
-_best_route_cache: dict[tuple[int, int, bool], tuple[dict, float]] = {}
+_best_route_cache: dict[tuple[int, int, bool, str], tuple[dict, float]] = {}
+_gate_distance_cache: tuple[dict[tuple[int, int, int], dict], float] | None = None
 _DOTLAN_SYSTEM_LINK_RE = re.compile(r'href="/system/([^"/?#]+)"', re.IGNORECASE)
 _PLANET_NUMBER_RE = re.compile(r"(?:\s|[-])([IVXLCDM]+|\d+)$", re.IGNORECASE)
+_AU_IN_METERS = 149_597_870_700.0
 
 
 def _storage_has_items(storage: list[dict] | None) -> bool:
@@ -177,7 +180,42 @@ def _normalize_bridge_pair(from_system_id: int, to_system_id: int) -> tuple[int,
 
 
 def _invalidate_route_caches() -> None:
+    global _gate_distance_cache
     _best_route_cache.clear()
+    _gate_distance_cache = None
+
+
+def _route_mode_value(route_mode: str | None) -> str:
+    return "warp" if str(route_mode or "").lower() == "warp" else "jumps"
+
+
+def _format_gate_distance_au(distance_au: float | None) -> str:
+    value = float(distance_au or 0.0)
+    if value <= 0:
+        return ""
+    if value >= 100:
+        return f"{value:,.0f} AU"
+    if value >= 10:
+        return f"{value:,.1f} AU"
+    return f"{value:,.2f} AU"
+
+
+def _load_gate_distance_map(db: Session) -> dict[tuple[int, int, int], dict]:
+    global _gate_distance_cache
+    if _gate_distance_cache and time.time() - _gate_distance_cache[1] < _ROUTE_CACHE_TTL:
+        return _gate_distance_cache[0]
+    rows = db.query(SystemGateDistance).all()
+    mapping = {
+        (int(row.system_id), int(row.from_system_id), int(row.to_system_id)): {
+            "distance_m": float(row.distance_m or 0.0),
+            "distance_au": float(row.distance_au or 0.0),
+            "entry_gate_id": int(row.entry_gate_id or 0),
+            "exit_gate_id": int(row.exit_gate_id or 0),
+        }
+        for row in rows
+    }
+    _gate_distance_cache = (mapping, time.time())
+    return mapping
 
 
 def _get_cached_location(character: Character, db: Session) -> dict | None:
@@ -499,8 +537,96 @@ def _graph_steps(origin_system_id: int, destination_system_id: int, db: Session,
     return steps
 
 
-def _steps_to_items(steps: list[dict], destination_system_id: int) -> tuple[list[dict], int]:
+def _warp_weighted_steps(origin_system_id: int, destination_system_id: int, db: Session, use_ansiblex: bool) -> tuple[list[dict], int, float]:
+    if origin_system_id == destination_system_id:
+        return [], 0, 0.0
+    if not sde.has_jump_graph():
+        return [], 0, 0.0
+
+    bridge_adjacency = _bridge_adjacency(db, use_ansiblex=use_ansiblex)
+    gate_distance_map = _load_gate_distance_map(db)
+    start_state = (int(origin_system_id), 0, "start")
+    target_id = int(destination_system_id)
+
+    queue: list[tuple[tuple[int, float], tuple[int, int, str]]] = [((0, 0.0), start_state)]
+    distances: dict[tuple[int, int, str], tuple[int, float]] = {start_state: (0, 0.0)}
+    previous: dict[tuple[int, int, str], tuple[tuple[int, int, str], dict]] = {}
+    best_target_state: tuple[int, int, str] | None = None
+    best_target_cost: tuple[int, float] | None = None
+
+    while queue:
+        current_cost, state = heappop(queue)
+        if current_cost != distances.get(state):
+            continue
+        current_system, previous_system, arrival_type = state
+        if current_system == target_id:
+            best_target_state = state
+            best_target_cost = current_cost
+            break
+
+        for edge in bridge_adjacency.get(current_system, []):
+            next_system = int(edge["to"])
+            next_state = (next_system, current_system, "bridge")
+            next_cost = (current_cost[0] + 1, current_cost[1])
+            if next_cost < distances.get(next_state, (10**9, float("inf"))):
+                distances[next_state] = next_cost
+                previous[next_state] = (state, {
+                    "from": current_system,
+                    "to": next_system,
+                    "type": "bridge",
+                    "bridge_label": edge.get("bridge_label"),
+                    "bridge_source": edge.get("bridge_source"),
+                    "bridge_corporation_name": edge.get("bridge_corporation_name"),
+                    "gate_warp_distance_m": 0.0,
+                    "gate_warp_distance_au": 0.0,
+                })
+                heappush(queue, (next_cost, next_state))
+
+        for next_system in sde.get_system_neighbors(current_system):
+            gate_warp_payload = {"distance_m": 0.0, "distance_au": 0.0}
+            if previous_system and arrival_type == "gate":
+                gate_warp_payload = gate_distance_map.get(
+                    (int(current_system), int(previous_system), int(next_system)),
+                    gate_warp_payload,
+                )
+            next_state = (int(next_system), int(current_system), "gate")
+            next_cost = (
+                current_cost[0] + 1,
+                current_cost[1] + float(gate_warp_payload.get("distance_m") or 0.0),
+            )
+            if next_cost < distances.get(next_state, (10**9, float("inf"))):
+                distances[next_state] = next_cost
+                previous[next_state] = (state, {
+                    "from": int(current_system),
+                    "to": int(next_system),
+                    "type": "gate",
+                    "bridge_label": None,
+                    "bridge_source": None,
+                    "bridge_corporation_name": None,
+                    "gate_warp_distance_m": float(gate_warp_payload.get("distance_m") or 0.0),
+                    "gate_warp_distance_au": float(gate_warp_payload.get("distance_au") or 0.0),
+                })
+                heappush(queue, (next_cost, next_state))
+
+    if best_target_state is None or best_target_cost is None:
+        return [], 0, 0.0
+
+    steps: list[dict] = []
+    current_state = best_target_state
+    while current_state != start_state:
+        prev_payload = previous.get(current_state)
+        if not prev_payload:
+            break
+        parent_state, step = prev_payload
+        steps.append(step)
+        current_state = parent_state
+    steps.reverse()
+    return steps, int(best_target_cost[0]), float(best_target_cost[1])
+
+
+def _steps_to_items(steps: list[dict], destination_system_id: int) -> tuple[list[dict], int, float]:
     total_jumps = len(steps)
+    total_gate_warp_m = sum(float(step.get("gate_warp_distance_m") or 0.0) for step in steps)
     items: list[dict] = []
     destination_id = int(destination_system_id)
     for index, step in enumerate(steps):
@@ -518,41 +644,80 @@ def _steps_to_items(steps: list[dict], destination_system_id: int) -> tuple[list
             "bridge_corporation_name": step.get("bridge_corporation_name"),
             "bridge_incoming": step.get("type") == "bridge",
             "bridge_outgoing": False,
+            "gate_warp_distance_m": 0.0,
+            "gate_warp_distance_au": 0.0,
+            "gate_warp_distance_label": "",
         })
     for index, step in enumerate(steps):
         if step.get("type") != "bridge":
+            if step.get("type") == "gate" and index > 0:
+                items[index - 1]["gate_warp_distance_m"] = float(step.get("gate_warp_distance_m") or 0.0)
+                items[index - 1]["gate_warp_distance_au"] = float(step.get("gate_warp_distance_au") or 0.0)
+                items[index - 1]["gate_warp_distance_label"] = _format_gate_distance_au(step.get("gate_warp_distance_au"))
             continue
-        if index == 0:
-            continue
-        items[index - 1]["bridge_outgoing"] = True
-        items[index - 1]["bridge_label"] = step.get("bridge_label")
-    return items, total_jumps
+        if index > 0:
+            items[index - 1]["bridge_outgoing"] = True
+            items[index - 1]["bridge_label"] = step.get("bridge_label")
+    return items, total_jumps, total_gate_warp_m
 
 
-def _best_leg(origin_system_id: int, destination_system_id: int, db: Session, use_ansiblex: bool = True) -> tuple[list[dict], int]:
+def _best_leg(
+    origin_system_id: int,
+    destination_system_id: int,
+    db: Session,
+    use_ansiblex: bool = True,
+    route_mode: str = "jumps",
+) -> tuple[list[dict], int, float]:
     if origin_system_id == destination_system_id:
-        return [], 0
-    cache_key = (int(origin_system_id), int(destination_system_id), bool(use_ansiblex))
+        return [], 0, 0.0
+    resolved_route_mode = _route_mode_value(route_mode)
+    cache_key = (int(origin_system_id), int(destination_system_id), bool(use_ansiblex), resolved_route_mode)
     cached = _best_route_cache.get(cache_key)
     if cached and time.time() - cached[1] < _ROUTE_CACHE_TTL:
         data = cached[0]
-        return list(data["items"]), int(data["jumps"])
+        return list(data["items"]), int(data["jumps"]), float(data.get("gate_warp_m") or 0.0)
 
-    steps = _graph_steps(origin_system_id, destination_system_id, db, use_ansiblex=use_ansiblex)
-    if steps:
-        items, total_jumps = _steps_to_items(steps, destination_system_id)
+    total_gate_warp_m = 0.0
+    if resolved_route_mode == "warp":
+        steps, total_jumps, total_gate_warp_m = _warp_weighted_steps(origin_system_id, destination_system_id, db, use_ansiblex=use_ansiblex)
+        if steps:
+            items, total_jumps, total_gate_warp_m = _steps_to_items(steps, destination_system_id)
+        else:
+            items = []
     else:
-        items, total_jumps = _fallback_esi_leg(origin_system_id, destination_system_id)
+        steps = _graph_steps(origin_system_id, destination_system_id, db, use_ansiblex=use_ansiblex)
+        if steps:
+            items, total_jumps, total_gate_warp_m = _steps_to_items(steps, destination_system_id)
+        else:
+            items, total_jumps = _fallback_esi_leg(origin_system_id, destination_system_id)
+            total_gate_warp_m = 0.0
 
-    _best_route_cache[cache_key] = ({"items": list(items), "jumps": int(total_jumps)}, time.time())
-    return items, total_jumps
+    _best_route_cache[cache_key] = (
+        {"items": list(items), "jumps": int(total_jumps), "gate_warp_m": float(total_gate_warp_m)},
+        time.time(),
+    )
+    return items, total_jumps, total_gate_warp_m
 
 
-def _jump_count(origin_system_id: int, destination_system_id: int, db: Session, use_ansiblex: bool = True) -> int:
+def _route_score(
+    origin_system_id: int,
+    destination_system_id: int,
+    db: Session,
+    use_ansiblex: bool = True,
+    route_mode: str = "jumps",
+) -> tuple[int, float]:
     if origin_system_id == destination_system_id:
-        return 0
-    _, total_jumps = _best_leg(origin_system_id, destination_system_id, db, use_ansiblex=use_ansiblex)
-    return total_jumps
+        return (0, 0.0)
+    items, total_jumps, total_gate_warp_m = _best_leg(
+        origin_system_id,
+        destination_system_id,
+        db,
+        use_ansiblex=use_ansiblex,
+        route_mode=route_mode,
+    )
+    if not items:
+        return (10**9, float("inf"))
+    return (int(total_jumps), float(total_gate_warp_m))
 
 
 def _build_system_stop_map(hauling_colonies: list[dict]) -> dict[int, dict]:
@@ -599,7 +764,8 @@ def _build_route(
     db: Session,
     use_ansiblex: bool = True,
     return_to_origin: bool = False,
-) -> tuple[list[dict], int]:
+    route_mode: str = "jumps",
+) -> tuple[list[dict], int, float]:
     remaining = list(dict.fromkeys(int(system_id) for system_id in system_ids if system_id and int(system_id) != int(origin_system_id)))[:20]
     ordered: list[dict] = [{
         "system_id": int(origin_system_id),
@@ -614,31 +780,46 @@ def _build_route(
         "bridge_incoming": False,
         "bridge_outgoing": False,
         "is_return": False,
+        "gate_warp_distance_m": 0.0,
+        "gate_warp_distance_au": 0.0,
+        "gate_warp_distance_label": "",
     }]
     total_jumps = 0
+    total_gate_warp_m = 0.0
     current = int(origin_system_id)
     while remaining:
-        next_id = min(remaining, key=lambda candidate: _jump_count(current, candidate, db, use_ansiblex=use_ansiblex))
-        steps = _graph_steps(current, next_id, db, use_ansiblex=use_ansiblex)
-        if steps and steps[0].get("type") == "bridge":
+        next_id = min(
+            remaining,
+            key=lambda candidate: _route_score(current, candidate, db, use_ansiblex=use_ansiblex, route_mode=route_mode),
+        )
+        leg_items, jumps, gate_warp_m = _best_leg(current, next_id, db, use_ansiblex=use_ansiblex, route_mode=route_mode)
+        if not leg_items:
+            break
+        if leg_items[0].get("bridge_incoming"):
             ordered[-1]["bridge_outgoing"] = True
-            ordered[-1]["bridge_label"] = steps[0].get("bridge_label")
-        leg_items, jumps = _best_leg(current, next_id, db, use_ansiblex=use_ansiblex)
+            ordered[-1]["bridge_label"] = leg_items[0].get("bridge_label")
         total_jumps += jumps
+        total_gate_warp_m += gate_warp_m
         ordered.extend(leg_items)
         remaining.remove(next_id)
         current = next_id
     if return_to_origin and len(ordered) > 1 and current != int(origin_system_id):
-        steps = _graph_steps(current, int(origin_system_id), db, use_ansiblex=use_ansiblex)
-        if steps and steps[0].get("type") == "bridge":
+        leg_items, jumps, gate_warp_m = _best_leg(
+            current,
+            int(origin_system_id),
+            db,
+            use_ansiblex=use_ansiblex,
+            route_mode=route_mode,
+        )
+        if leg_items and leg_items[0].get("bridge_incoming"):
             ordered[-1]["bridge_outgoing"] = True
-            ordered[-1]["bridge_label"] = steps[0].get("bridge_label")
-        leg_items, jumps = _best_leg(current, int(origin_system_id), db, use_ansiblex=use_ansiblex)
+            ordered[-1]["bridge_label"] = leg_items[0].get("bridge_label")
         total_jumps += jumps
+        total_gate_warp_m += gate_warp_m
         if leg_items:
             leg_items[-1]["is_return"] = True
         ordered.extend(leg_items)
-    return ordered, total_jumps
+    return ordered, total_jumps, total_gate_warp_m
 
 
 def _resolve_selected_character(account, db: Session, character_id: int | None):
@@ -698,20 +879,23 @@ def hauling_page(
     hauling_colonies = _load_hauling_colonies(account, db, selected_character)
     hauling_pref = db.get(HaulingPreference, int(account.id))
     return_to_origin = bool(hauling_pref.return_to_start) if hauling_pref else False
+    route_mode = _route_mode_value(getattr(hauling_pref, "route_mode", "jumps"))
     system_stop_map = _build_system_stop_map(hauling_colonies)
 
     location = _get_cached_location(selected_character, db) if selected_character else None
     route_ordered: list[dict] = []
     route_total_jumps = 0
+    route_total_gate_warp_m = 0.0
     ansiblex_status = _ansiblex.status(ensure_loaded=True)
     if location and hauling_colonies:
         try:
-            route_ordered, route_total_jumps = _build_route(
+            route_ordered, route_total_jumps, route_total_gate_warp_m = _build_route(
                 int(location.get("solar_system_id") or 0),
                 [int(colony.get("solar_system_id") or 0) for colony in hauling_colonies if colony.get("solar_system_id")],
                 db,
                 use_ansiblex=True,
                 return_to_origin=return_to_origin,
+                route_mode=route_mode,
             )
             route_ordered = _apply_system_stop_map(route_ordered, system_stop_map)
             ansiblex_status = _ansiblex.status()
@@ -719,6 +903,7 @@ def hauling_page(
             logger.exception("hauling: failed to build initial route")
             route_ordered = []
             route_total_jumps = 0
+            route_total_gate_warp_m = 0.0
             ansiblex_status = _ansiblex.status()
 
     location_name = _system_name(int(location.get("solar_system_id"))) if location and location.get("solar_system_id") else None
@@ -734,11 +919,14 @@ def hauling_page(
         "selected_character_id": selected_character.id if selected_character else None,
         "selected_character_name": selected_character.character_name if selected_character else None,
         "return_to_origin": return_to_origin,
+        "route_mode": route_mode,
         "location": location,
         "location_name": location_name,
         "hauling_colonies": hauling_colonies,
         "route_ordered": route_ordered,
         "route_total_jumps": route_total_jumps,
+        "route_total_gate_warp_au": route_total_gate_warp_m / _AU_IN_METERS,
+        "route_total_gate_warp_label": _format_gate_distance_au(route_total_gate_warp_m / _AU_IN_METERS),
         "ansiblex_status": ansiblex_status,
         "dotlan_route_link": dotlan_route_link,
         "hauling_total_value": sum(float(colony.get("storage_value") or 0.0) for colony in hauling_colonies),
@@ -758,8 +946,13 @@ def save_hauling_preferences(
         pref = HaulingPreference(account_id=int(account.id))
         db.add(pref)
     pref.return_to_start = bool(payload.get("return_to_start", False))
+    pref.route_mode = _route_mode_value(payload.get("route_mode", getattr(pref, "route_mode", "jumps")))
     db.commit()
-    return JSONResponse({"ok": True, "return_to_start": bool(pref.return_to_start)})
+    return JSONResponse({
+        "ok": True,
+        "return_to_start": bool(pref.return_to_start),
+        "route_mode": pref.route_mode,
+    })
 
 
 @router.get("/api/location")
@@ -1003,6 +1196,7 @@ def get_route(
     system_ids = [int(system_id) for system_id in (payload.get("system_ids") or []) if system_id]
     use_ansiblex = bool(payload.get("use_ansiblex", True))
     return_to_origin = bool(payload.get("return_to_origin", False))
+    route_mode = _route_mode_value(payload.get("route_mode", "jumps"))
     character_id = int(payload.get("character_id") or 0) if payload.get("character_id") is not None else None
     if not origin_system_id or not system_ids:
         return JSONResponse({"ordered": [], "total_jumps": 0})
@@ -1011,12 +1205,13 @@ def get_route(
         selected_character = selected_character if character_id not in (None, -1) else None
         hauling_colonies = _load_hauling_colonies(account, db, selected_character)
         system_stop_map = _build_system_stop_map(hauling_colonies)
-        ordered, total_jumps = _build_route(
+        ordered, total_jumps, total_gate_warp_m = _build_route(
             origin_system_id,
             system_ids,
             db,
             use_ansiblex=use_ansiblex,
             return_to_origin=return_to_origin,
+            route_mode=route_mode,
         )
         ordered = _apply_system_stop_map(ordered, system_stop_map)
     except Exception:
@@ -1029,6 +1224,9 @@ def get_route(
     return JSONResponse({
         "ordered": ordered,
         "total_jumps": total_jumps,
+        "total_gate_warp_au": total_gate_warp_m / _AU_IN_METERS,
+        "total_gate_warp_label": _format_gate_distance_au(total_gate_warp_m / _AU_IN_METERS),
+        "route_mode": route_mode,
         "ansiblex_status": _ansiblex.status(),
         "dotlan_route_link": dotlan_route_link,
     })

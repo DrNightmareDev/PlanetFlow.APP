@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from app.config import get_settings
 from app.database import engine, SessionLocal
-from app.i18n import bootstrap_pi_type_translations, bootstrap_static_planets, bootstrap_translations
+from app.i18n import bootstrap_pi_type_translations, bootstrap_static_planets, bootstrap_static_stargates, bootstrap_translations
 from app.models import SSOState
 from app.page_access import get_access_settings_map, get_page_visibility, is_public_path, match_page_for_path
 from app.routers import auth, dashboard, admin, pi, market, system, planner, skyhook, colony_plan, pi_templates, hauling, killboard, intel, inventory
@@ -93,6 +93,9 @@ async def lifespan(app: FastAPI):
     inserted_static_planets = bootstrap_static_planets()
     if inserted_static_planets:
         logger.info("SDE: %s statische Planeten in DB gebootstrapped.", inserted_static_planets)
+    inserted_static_stargates = bootstrap_static_stargates()
+    if inserted_static_stargates:
+        logger.info("SDE: %s statische Stargates/Gate-Distanzen in DB gebootstrapped.", inserted_static_stargates)
 
     _fallback_cleanup_sso()
 

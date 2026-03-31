@@ -310,6 +310,104 @@ def bootstrap_static_planets() -> int:
     return inserted + updated
 
 
+def bootstrap_static_stargates() -> int:
+    try:
+        from sqlalchemy import inspect
+        from app.database import engine
+        if not inspect(engine).has_table("static_stargates") or not inspect(engine).has_table("system_gate_distances"):
+            return 0
+    except Exception:
+        return 0
+
+    from app import sde
+    from app.models import StaticStargate, SystemGateDistance
+
+    stargates = sde.get_static_stargates()
+    gate_distances = sde.get_system_gate_distances()
+    if not stargates and not gate_distances:
+        return 0
+
+    inserted = 0
+    updated = 0
+    with SessionLocal() as db:
+        existing_gates = {row.gate_id: row for row in db.query(StaticStargate).all()}
+        for gate_id, gate in stargates.items():
+            row = existing_gates.get(int(gate_id))
+            if row is None:
+                db.add(StaticStargate(
+                    gate_id=int(gate_id),
+                    system_id=int(gate.get("system_id") or 0),
+                    system_name=str(gate.get("system_name") or f"System {gate.get('system_id') or 0}"),
+                    gate_name=str(gate.get("gate_name") or f"Gate {gate_id}"),
+                    destination_system_id=int(gate.get("destination_system_id")) if gate.get("destination_system_id") else None,
+                    destination_system_name=gate.get("destination_system_name"),
+                    x=float(gate.get("x") or 0.0),
+                    y=float(gate.get("y") or 0.0),
+                    z=float(gate.get("z") or 0.0),
+                ))
+                inserted += 1
+                continue
+            changed = False
+            values = (
+                ("system_id", int(gate.get("system_id") or 0)),
+                ("system_name", str(gate.get("system_name") or f"System {gate.get('system_id') or 0}")),
+                ("gate_name", str(gate.get("gate_name") or f"Gate {gate_id}")),
+                ("destination_system_id", int(gate.get("destination_system_id")) if gate.get("destination_system_id") else None),
+                ("destination_system_name", gate.get("destination_system_name")),
+                ("x", float(gate.get("x") or 0.0)),
+                ("y", float(gate.get("y") or 0.0)),
+                ("z", float(gate.get("z") or 0.0)),
+            )
+            for attr, value in values:
+                if getattr(row, attr) != value:
+                    setattr(row, attr, value)
+                    changed = True
+            if changed:
+                updated += 1
+
+        existing_distances = {
+            (int(row.system_id), int(row.from_system_id), int(row.to_system_id)): row
+            for row in db.query(SystemGateDistance).all()
+        }
+        for key, distance in gate_distances.items():
+            row = existing_distances.get((int(key[0]), int(key[1]), int(key[2])))
+            if row is None:
+                db.add(SystemGateDistance(
+                    system_id=int(distance.get("system_id") or 0),
+                    system_name=str(distance.get("system_name") or f"System {distance.get('system_id') or 0}"),
+                    entry_gate_id=int(distance.get("entry_gate_id") or 0),
+                    exit_gate_id=int(distance.get("exit_gate_id") or 0),
+                    from_system_id=int(distance.get("from_system_id") or 0),
+                    to_system_id=int(distance.get("to_system_id") or 0),
+                    from_system_name=str(distance.get("from_system_name") or f"System {distance.get('from_system_id') or 0}"),
+                    to_system_name=str(distance.get("to_system_name") or f"System {distance.get('to_system_id') or 0}"),
+                    distance_m=float(distance.get("distance_m") or 0.0),
+                    distance_au=float(distance.get("distance_au") or 0.0),
+                ))
+                inserted += 1
+                continue
+            changed = False
+            values = (
+                ("system_name", str(distance.get("system_name") or f"System {distance.get('system_id') or 0}")),
+                ("entry_gate_id", int(distance.get("entry_gate_id") or 0)),
+                ("exit_gate_id", int(distance.get("exit_gate_id") or 0)),
+                ("from_system_name", str(distance.get("from_system_name") or f"System {distance.get('from_system_id') or 0}")),
+                ("to_system_name", str(distance.get("to_system_name") or f"System {distance.get('to_system_id') or 0}")),
+                ("distance_m", float(distance.get("distance_m") or 0.0)),
+                ("distance_au", float(distance.get("distance_au") or 0.0)),
+            )
+            for attr, value in values:
+                if getattr(row, attr) != value:
+                    setattr(row, attr, value)
+                    changed = True
+            if changed:
+                updated += 1
+
+        if inserted or updated:
+            db.commit()
+    return inserted + updated
+
+
 @pass_context
 def t(context, key: str, **params) -> str:
     request = context.get("request")

@@ -1,6 +1,6 @@
 from sqlalchemy import (
     BigInteger, Boolean, Column, DateTime, ForeignKey,
-    Index, Integer, String, Text, UniqueConstraint, func
+    Float, Index, Integer, String, Text, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -171,6 +171,7 @@ class HaulingPreference(Base):
 
     account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
     return_to_start = Column(Boolean, nullable=False, default=False, server_default="false")
+    route_mode = Column(String(20), nullable=False, default="jumps", server_default="jumps")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
@@ -361,6 +362,47 @@ class StaticPlanet(Base):
     planet_name = Column(String(255), nullable=False)
     planet_number = Column(String(16), nullable=True)
     radius = Column(BigInteger, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class StaticStargate(Base):
+    __tablename__ = "static_stargates"
+    __table_args__ = (
+        Index("ix_static_stargates_system_dest", "system_id", "destination_system_id"),
+    )
+
+    gate_id = Column(BigInteger, primary_key=True, index=True)
+    system_id = Column(BigInteger, nullable=False, index=True)
+    system_name = Column(String(255), nullable=False)
+    gate_name = Column(String(255), nullable=False)
+    destination_system_id = Column(BigInteger, nullable=True, index=True)
+    destination_system_name = Column(String(255), nullable=True)
+    x = Column(Float, nullable=False)
+    y = Column(Float, nullable=False)
+    z = Column(Float, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class SystemGateDistance(Base):
+    __tablename__ = "system_gate_distances"
+    __table_args__ = (
+        UniqueConstraint("system_id", "from_system_id", "to_system_id", name="uq_system_gate_distances_triplet"),
+        Index("ix_system_gate_distances_system", "system_id"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    system_id = Column(BigInteger, nullable=False, index=True)
+    system_name = Column(String(255), nullable=False)
+    entry_gate_id = Column(BigInteger, nullable=False, index=True)
+    exit_gate_id = Column(BigInteger, nullable=False, index=True)
+    from_system_id = Column(BigInteger, nullable=False, index=True)
+    to_system_id = Column(BigInteger, nullable=False, index=True)
+    from_system_name = Column(String(255), nullable=False)
+    to_system_name = Column(String(255), nullable=False)
+    distance_m = Column(Float, nullable=False)
+    distance_au = Column(Float, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

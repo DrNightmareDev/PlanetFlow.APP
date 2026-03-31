@@ -645,10 +645,27 @@ def zkill_websocket_subscriber(self):
             return None
 
     def _store_kill(payload: dict):
-        killmail_id = int(payload.get("killmail_id") or payload.get("killID") or 0)
-        system_id = int(payload.get("solar_system_id") or 0)
-        kill_time = str(payload.get("killmail_time") or "")
+        esi_payload = payload.get("esi") if isinstance(payload.get("esi"), dict) else None
+        kill_payload = dict(esi_payload or payload or {})
+        if payload.get("killmail_id") and not kill_payload.get("killmail_id"):
+            kill_payload["killmail_id"] = payload.get("killmail_id")
+        if payload.get("hash") and not kill_payload.get("hash"):
+            kill_payload["hash"] = payload.get("hash")
+        if payload.get("zkb") and not kill_payload.get("zkb"):
+            kill_payload["zkb"] = payload.get("zkb")
+        if payload.get("sequence_id") and not kill_payload.get("sequence_id"):
+            kill_payload["sequence_id"] = payload.get("sequence_id")
+        if payload.get("uploaded_at") and not kill_payload.get("uploaded_at"):
+            kill_payload["uploaded_at"] = payload.get("uploaded_at")
+
+        killmail_id = int(kill_payload.get("killmail_id") or kill_payload.get("killID") or 0)
+        system_id = int(kill_payload.get("solar_system_id") or 0)
+        kill_time = str(kill_payload.get("killmail_time") or "")
         if not killmail_id or not system_id or not kill_time:
+            logger.warning(
+                "intel_live: skipping R2Z2 payload without required fields (keys=%s)",
+                sorted(list(payload.keys()))[:20] if isinstance(payload, dict) else type(payload).__name__,
+            )
             return
 
         system_info = sde.get_system_local(system_id) or {}
@@ -656,7 +673,7 @@ def zkill_websocket_subscriber(self):
         if not region_id:
             return
 
-        normalized = normalize_kill(payload, system_name=system_info.get("name"), name_map={})
+        normalized = normalize_kill(kill_payload, system_name=system_info.get("name"), name_map={})
         normalized_json = json.dumps(normalized)
         now_utc = datetime.now(timezone.utc)
 

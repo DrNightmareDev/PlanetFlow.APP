@@ -8,7 +8,7 @@ import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -394,6 +394,13 @@ def intel_map(
         "can_view_debug": can_view_debug,
         "intel_debug": _intel_debug_info(db) if can_view_debug else None,
     })
+
+
+@router.get("/debug")
+def intel_debug(account=Depends(require_account), db: Session = Depends(get_db)):
+    if not (getattr(account, "is_owner", False) or getattr(account, "is_admin", False)):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return JSONResponse(_intel_debug_info(db))
 
 
 @router.post("/preferences")

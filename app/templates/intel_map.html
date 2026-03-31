@@ -103,39 +103,46 @@
 
     {% if can_view_debug and intel_debug %}
     <section class="intel-panel intel-debug-panel">
-        <div class="intel-panel-title">Intel Debug</div>
+        <div class="intel-debug-header">
+            <div class="intel-panel-title">Intel Debug</div>
+            <button type="button" class="btn btn-sm eve-btn-ghost" id="intelDebugRefresh">Update</button>
+        </div>
         <div class="intel-debug-grid">
             <div class="intel-debug-item">
                 <div class="intel-debug-label">Stream</div>
-                <div class="intel-debug-value">{{ intel_debug.stream_key }}</div>
+                <div class="intel-debug-value" id="intelDebugStream">{{ intel_debug.stream_key }}</div>
             </div>
             <div class="intel-debug-item">
                 <div class="intel-debug-label">Last Sequence</div>
-                <div class="intel-debug-value">{{ intel_debug.last_sequence_id or 'n/a' }}</div>
+                <div class="intel-debug-value" id="intelDebugSequence">{{ intel_debug.last_sequence_id or 'n/a' }}</div>
             </div>
             <div class="intel-debug-item">
                 <div class="intel-debug-label">Last Success</div>
-                <div class="intel-debug-value">{{ intel_debug.last_success_at or 'n/a' }}</div>
+                <div class="intel-debug-value" id="intelDebugSuccess">{{ intel_debug.last_success_at or 'n/a' }}</div>
             </div>
             <div class="intel-debug-item">
                 <div class="intel-debug-label">Latest Event Age</div>
-                <div class="intel-debug-value">{{ intel_debug.latest_event_age_seconds if intel_debug.latest_event_age_seconds is not none else 'n/a' }}</div>
+                <div class="intel-debug-value" id="intelDebugEventAge">{{ intel_debug.latest_event_age_seconds if intel_debug.latest_event_age_seconds is not none else 'n/a' }}</div>
             </div>
             <div class="intel-debug-item">
                 <div class="intel-debug-label">Events 5m</div>
-                <div class="intel-debug-value">{{ intel_debug.recent_events_5m }}</div>
+                <div class="intel-debug-value" id="intelDebugEvents5m">{{ intel_debug.recent_events_5m }}</div>
             </div>
             <div class="intel-debug-item">
                 <div class="intel-debug-label">Events 15m</div>
-                <div class="intel-debug-value">{{ intel_debug.recent_events_15m }}</div>
+                <div class="intel-debug-value" id="intelDebugEvents15m">{{ intel_debug.recent_events_15m }}</div>
             </div>
             <div class="intel-debug-item">
                 <div class="intel-debug-label">Total Events</div>
-                <div class="intel-debug-value">{{ intel_debug.total_events }}</div>
+                <div class="intel-debug-value" id="intelDebugTotalEvents">{{ intel_debug.total_events }}</div>
+            </div>
+            <div class="intel-debug-item">
+                <div class="intel-debug-label">Updated</div>
+                <div class="intel-debug-value" id="intelDebugUpdated">{{ intel_debug.updated_at or 'n/a' }}</div>
             </div>
             <div class="intel-debug-item intel-debug-item-wide">
                 <div class="intel-debug-label">Last Error</div>
-                <div class="intel-debug-value">{{ intel_debug.last_error or 'none' }}</div>
+                <div class="intel-debug-value" id="intelDebugError">{{ intel_debug.last_error or 'none' }}</div>
             </div>
         </div>
     </section>
@@ -303,6 +310,30 @@ function renderWsStatus(status, lastKillAgo) {
         return;
     }
     node.textContent = 'Feed idle';
+}
+
+function formatDebugTimestamp(value) {
+    if (!value) return 'n/a';
+    return String(value);
+}
+
+async function refreshIntelDebug() {
+    const refreshButton = document.getElementById('intelDebugRefresh');
+    if (!refreshButton) return;
+    try {
+        const response = await fetch('/intel/debug', { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+        if (!response.ok) return;
+        const payload = await response.json();
+        document.getElementById('intelDebugStream').textContent = payload.stream_key || 'r2z2';
+        document.getElementById('intelDebugSequence').textContent = payload.last_sequence_id ?? 'n/a';
+        document.getElementById('intelDebugSuccess').textContent = formatDebugTimestamp(payload.last_success_at);
+        document.getElementById('intelDebugEventAge').textContent = payload.latest_event_age_seconds ?? 'n/a';
+        document.getElementById('intelDebugEvents5m').textContent = payload.recent_events_5m ?? 0;
+        document.getElementById('intelDebugEvents15m').textContent = payload.recent_events_15m ?? 0;
+        document.getElementById('intelDebugTotalEvents').textContent = payload.total_events ?? 0;
+        document.getElementById('intelDebugUpdated').textContent = formatDebugTimestamp(payload.updated_at);
+        document.getElementById('intelDebugError').textContent = payload.last_error || 'none';
+    } catch {}
 }
 
 function syncQueryParams() {
@@ -698,6 +729,9 @@ if (document.getElementById('intelForceRefresh')) {
         await refreshIntel(true, { showLoading: true });
     });
 }
+if (document.getElementById('intelDebugRefresh')) {
+    document.getElementById('intelDebugRefresh').addEventListener('click', refreshIntelDebug);
+}
 document.getElementById('intelZoomIn').addEventListener('click', () => zoom(0.8));
 document.getElementById('intelZoomOut').addEventListener('click', () => zoom(1.25));
 document.getElementById('intelZoomReset').addEventListener('click', resetZoom);
@@ -735,6 +769,9 @@ if (intelState.region.systems[0]?.id) {
 if (intelState.trackedCharacterId) jumpToTrackedCharacter(Boolean(intelState.followCharacter));
 startSse();
 setInterval(() => refreshIntel(false, { showLoading: false }), 20000);
+if (document.getElementById('intelDebugRefresh')) {
+    setInterval(refreshIntelDebug, 1000);
+}
 </script>
 <style>
 .intel-shell { display:grid; gap:1.5rem; }
@@ -802,6 +839,7 @@ setInterval(() => refreshIntel(false, { showLoading: false }), 20000);
 .intel-feed-line { display:flex; justify-content:space-between; gap:.6rem; font-size:.82rem; align-items:center; }
 .intel-feed-line-secondary { color:var(--eve-text-muted); font-size:.74rem; }
 .intel-debug-panel { padding:1rem 1.1rem; }
+.intel-debug-header { display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin-bottom:.8rem; }
 .intel-debug-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:.8rem; }
 .intel-debug-item { border:1px solid rgba(255,255,255,.05); border-radius:.85rem; background:rgba(255,255,255,.02); padding:.7rem .8rem; }
 .intel-debug-item-wide { grid-column:1 / -1; }

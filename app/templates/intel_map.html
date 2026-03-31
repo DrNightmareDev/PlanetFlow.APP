@@ -105,7 +105,10 @@
     <section class="intel-panel intel-debug-panel">
         <div class="intel-debug-header">
             <div class="intel-panel-title">Intel Debug</div>
-            <button type="button" class="btn btn-sm eve-btn-ghost" id="intelDebugRefresh">Update</button>
+            <div class="intel-debug-actions">
+                <span class="intel-debug-refresh-state" id="intelDebugRefreshState">Idle</span>
+                <button type="button" class="btn btn-sm eve-btn-ghost" id="intelDebugRefresh">Update</button>
+            </div>
         </div>
         <div class="intel-debug-grid">
             <div class="intel-debug-item">
@@ -317,12 +320,24 @@ function formatDebugTimestamp(value) {
     return String(value);
 }
 
+function setIntelDebugRefreshState(text, state = 'idle') {
+    const node = document.getElementById('intelDebugRefreshState');
+    if (!node) return;
+    node.textContent = text;
+    node.className = `intel-debug-refresh-state is-${state}`;
+}
+
 async function refreshIntelDebug() {
     const refreshButton = document.getElementById('intelDebugRefresh');
     if (!refreshButton) return;
+    refreshButton.disabled = true;
+    setIntelDebugRefreshState('Updating...', 'loading');
     try {
         const response = await fetch('/intel/debug', { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
-        if (!response.ok) return;
+        if (!response.ok) {
+            setIntelDebugRefreshState(`HTTP ${response.status}`, 'error');
+            return;
+        }
         const payload = await response.json();
         document.getElementById('intelDebugStream').textContent = payload.stream_key || 'r2z2';
         document.getElementById('intelDebugSequence').textContent = payload.last_sequence_id ?? 'n/a';
@@ -333,7 +348,12 @@ async function refreshIntelDebug() {
         document.getElementById('intelDebugTotalEvents').textContent = payload.total_events ?? 0;
         document.getElementById('intelDebugUpdated').textContent = formatDebugTimestamp(payload.updated_at);
         document.getElementById('intelDebugError').textContent = payload.last_error || 'none';
-    } catch {}
+        setIntelDebugRefreshState(`Updated ${new Date().toLocaleTimeString()}`, 'ok');
+    } catch {
+        setIntelDebugRefreshState('Refresh failed', 'error');
+    } finally {
+        refreshButton.disabled = false;
+    }
 }
 
 function syncQueryParams() {
@@ -840,6 +860,11 @@ if (document.getElementById('intelDebugRefresh')) {
 .intel-feed-line-secondary { color:var(--eve-text-muted); font-size:.74rem; }
 .intel-debug-panel { padding:1rem 1.1rem; }
 .intel-debug-header { display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin-bottom:.8rem; }
+.intel-debug-actions { display:flex; align-items:center; gap:.55rem; }
+.intel-debug-refresh-state { font-size:.76rem; color:var(--eve-text-muted); padding:.18rem .55rem; border-radius:999px; border:1px solid rgba(255,255,255,.06); background:rgba(255,255,255,.03); }
+.intel-debug-refresh-state.is-loading { color:#8fdfff; border-color:rgba(0,180,216,.34); background:rgba(0,180,216,.08); }
+.intel-debug-refresh-state.is-ok { color:#9fe7b0; border-color:rgba(80,200,120,.25); background:rgba(80,200,120,.08); }
+.intel-debug-refresh-state.is-error { color:#ff9f9f; border-color:rgba(220,70,70,.3); background:rgba(220,70,70,.1); }
 .intel-debug-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:.8rem; }
 .intel-debug-item { border:1px solid rgba(255,255,255,.05); border-radius:.85rem; background:rgba(255,255,255,.02); padding:.7rem .8rem; }
 .intel-debug-item-wide { grid-column:1 / -1; }

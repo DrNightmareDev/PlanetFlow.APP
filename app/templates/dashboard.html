@@ -793,7 +793,7 @@ function toggleDashboardFlag(flagName) {
 // -- Daten für Colony-Detail-Modal ---------------------------------------------
 const COLONY_META = [
 {% for colony in colonies %}
-  {"name": {{ colony.planet_name | tojson }}, "type": {{ colony.planet_type | tojson }}, "char": {{ colony.character_name | tojson }}, "color": {{ colony.color | tojson }}},
+  {"name": {{ (colony.planet_name | default('Unknown planet', true)) | tojson }}, "type": {{ (colony.planet_type | default('Unknown', true)) | tojson }}, "char": {{ (colony.character_name | default('Unknown character', true)) | tojson }}, "color": {{ (colony.color | default('#586e75', true)) | tojson }}},
 {% endfor %}
 ];
 const COLONY_FACTORIES = [

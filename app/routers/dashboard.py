@@ -528,6 +528,28 @@ def _cached_vacation_colonies(account_id: int, characters: list[Character], db: 
     return result
 
 
+def _normalize_dashboard_colony(colony: dict) -> dict:
+    item = dict(colony or {})
+    planet_type = item.get("planet_type") or "Unknown"
+    item["planet_type"] = planet_type
+    planet_name = item.get("planet_name")
+    if not planet_name:
+        planet_id = item.get("planet_id")
+        planet_name = f"Planet {planet_id}" if planet_id else "Unknown planet"
+    item["planet_name"] = planet_name
+    item["character_name"] = item.get("character_name") or "Unknown character"
+    item["color"] = item.get("color") or PLANET_TYPE_COLORS.get(planet_type, "#586e75")
+    item["factories"] = item.get("factories") or []
+    item["storage"] = item.get("storage") or []
+    item["extractor_status"] = item.get("extractor_status") or {}
+    if "extractor_balance" not in item:
+        item["extractor_balance"] = None
+    if "extractor_rate_summary" not in item:
+        item["extractor_rate_summary"] = None
+    item["missing_inputs"] = item.get("missing_inputs") or []
+    return item
+
+
 def _compute_missing_inputs(pins: list) -> list[dict]:
     """Materialien die täglich importiert werden müssen (nicht lokal produziert)."""
     from app.sde import get_type_name
@@ -1141,7 +1163,7 @@ def dashboard(
 
     if db_cached:
         cache_age = now - db_cached["fetched_at"]
-        colonies = db_cached["colonies"]
+        colonies = [_normalize_dashboard_colony(colony) for colony in (db_cached["colonies"] or [])]
         meta = db_cached["meta"]
 
         needs_balance_refresh = any(

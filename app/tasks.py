@@ -54,7 +54,7 @@ def _refresh_character_data(char, db) -> dict | None:
         _compute_colony_productions, _get_colony_expiry,
         _compute_extractor_rate_summary, _compute_extractor_balance,
         _compute_factories, _compute_storage,
-        _compute_missing_inputs, _get_extractor_status,
+        _compute_missing_inputs, _get_extractor_status, _check_factory_stall,
     )
 
     token = ensure_valid_token(char, db)
@@ -147,6 +147,8 @@ def _refresh_character_data(char, db) -> dict | None:
         if expiry_time:
             delta = (expiry_time - now).total_seconds() / 3600.0
             expiry_hours = round(delta, 2)
+        is_stalled = _check_factory_stall(pins) if expiry_time is None else None
+        is_active = (expiry_hours is not None and expiry_hours > 0) if expiry_time is not None else (is_stalled is False)
 
         planet_id = colony.get("planet_id")
         planet_type = colony.get("planet_type", "unknown").capitalize()
@@ -164,6 +166,9 @@ def _refresh_character_data(char, db) -> dict | None:
             "prod_tiers": prod_tiers,
             "expiry_hours": expiry_hours,
             "expiry_time": expiry_time.isoformat() if expiry_time else None,
+            "expiry_iso": expiry_time.isoformat() if expiry_time else None,
+            "is_stalled": is_stalled,
+            "is_active": is_active,
             "pins": pins,
             "extractor_status": _get_extractor_status(pins),
             "extractor_balance": _compute_extractor_balance(pins),

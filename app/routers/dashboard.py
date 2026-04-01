@@ -779,6 +779,40 @@ def _get_colony_expiry(pins: list) -> datetime | None:
     return expiry
 
 
+def _get_storage_inventory(pins: list) -> dict[int, float]:
+    inventory: dict[int, float] = {}
+    for pin in pins:
+        if pin.get("type_id") not in _STORAGE_TYPE_IDS:
+            continue
+        for item in (pin.get("contents") or []):
+            type_id = item.get("type_id")
+            if type_id is None:
+                continue
+            type_id = int(type_id)
+            inventory[type_id] = inventory.get(type_id, 0.0) + float(item.get("amount") or 0.0)
+    return inventory
+
+
+def _storage_can_feed_schematic(pins: list, schematic_id: int) -> bool:
+    try:
+        schematic = get_schematic(int(schematic_id))
+    except Exception:
+        return False
+
+    inputs = schematic.get("input_type_ids") or {}
+    if not inputs:
+        return False
+
+    inventory = _get_storage_inventory(pins)
+    for type_id, qty in inputs.items():
+        required_qty = float(qty or 0.0)
+        if required_qty <= 0:
+            continue
+        if float(inventory.get(int(type_id), 0.0)) < required_qty:
+            return False
+    return True
+
+
 def _check_factory_stall(pins: list) -> bool | None:
     """Für factory-only Planeten (keine Extractors): prüft ob höchste-Tier Fabriken laufen.
     Returns True = stalled, False = läuft, None = kein reiner Factory-Planet."""
@@ -788,7 +822,7 @@ def _check_factory_stall(pins: list) -> bool | None:
         return None
 
     now = datetime.now(timezone.utc)
-    factory_pins: list[tuple[dict, int, int]] = []  # (pin, tier_num, cycle_time)
+    factory_pins: list[tuple[dict, int, int, int]] = []  # (pin, tier_num, cycle_time, schematic_id)
     for pin in pins:
         factory = pin.get("factory_details") or {}
         schematic_id = factory.get("schematic_id") or pin.get("schematic_id")
@@ -802,29 +836,32 @@ def _check_factory_stall(pins: list) -> bool | None:
         if not cycle_time:
             continue
         tier_num = _tier_from_schematic(schematic)
-        factory_pins.append((pin, tier_num, cycle_time))
+        factory_pins.append((pin, tier_num, cycle_time, int(schematic_id)))
 
     if not factory_pins:
         return None  # keine konfigurierten Fabriken
 
-    max_tier = max(t for _, t, _ in factory_pins)
-    stalled = False
-    for pin, tier, cycle_time in factory_pins:
+    max_tier = max(t for _, t, _, _ in factory_pins)
+    stale_schematics: list[int] = []
+    for pin, tier, cycle_time, schematic_id in factory_pins:
         if tier != max_tier:
             continue
         last_start_str = pin.get("last_cycle_start", "")
         if not last_start_str:
-            stalled = True
+            stale_schematics.append(schematic_id)
             continue
         last_start = _parse_expiry(last_start_str)
         if last_start is None:
-            stalled = True
+            stale_schematics.append(schematic_id)
             continue
-        from datetime import timedelta
         cycle_end = last_start + timedelta(seconds=cycle_time)
-        if cycle_end <= now:
-            stalled = True
-    return stalled
+        if cycle_end > now:
+            return False
+        stale_schematics.append(schematic_id)
+
+    if any(_storage_can_feed_schematic(pins, schematic_id) for schematic_id in stale_schematics):
+        return False
+    return True
 
 
 def _compute_factories(pins: list, prices: dict) -> list:

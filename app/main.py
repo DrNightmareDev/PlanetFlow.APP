@@ -147,6 +147,9 @@ async def impersonate_middleware(request: Request, call_next):
     if is_public_path(path):
         return await call_next(request)
 
+    if path == "/manager/impersonate-exit" and request.state.is_impersonating:
+        return await call_next(request)
+
     db = SessionLocal()
     try:
         account_id = session.get("account_id") if session else None

@@ -470,3 +470,310 @@ def admin_reload_account(
     except Exception as e:
         _logger.exception("admin_reload_account %s failed", target_account_id)
         return JSONResponse({"ok": False, "error": "Laden fehlgeschlagen"}, status_code=500)
+
+
+# ── Admin Billing ─────────────────────────────────────────────────────────────
+
+@router.get("/billing", response_class=HTMLResponse)
+def admin_billing(
+    request: Request,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from app.models import (
+        BillingAuditLog, BillingBonusCode, BillingGrant,
+        BillingPricingTier, BillingSubscriptionPlan, BillingWalletReceiver,
+        BillingTransactionMatch, BillingWalletTransaction,
+    )
+    plans = db.query(BillingSubscriptionPlan).order_by(BillingSubscriptionPlan.id).all()
+    tiers = db.query(BillingPricingTier).order_by(BillingPricingTier.scope, BillingPricingTier.min_members).all()
+    receivers = db.query(BillingWalletReceiver).order_by(BillingWalletReceiver.id).all()
+    codes = db.query(BillingBonusCode).order_by(BillingBonusCode.created_at.desc()).limit(50).all()
+    grants = (
+        db.query(BillingGrant, Account)
+        .join(Account, Account.id == BillingGrant.account_id)
+        .order_by(BillingGrant.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    unmatched_txs = (
+        db.query(BillingTransactionMatch, BillingWalletTransaction)
+        .join(BillingWalletTransaction, BillingWalletTransaction.id == BillingTransactionMatch.transaction_id)
+        .filter(BillingTransactionMatch.match_status == "unmatched")
+        .order_by(BillingWalletTransaction.occurred_at.desc())
+        .limit(20)
+        .all()
+    )
+    audit_rows = (
+        db.query(BillingAuditLog)
+        .order_by(BillingAuditLog.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    all_accounts = db.query(Account).order_by(Account.id).all()
+    return templates.TemplateResponse("admin/billing.html", {
+        "request": request,
+        "account": account,
+        "plans": plans,
+        "tiers": tiers,
+        "receivers": receivers,
+        "codes": codes,
+        "grants": grants,
+        "unmatched_txs": unmatched_txs,
+        "audit_rows": audit_rows,
+        "all_accounts": all_accounts,
+    })
+
+
+@router.post("/billing/plan/save", response_class=HTMLResponse)
+def admin_billing_plan_save(
+    request: Request,
+    scope: str = Form(...),
+    display_name: str = Form(...),
+    daily_price_isk: int = Form(...),
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from app.models import BillingSubscriptionPlan
+    from app.session import add_flash
+    plan = db.query(BillingSubscriptionPlan).filter(BillingSubscriptionPlan.scope == scope).first()
+    if plan:
+        plan.display_name = display_name
+        plan.daily_price_isk = daily_price_isk
+    else:
+        db.add(BillingSubscriptionPlan(
+            key=scope,
+            scope=scope,
+            display_name=display_name,
+            daily_price_isk=daily_price_isk,
+        ))
+    db.commit()
+    add_flash(request, f"Plan '{scope}' gespeichert.", "success")
+    return RedirectResponse(url="/manager/billing", status_code=303)
+
+
+@router.post("/billing/tier/save", response_class=HTMLResponse)
+def admin_billing_tier_save(
+    request: Request,
+    scope: str = Form(...),
+    min_members: int = Form(...),
+    max_members: int | None = Form(None),
+    daily_price_isk: int = Form(...),
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from app.models import BillingPricingTier
+    from app.session import add_flash
+    tier = db.query(BillingPricingTier).filter(
+        BillingPricingTier.scope == scope,
+        BillingPricingTier.min_members == min_members,
+    ).first()
+    if tier:
+        tier.max_members = max_members
+        tier.daily_price_isk = daily_price_isk
+    else:
+        db.add(BillingPricingTier(
+            scope=scope,
+            min_members=min_members,
+            max_members=max_members,
+            daily_price_isk=daily_price_isk,
+        ))
+    db.commit()
+    add_flash(request, "Preisstufe gespeichert.", "success")
+    return RedirectResponse(url="/manager/billing", status_code=303)
+
+
+@router.post("/billing/tier/delete/{tier_id}", response_class=HTMLResponse)
+def admin_billing_tier_delete(
+    request: Request,
+    tier_id: int,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from app.models import BillingPricingTier
+    from app.session import add_flash
+    tier = db.get(BillingPricingTier, tier_id)
+    if tier:
+        db.delete(tier)
+        db.commit()
+    add_flash(request, "Preisstufe gelöscht.", "success")
+    return RedirectResponse(url="/manager/billing", status_code=303)
+
+
+@router.post("/billing/receiver/save", response_class=HTMLResponse)
+def admin_billing_receiver_save(
+    request: Request,
+    eve_character_id: int = Form(...),
+    character_name: str = Form(...),
+    notes: str = Form(""),
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from app.models import BillingWalletReceiver
+    from app.session import add_flash
+    existing = db.query(BillingWalletReceiver).filter(
+        BillingWalletReceiver.eve_character_id == eve_character_id
+    ).first()
+    if existing:
+        existing.character_name = character_name
+        existing.notes = notes or None
+        existing.is_active = True
+    else:
+        db.add(BillingWalletReceiver(
+            eve_character_id=eve_character_id,
+            character_name=character_name,
+            notes=notes or None,
+        ))
+    db.commit()
+    add_flash(request, f"Empfänger '{character_name}' gespeichert.", "success")
+    return RedirectResponse(url="/manager/billing", status_code=303)
+
+
+@router.post("/billing/receiver/toggle/{receiver_id}", response_class=HTMLResponse)
+def admin_billing_receiver_toggle(
+    request: Request,
+    receiver_id: int,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from app.models import BillingWalletReceiver
+    from app.session import add_flash
+    rec = db.get(BillingWalletReceiver, receiver_id)
+    if rec:
+        rec.is_active = not rec.is_active
+        db.commit()
+        add_flash(request, f"Empfänger {'aktiviert' if rec.is_active else 'deaktiviert'}.", "success")
+    return RedirectResponse(url="/manager/billing", status_code=303)
+
+
+@router.post("/billing/grant/create", response_class=HTMLResponse)
+def admin_billing_grant_create(
+    request: Request,
+    target_account_id: int = Form(...),
+    scope_type: str = Form("global"),
+    scope_key: str = Form(""),
+    expires_days: int | None = Form(None),
+    note: str = Form(""),
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from datetime import timedelta
+    from app.services.billing import create_grant
+    from app.session import add_flash
+    expires_at = None
+    if expires_days and expires_days > 0:
+        from datetime import UTC, datetime
+        expires_at = datetime.now(UTC) + timedelta(days=expires_days)
+    create_grant(
+        db,
+        account_id=target_account_id,
+        scope_type=scope_type,
+        scope_key=scope_key or None,
+        expires_at=expires_at,
+        granted_by_account_id=account.id,
+        note=note,
+    )
+    db.commit()
+    add_flash(request, "Grant erstellt.", "success")
+    return RedirectResponse(url="/manager/billing", status_code=303)
+
+
+@router.post("/billing/grant/revoke/{grant_id}", response_class=HTMLResponse)
+def admin_billing_grant_revoke(
+    request: Request,
+    grant_id: int,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from app.models import BillingGrant
+    from app.services.billing import revoke_grant
+    from app.session import add_flash
+    grant = db.get(BillingGrant, grant_id)
+    if grant:
+        revoke_grant(db, grant=grant, actor_account_id=account.id)
+        db.commit()
+        add_flash(request, "Grant widerrufen.", "success")
+    return RedirectResponse(url="/manager/billing", status_code=303)
+
+
+@router.post("/billing/code/create", response_class=HTMLResponse)
+def admin_billing_code_create(
+    request: Request,
+    code: str = Form(...),
+    reward_type: str = Form(...),
+    reward_value: str = Form(...),
+    max_redemptions: int | None = Form(None),
+    expires_days: int | None = Form(None),
+    note: str = Form(""),
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from datetime import UTC, datetime, timedelta
+    from app.models import BillingBonusCode
+    from app.session import add_flash
+    existing = db.query(BillingBonusCode).filter(
+        BillingBonusCode.code == code.upper().strip()
+    ).first()
+    if existing:
+        add_flash(request, f"Code '{code}' existiert bereits.", "error")
+        return RedirectResponse(url="/manager/billing", status_code=303)
+    expires_at = None
+    if expires_days and expires_days > 0:
+        expires_at = datetime.now(UTC) + timedelta(days=expires_days)
+    db.add(BillingBonusCode(
+        code=code.upper().strip(),
+        reward_type=reward_type,
+        reward_value=reward_value,
+        max_redemptions=max_redemptions or None,
+        expires_at=expires_at,
+        created_by_account_id=account.id,
+        note=note or None,
+    ))
+    db.commit()
+    add_flash(request, f"Code '{code.upper().strip()}' erstellt.", "success")
+    return RedirectResponse(url="/manager/billing", status_code=303)
+
+
+@router.post("/billing/code/toggle/{code_id}", response_class=HTMLResponse)
+def admin_billing_code_toggle(
+    request: Request,
+    code_id: int,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from app.models import BillingBonusCode
+    from app.session import add_flash
+    code = db.get(BillingBonusCode, code_id)
+    if code:
+        code.is_active = not code.is_active
+        db.commit()
+        add_flash(request, f"Code {'aktiviert' if code.is_active else 'deaktiviert'}.", "success")
+    return RedirectResponse(url="/manager/billing", status_code=303)
+
+
+@router.post("/billing/subscription/grant", response_class=HTMLResponse)
+def admin_billing_subscription_grant(
+    request: Request,
+    target_account_id: int = Form(...),
+    subject_type: str = Form("account"),
+    days: int = Form(...),
+    note: str = Form(""),
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from decimal import Decimal
+    from app.services.billing import extend_subscription
+    from app.session import add_flash
+    extend_subscription(
+        db,
+        subject_type=subject_type,
+        subject_id=target_account_id,
+        plan_id=None,
+        days=Decimal(days),
+        source_type="manual_grant",
+        note=note or f"Manual grant by admin {account.id}",
+        actor_account_id=account.id,
+    )
+    db.commit()
+    add_flash(request, f"{days} Tage Subscription für Account {target_account_id} vergeben.", "success")
+    return RedirectResponse(url="/manager/billing", status_code=303)

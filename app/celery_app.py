@@ -47,5 +47,19 @@ celery_app.conf.update(
             "task": "app.tasks.send_webhook_alerts_task",
             "schedule": 900.0,
         },
+        # Billing: wallet sync + matching every 3 minutes
+        "sync-billing-wallets": {
+            "task": "app.tasks.sync_billing_wallets",
+            "schedule": 180.0,
+        },
+        "match-billing-transactions": {
+            "task": "app.tasks.match_billing_transactions",
+            "schedule": 180.0,
+        },
+        # Entitlement cache recompute every 5 minutes
+        "recompute-entitlements": {
+            "task": "app.tasks.recompute_entitlements",
+            "schedule": 300.0,
+        },
     },
 )

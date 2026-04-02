@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% block title %}Billing Admin — {{ t('app.name') }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <h2 class="mb-4"><i class="bi bi-currency-exchange me-2"></i>Billing Administration</h2>
+
+  {% for msg in get_flashes(request) %}
+    <div class="alert alert-{{ msg.type }} alert-dismissible fade show" role="alert">
+      {{ msg.text }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  {% endfor %}
+
+  <div class="row g-4">
+
+    {# ── Wallet Receivers ─────────────────────────────────────────────────── #}
+    <div class="col-12 col-xl-6">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">ISK-Empfänger</div>
+        <div class="card-body">
+          <table class="table table-sm mb-3">
+            <thead><tr><th>Charakter</th><th>ID</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+            {% for r in receivers %}
+              <tr>
+                <td>{{ r.character_name }}</td>
+                <td class="text-muted small">{{ r.eve_character_id }}</td>
+                <td><span class="badge {{ 'bg-success' if r.is_active else 'bg-secondary' }}">{{ 'Aktiv' if r.is_active else 'Inaktiv' }}</span></td>
+                <td>
+                  <form method="post" action="/manager/billing/receiver/toggle/{{ r.id }}" class="d-inline">
+                    <button class="btn btn-xs btn-outline-secondary py-0 px-1">Toggle</button>
+                  </form>
+                </td>
+              </tr>
+            {% else %}
+              <tr><td colspan="4" class="text-muted">Kein Empfänger konfiguriert.</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          <form method="post" action="/manager/billing/receiver/save" class="row g-2">
+            <div class="col-auto"><input type="number" name="eve_character_id" class="form-control form-control-sm" placeholder="EVE Char ID" required></div>
+            <div class="col-auto"><input type="text" name="character_name" class="form-control form-control-sm" placeholder="Name" required></div>
+            <div class="col-auto"><input type="text" name="notes" class="form-control form-control-sm" placeholder="Notiz"></div>
+            <div class="col-auto"><button class="btn btn-sm btn-primary">Hinzufügen</button></div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    {# ── Subscription Plans ────────────────────────────────────────────────── #}
+    <div class="col-12 col-xl-6">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">Subscription-Pläne (Basispreis ISK/Tag)</div>
+        <div class="card-body">
+          {% for scope in ['individual', 'corporation', 'alliance'] %}
+            {% set plan = plans | selectattr('scope', 'equalto', scope) | first | default(none) %}
+            <form method="post" action="/manager/billing/plan/save" class="row g-2 mb-2 align-items-center">
+              <input type="hidden" name="scope" value="{{ scope }}">
+              <div class="col-3"><span class="fw-semibold text-capitalize">{{ scope }}</span></div>
+              <div class="col-4">
+                <input type="text" name="display_name" class="form-control form-control-sm"
+                       value="{{ plan.display_name if plan else scope | title }}" placeholder="Name">
+              </div>
+              <div class="col-3">
+                <input type="number" name="daily_price_isk" class="form-control form-control-sm"
+                       value="{{ plan.daily_price_isk if plan else 0 }}" placeholder="ISK/Tag">
+              </div>
+              <div class="col-2"><button class="btn btn-sm btn-outline-primary w-100">Speichern</button></div>
+            </form>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    {# ── Pricing Tiers ─────────────────────────────────────────────────────── #}
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header fw-semibold">Preisstufen nach Mitgliederanzahl (Corp/Alliance)</div>
+        <div class="card-body">
+          <table class="table table-sm mb-3">
+            <thead><tr><th>Scope</th><th>Min</th><th>Max</th><th>ISK/Tag</th><th></th></tr></thead>
+            <tbody>
+            {% for tier in tiers %}
+              <tr>
+                <td>{{ tier.scope }}</td>
+                <td>{{ tier.min_members }}</td>
+                <td>{{ tier.max_members or '∞' }}</td>
+                <td>{{ "{:,.0f}".format(tier.daily_price_isk) }}</td>
+                <td>
+                  <form method="post" action="/manager/billing/tier/delete/{{ tier.id }}" class="d-inline">
+                    <button class="btn btn-xs btn-outline-danger py-0 px-1">✕</button>
+                  </form>
+                </td>
+              </tr>
+            {% else %}
+              <tr><td colspan="5" class="text-muted">Keine Stufen konfiguriert — Basispreis gilt.</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          <form method="post" action="/manager/billing/tier/save" class="row g-2 align-items-center">
+            <div class="col-auto">
+              <select name="scope" class="form-select form-select-sm">
+                <option value="corporation">Corporation</option>
+                <option value="alliance">Alliance</option>
+              </select>
+            </div>
+            <div class="col-auto"><input type="number" name="min_members" class="form-control form-control-sm" placeholder="Min" required></div>
+            <div class="col-auto"><input type="number" name="max_members" class="form-control form-control-sm" placeholder="Max (leer=∞)"></div>
+            <div class="col-auto"><input type="number" name="daily_price_isk" class="form-control form-control-sm" placeholder="ISK/Tag" required></div>
+            <div class="col-auto"><button class="btn btn-sm btn-primary">Hinzufügen</button></div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    {# ── Manual Subscription Grant ─────────────────────────────────────────── #}
+    <div class="col-12 col-xl-6">
+      <div class="card">
+        <div class="card-header fw-semibold">Subscription manuell vergeben</div>
+        <div class="card-body">
+          <form method="post" action="/manager/billing/subscription/grant" class="row g-2">
+            <div class="col-12">
+              <select name="target_account_id" class="form-select form-select-sm" required>
+                {% for a in all_accounts %}
+                  <option value="{{ a.id }}">{{ a.id }} — {{ a.main_character.character_name if a.main_character else 'Account ' ~ a.id }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-auto">
+              <select name="subject_type" class="form-select form-select-sm">
+                <option value="account">Account (Individual)</option>
+              </select>
+            </div>
+            <div class="col-auto"><input type="number" name="days" class="form-control form-control-sm" placeholder="Tage" required min="1"></div>
+            <div class="col"><input type="text" name="note" class="form-control form-control-sm" placeholder="Notiz"></div>
+            <div class="col-auto"><button class="btn btn-sm btn-success">Vergeben</button></div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    {# ── Free Grants ───────────────────────────────────────────────────────── #}
+    <div class="col-12 col-xl-6">
+      <div class="card">
+        <div class="card-header fw-semibold">Free Grants (Seiten-/Feature-Zugang)</div>
+        <div class="card-body">
+          <table class="table table-sm mb-3" style="font-size:.85em">
+            <thead><tr><th>Account</th><th>Typ</th><th>Key</th><th>Läuft ab</th><th></th></tr></thead>
+            <tbody>
+            {% for grant, acc in grants %}
+              <tr class="{{ 'text-muted' if grant.revoked_at }}">
+                <td>{{ acc.main_character.character_name if acc.main_character else acc.id }}</td>
+                <td>{{ grant.scope_type }}</td>
+                <td>{{ grant.scope_key or '—' }}</td>
+                <td>{{ grant.expires_at.strftime('%Y-%m-%d') if grant.expires_at else '∞' }}</td>
+                <td>
+                  {% if not grant.revoked_at %}
+                  <form method="post" action="/manager/billing/grant/revoke/{{ grant.id }}" class="d-inline">
+                    <button class="btn btn-xs btn-outline-danger py-0 px-1">Widerrufen</button>
+                  </form>
+                  {% else %}
+                    <span class="badge bg-secondary">Widerrufen</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% else %}
+              <tr><td colspan="5" class="text-muted">Keine Grants.</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          <form method="post" action="/manager/billing/grant/create" class="row g-2 align-items-end">
+            <div class="col-12">
+              <select name="target_account_id" class="form-select form-select-sm" required>
+                {% for a in all_accounts %}
+                  <option value="{{ a.id }}">{{ a.id }} — {{ a.main_character.character_name if a.main_character else 'Account ' ~ a.id }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-auto">
+              <select name="scope_type" class="form-select form-select-sm">
+                <option value="global">Global</option>
+                <option value="page">Page</option>
+                <option value="feature">Feature</option>
+              </select>
+            </div>
+            <div class="col"><input type="text" name="scope_key" class="form-control form-control-sm" placeholder="page_key oder feature_key"></div>
+            <div class="col-auto"><input type="number" name="expires_days" class="form-control form-control-sm" placeholder="Tage (leer=∞)" min="1"></div>
+            <div class="col"><input type="text" name="note" class="form-control form-control-sm" placeholder="Notiz"></div>
+            <div class="col-auto"><button class="btn btn-sm btn-primary">Erstellen</button></div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    {# ── Bonus Codes ───────────────────────────────────────────────────────── #}
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header fw-semibold">Bonus-Codes</div>
+        <div class="card-body">
+          <table class="table table-sm mb-3" style="font-size:.85em">
+            <thead><tr><th>Code</th><th>Reward-Typ</th><th>Wert</th><th>Einlösungen</th><th>Läuft ab</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+            {% for c in codes %}
+              <tr class="{{ 'text-muted' if not c.is_active }}">
+                <td class="font-monospace">{{ c.code }}</td>
+                <td>{{ c.reward_type }}</td>
+                <td>{{ c.reward_value }}</td>
+                <td>{{ c.redemption_count }}{{ ' / ' ~ c.max_redemptions if c.max_redemptions else '' }}</td>
+                <td>{{ c.expires_at.strftime('%Y-%m-%d') if c.expires_at else '—' }}</td>
+                <td><span class="badge {{ 'bg-success' if c.is_active else 'bg-secondary' }}">{{ 'Aktiv' if c.is_active else 'Inaktiv' }}</span></td>
+                <td>
+                  <form method="post" action="/manager/billing/code/toggle/{{ c.id }}" class="d-inline">
+                    <button class="btn btn-xs btn-outline-secondary py-0 px-1">Toggle</button>
+                  </form>
+                </td>
+              </tr>
+            {% else %}
+              <tr><td colspan="7" class="text-muted">Keine Codes.</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          <form method="post" action="/manager/billing/code/create" class="row g-2 align-items-end">
+            <div class="col-auto"><input type="text" name="code" class="form-control form-control-sm font-monospace" placeholder="CODE" required style="text-transform:uppercase;width:180px"></div>
+            <div class="col-auto">
+              <select name="reward_type" class="form-select form-select-sm">
+                <option value="subscription_days">Subscription-Tage</option>
+                <option value="page_access">Seiten-Zugang</option>
+                <option value="feature_access">Feature-Zugang</option>
+                <option value="global_access">Global-Zugang</option>
+              </select>
+            </div>
+            <div class="col-auto"><input type="text" name="reward_value" class="form-control form-control-sm" placeholder="Wert (z.B. 30 oder skyhook:30)" required></div>
+            <div class="col-auto"><input type="number" name="max_redemptions" class="form-control form-control-sm" placeholder="Max. (leer=∞)" min="1"></div>
+            <div class="col-auto"><input type="number" name="expires_days" class="form-control form-control-sm" placeholder="Läuft ab (Tage)" min="1"></div>
+            <div class="col"><input type="text" name="note" class="form-control form-control-sm" placeholder="Notiz"></div>
+            <div class="col-auto"><button class="btn btn-sm btn-primary">Erstellen</button></div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    {# ── Unmatched Transactions ────────────────────────────────────────────── #}
+    {% if unmatched_txs %}
+    <div class="col-12">
+      <div class="card border-warning">
+        <div class="card-header fw-semibold text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Nicht zugeordnete Zahlungen</div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>ID</th><th>Typ</th><th>Sender Char</th><th>Sender Corp</th><th>Betrag (ISK)</th><th>Datum</th></tr></thead>
+            <tbody>
+            {% for match, tx in unmatched_txs %}
+              <tr>
+                <td class="font-monospace small">{{ tx.id }}</td>
+                <td>{{ tx.ref_type }}</td>
+                <td>{{ tx.sender_character_name or tx.sender_character_id or '—' }}</td>
+                <td>{{ tx.sender_corporation_name or tx.sender_corporation_id or '—' }}</td>
+                <td>{{ "{:,.0f}".format(tx.amount_isk) }}</td>
+                <td>{{ tx.occurred_at.strftime('%Y-%m-%d %H:%M') }}</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# ── Audit Log ─────────────────────────────────────────────────────────── #}
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header fw-semibold">Audit-Log (letzte 100 Einträge)</div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0" style="font-size:.82em">
+            <thead><tr><th>Zeitpunkt</th><th>Event</th><th>Actor</th><th>Target</th><th>Details</th></tr></thead>
+            <tbody>
+            {% for row in audit_rows %}
+              <tr>
+                <td class="text-nowrap">{{ row.created_at.strftime('%m-%d %H:%M') }}</td>
+                <td class="font-monospace">{{ row.event_type }}</td>
+                <td>{{ row.actor_account_id or '—' }}</td>
+                <td>{{ row.target_account_id or '—' }}</td>
+                <td class="text-muted small text-truncate" style="max-width:320px">{{ row.detail_json }}</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="5" class="text-muted">Kein Einträge.</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>{# /row #}
+</div>
+{% endblock %}

@@ -1,6 +1,6 @@
 from sqlalchemy import (
-    BigInteger, Boolean, Column, DateTime, ForeignKey,
-    Float, Index, Integer, String, Text, UniqueConstraint, func
+    BigInteger, Boolean, CheckConstraint, Column, DateTime, ForeignKey,
+    Float, Index, Integer, Numeric, String, Text, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -452,3 +452,168 @@ class WebhookAlert(Base):
     enabled = Column(Boolean, nullable=False, default=True, server_default="true")
     last_alert_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# ── Billing System ────────────────────────────────────────────────────────────
+
+class BillingWalletReceiver(Base):
+    """EVE characters configured to receive ISK payments for subscriptions."""
+    __tablename__ = "billing_wallet_receivers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    eve_character_id = Column(BigInteger, nullable=False, unique=True, index=True)
+    character_name = Column(String(255), nullable=False)
+    # character_id FK into characters table (nullable: receiver may not be a logged-in user)
+    character_fk = Column(Integer, ForeignKey("characters.id", ondelete="SET NULL"), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
+    notes = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class BillingSubscriptionPlan(Base):
+    """Named subscription plan with base daily ISK price. One per scope (individual/corp/alliance)."""
+    __tablename__ = "billing_subscription_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(50), nullable=False, unique=True, index=True)   # e.g. "individual", "corporation", "alliance"
+    scope = Column(String(20), nullable=False)                           # "individual" | "corporation" | "alliance"
+    display_name = Column(String(255), nullable=False)
+    daily_price_isk = Column(Numeric(20, 0), nullable=False)            # ISK as integer (no floats)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class BillingPricingTier(Base):
+    """Character-count tiers for corporation and alliance subscription pricing."""
+    __tablename__ = "billing_pricing_tiers"
+    __table_args__ = (
+        UniqueConstraint("scope", "min_members", name="uq_billing_pricing_tier_scope_min"),
+        CheckConstraint("max_members IS NULL OR max_members >= min_members", name="ck_billing_pricing_tier_range"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    scope = Column(String(20), nullable=False, index=True)              # "corporation" | "alliance"
+    min_members = Column(Integer, nullable=False)
+    max_members = Column(Integer, nullable=True)                        # NULL = unbounded
+    daily_price_isk = Column(Numeric(20, 0), nullable=False)
+
+
+class BillingWalletTransaction(Base):
+    """Raw wallet journal entries ingested from ESI for configured receiver characters."""
+    __tablename__ = "billing_wallet_transactions"
+
+    id = Column(BigInteger, primary_key=True)                           # ESI journal_id — natural dedup key
+    receiver_id = Column(Integer, ForeignKey("billing_wallet_receivers.id", ondelete="CASCADE"), nullable=False, index=True)
+    ref_type = Column(String(100), nullable=False)                      # "player_donation" | "corporation_account_withdrawal" etc.
+    sender_character_id = Column(BigInteger, nullable=True, index=True)
+    sender_character_name = Column(String(255), nullable=True)
+    sender_corporation_id = Column(BigInteger, nullable=True, index=True)
+    sender_corporation_name = Column(String(255), nullable=True)
+    amount_isk = Column(Numeric(20, 0), nullable=False)                 # rounded to integer on import
+    description = Column(String(1024), nullable=True)
+    occurred_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    imported_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class BillingTransactionMatch(Base):
+    """Links a wallet transaction to the subscription period it created."""
+    __tablename__ = "billing_transaction_matches"
+
+    id = Column(Integer, primary_key=True, index=True)
+    transaction_id = Column(BigInteger, ForeignKey("billing_wallet_transactions.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    subject_type = Column(String(20), nullable=False)                   # "account" | "corporation" | "alliance"
+    subject_id = Column(Integer, nullable=False, index=True)            # account.id | corporation_id | alliance_id
+    plan_id = Column(Integer, ForeignKey("billing_subscription_plans.id", ondelete="SET NULL"), nullable=True)
+    days_granted = Column(Numeric(12, 4), nullable=False)
+    match_status = Column(String(20), nullable=False, default="matched", server_default="matched")  # "matched" | "unmatched" | "manual"
+    notes = Column(String(255), nullable=True)
+    matched_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class BillingSubscriptionPeriod(Base):
+    """Active or historical subscription period for an account, corporation, or alliance."""
+    __tablename__ = "billing_subscription_periods"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subject_type = Column(String(20), nullable=False)                   # "account" | "corporation" | "alliance"
+    subject_id = Column(Integer, nullable=False, index=True)            # account.id OR eve corporation_id OR eve alliance_id
+    plan_id = Column(Integer, ForeignKey("billing_subscription_plans.id", ondelete="SET NULL"), nullable=True, index=True)
+    source_type = Column(String(30), nullable=False)                    # "payment" | "bonus_code" | "manual_grant"
+    starts_at = Column(DateTime(timezone=True), nullable=False)
+    ends_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    granted_by_account_id = Column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)
+    note = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class BillingGrant(Base):
+    """Manual free-access grants — global, page-scoped, or feature-scoped."""
+    __tablename__ = "billing_grants"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    scope_type = Column(String(20), nullable=False, default="global", server_default="global")  # "global" | "page" | "feature"
+    scope_key = Column(String(100), nullable=True)                      # page_key or feature_key; NULL = global
+    starts_at = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=True)         # NULL = permanent
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    granted_by_account_id = Column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)
+    note = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class BillingBonusCode(Base):
+    """Redeemable bonus codes that grant subscription time, page access, or feature access."""
+    __tablename__ = "billing_bonus_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(64), nullable=False, unique=True, index=True)
+    reward_type = Column(String(30), nullable=False)                    # "subscription_days" | "page_access" | "feature_access" | "global_access"
+    reward_value = Column(String(255), nullable=False)                  # "30" for days, "skyhook" for page_key, etc.
+    plan_id = Column(Integer, ForeignKey("billing_subscription_plans.id", ondelete="SET NULL"), nullable=True)
+    max_redemptions = Column(Integer, nullable=True)                    # NULL = unlimited
+    redemption_count = Column(Integer, nullable=False, default=0, server_default="0")
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
+    created_by_account_id = Column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)
+    note = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class BillingBonusCodeRedemption(Base):
+    """Audit trail for bonus code redemptions."""
+    __tablename__ = "billing_bonus_code_redemptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code_id = Column(Integer, ForeignKey("billing_bonus_codes.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    redeemed_at = Column(DateTime(timezone=True), server_default=func.now())
+    reward_snapshot = Column(Text, nullable=True)                       # JSON snapshot of reward at redemption time
+
+
+class BillingEntitlementCache(Base):
+    """Pre-computed entitlement state per account. Recomputed by Celery task."""
+    __tablename__ = "billing_entitlement_cache"
+
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
+    # JSON: {"dashboard": true, "skyhook": true, ...} — one key per page_key
+    pages_json = Column(Text, nullable=False, default="{}", server_default="{}")
+    # JSON: {"feature_key": true, ...} — for future paid features within pages
+    features_json = Column(Text, nullable=False, default="{}", server_default="{}")
+    computed_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class BillingAuditLog(Base):
+    """Immutable append-only billing event log."""
+    __tablename__ = "billing_audit_log"
+    __table_args__ = (
+        Index("ix_billing_audit_log_account_event", "actor_account_id", "event_type"),
+    )
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    event_type = Column(String(100), nullable=False, index=True)
+    actor_account_id = Column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True, index=True)
+    target_account_id = Column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True, index=True)
+    detail_json = Column(Text, nullable=False, default="{}", server_default="{}")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

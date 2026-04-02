@@ -1,3 +1,4 @@
+import json
 import time
 from fastapi.templating import Jinja2Templates
 from app.i18n import t, current_lang, client_i18n, SUPPORTED_LANGUAGES
@@ -40,6 +41,7 @@ def account_can_access_corp_nav(account) -> bool:
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["format_isk"] = format_isk
 templates.env.filters["format_expiry"] = format_expiry
+templates.env.filters["from_json"] = lambda s: json.loads(s) if s else {}
 templates.env.globals["static_version"] = _STATIC_VERSION
 templates.env.globals["account_can_access_corp_nav"] = account_can_access_corp_nav
 templates.env.globals["t"] = t

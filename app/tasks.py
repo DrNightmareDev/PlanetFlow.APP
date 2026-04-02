@@ -536,6 +536,165 @@ def send_webhook_alerts_task() -> dict:
     return {"sent": sent, "skipped": skipped}
 
 
+# ── Billing tasks ─────────────────────────────────────────────────────────────
+
+@celery_app.task(name="app.tasks.sync_billing_wallets")
+def sync_billing_wallets() -> dict:
+    """
+    Fetch wallet journal entries from ESI for all active BillingWalletReceiver characters.
+    Stores raw transactions, deduplicating on the ESI journal_id (used as PK).
+    Runs every 3 minutes.
+    """
+    import requests
+    from decimal import Decimal
+    from app.database import SessionLocal
+    from app.models import BillingWalletReceiver, BillingWalletTransaction, Character
+
+    imported = 0
+    errors = 0
+
+    with SessionLocal() as db:
+        receivers = db.query(BillingWalletReceiver).filter(
+            BillingWalletReceiver.is_active == True
+        ).all()
+
+        for receiver in receivers:
+            # Find a character with a valid refresh_token for this receiver
+            char = None
+            if receiver.character_fk:
+                char = db.get(Character, receiver.character_fk)
+            if not char:
+                char = db.query(Character).filter(
+                    Character.eve_character_id == receiver.eve_character_id
+                ).first()
+            if not char or not char.refresh_token:
+                logger.warning("billing: no token for receiver eve_char_id=%s", receiver.eve_character_id)
+                errors += 1
+                continue
+
+            # Refresh access token if needed
+            try:
+                from app.services.esi_auth import ensure_valid_token
+                token = ensure_valid_token(db, char)
+            except Exception as exc:
+                logger.warning("billing: token refresh failed for char %s: %s", char.eve_character_id, exc)
+                errors += 1
+                continue
+
+            # Fetch wallet journal from ESI
+            try:
+                url = f"https://esi.evetech.net/latest/characters/{char.eve_character_id}/wallet/journal/"
+                resp = requests.get(
+                    url,
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=15,
+                )
+                resp.raise_for_status()
+                entries = resp.json()
+            except Exception as exc:
+                logger.warning("billing: ESI wallet fetch failed for char %s: %s", char.eve_character_id, exc)
+                errors += 1
+                continue
+
+            for entry in entries:
+                journal_id = entry.get("id")
+                if not journal_id:
+                    continue
+                # Dedup: skip if already imported
+                if db.get(BillingWalletTransaction, journal_id):
+                    continue
+                ref_type = entry.get("ref_type", "")
+                # Only process donation types relevant for billing
+                if ref_type not in ("player_donation", "corporation_account_withdrawal"):
+                    continue
+                amount_raw = entry.get("amount", 0)
+                amount_isk = int(Decimal(str(amount_raw)).to_integral_value())
+                if amount_isk <= 0:
+                    continue
+                tx = BillingWalletTransaction(
+                    id=journal_id,
+                    receiver_id=receiver.id,
+                    ref_type=ref_type,
+                    sender_character_id=entry.get("first_party_id"),
+                    sender_character_name=entry.get("first_party_name"),
+                    sender_corporation_id=entry.get("second_party_id") if ref_type == "corporation_account_withdrawal" else None,
+                    amount_isk=amount_isk,
+                    description=entry.get("description", "")[:1024],
+                    occurred_at=datetime.fromisoformat(
+                        entry["date"].replace("Z", "+00:00")
+                    ) if entry.get("date") else datetime.now(timezone.utc),
+                )
+                db.add(tx)
+                imported += 1
+
+        db.commit()
+
+    logger.info("billing: sync_billing_wallets imported=%d errors=%d", imported, errors)
+    return {"imported": imported, "errors": errors}
+
+
+@celery_app.task(name="app.tasks.match_billing_transactions")
+def match_billing_transactions() -> dict:
+    """
+    Match unmatched wallet transactions to accounts/corps/alliances.
+    Runs every 3 minutes after wallet sync.
+    """
+    from app.database import SessionLocal
+    from app.models import BillingWalletTransaction, BillingTransactionMatch
+    from app.services.billing import match_wallet_transaction
+
+    matched = 0
+    unmatched = 0
+
+    with SessionLocal() as db:
+        # Find transactions with no match record yet
+        matched_ids = db.query(BillingTransactionMatch.transaction_id).subquery()
+        pending = (
+            db.query(BillingWalletTransaction)
+            .filter(BillingWalletTransaction.id.notin_(matched_ids))
+            .order_by(BillingWalletTransaction.occurred_at.asc())
+            .all()
+        )
+        for tx in pending:
+            success, msg = match_wallet_transaction(db, transaction_id=tx.id)
+            if success:
+                matched += 1
+            else:
+                unmatched += 1
+        db.commit()
+
+    logger.info("billing: match_billing_transactions matched=%d unmatched=%d", matched, unmatched)
+    return {"matched": matched, "unmatched": unmatched}
+
+
+@celery_app.task(name="app.tasks.recompute_entitlements")
+def recompute_entitlements() -> dict:
+    """
+    Recompute and cache entitlements for all accounts.
+    Runs every 5 minutes. Also triggered on demand after billing events.
+    """
+    from app.database import SessionLocal
+    from app.models import Account
+    from app.services.entitlements import recompute_and_cache
+
+    updated = 0
+    errors = 0
+
+    with SessionLocal() as db:
+        accounts = db.query(Account).all()
+        for account in accounts:
+            try:
+                recompute_and_cache(db, account=account)
+                updated += 1
+            except Exception as exc:
+                logger.warning("billing: entitlement recompute failed for account %s: %s", account.id, exc)
+                errors += 1
+        db.commit()
+
+    logger.info("billing: recompute_entitlements updated=%d errors=%d", updated, errors)
+    return {"updated": updated, "errors": errors}
+
+
 # ── Task: SSO state cleanup ───────────────────────────────────────────────────
 
 @celery_app.task(name="app.tasks.cleanup_sso_states_task")

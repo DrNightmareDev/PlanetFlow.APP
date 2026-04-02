@@ -13,7 +13,7 @@ from app.database import engine, SessionLocal
 from app.i18n import bootstrap_pi_type_translations, bootstrap_static_planets, bootstrap_static_stargates, bootstrap_translations
 from app.models import SSOState
 from app.page_access import get_access_settings_map, get_page_visibility, is_public_path, match_page_for_path
-from app.routers import auth, dashboard, admin, pi, market, system, planner, skyhook, colony_plan, pi_templates, hauling, killboard, intel, inventory
+from app.routers import auth, dashboard, admin, pi, market, system, planner, skyhook, colony_plan, pi_templates, hauling, killboard, intel, inventory, billing
 from app.templates_env import templates
 
 logging.basicConfig(level=logging.INFO)
@@ -157,7 +157,17 @@ async def impersonate_middleware(request: Request, call_next):
         request.state.account = account
         settings_map = get_access_settings_map(db)
         request.state.page_access_levels = settings_map
-        request.state.page_permissions = get_page_visibility(account, settings_map=settings_map)
+
+        # Load entitlement cache once per request (only for paid pages, avoids extra query otherwise)
+        entitlement_map: dict[str, bool] | None = None
+        if account is not None and "paid" in settings_map.values():
+            from app.services.entitlements import get_cached_page_entitlements
+            entitlement_map = get_cached_page_entitlements(db, account_id=account.id)
+        request.state.entitlement_map = entitlement_map or {}
+
+        request.state.page_permissions = get_page_visibility(
+            account, settings_map=settings_map, entitlement_map=entitlement_map
+        )
 
         page = match_page_for_path(path)
         if page is None:
@@ -195,6 +205,7 @@ app.include_router(killboard.router)
 app.include_router(colony_plan.router)
 app.include_router(pi_templates.router)
 app.include_router(intel.router)
+app.include_router(billing.router)
 
 
 @app.get("/", response_class=HTMLResponse)

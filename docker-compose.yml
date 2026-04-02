@@ -15,40 +15,12 @@ services:
       timeout: 5s
       retries: 10
 
-  # ── Optional: PgBouncer connection pooler ─────────────────────────────────
-  # Start with: docker compose --profile pgbouncer up
-  pgbouncer:
-    image: pgbouncer/pgbouncer:latest
-    profiles: ["pgbouncer"]
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      DATABASES_HOST: db
-      DATABASES_PORT: "5432"
-      DATABASES_USER: planetflow
-      DATABASES_PASSWORD: ${DB_PASSWORD:-planetflow_secret}
-      DATABASES_DBNAME: planetflow
-      PGBOUNCER_POOL_MODE: transaction
-      PGBOUNCER_MAX_CLIENT_CONN: "500"
-      PGBOUNCER_DEFAULT_POOL_SIZE: "20"
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h localhost -U planetflow"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   rabbitmq:
-    image: rabbitmq:3-management-alpine
+    image: rabbitmq:3-alpine
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-planetflow}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-planetflow_rabbit}
-    ports:
-      - "127.0.0.1:15672:15672"   # management UI — localhost only
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -59,7 +31,6 @@ services:
 
   app:
     build: .
-    user: "0:0"
     restart: unless-stopped
     depends_on:
       db:
@@ -79,17 +50,31 @@ services:
     volumes:
       - ./app/static:/app/app/static:ro
       - sde_data:/app/data
-    ports:
-      # Direct access when nginx profile is not active.
-      # If you use the nginx profile, comment this out or let nginx handle it.
-      - "${APP_PORT:-8000}:8000"
+    expose:
+      - "8000"
 
   celery_worker:
     build: .
-    user: "0:0"
     restart: unless-stopped
     entrypoint: ["/app/docker/celery_entrypoint.sh"]
-    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "--concurrency=4", "-Q", "celery"]
+    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "--concurrency=4", "-Q", "celery,esi,billing"]
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://planetflow:${DB_PASSWORD:-planetflow_secret}@db/planetflow
+      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-planetflow}:${RABBITMQ_PASS:-planetflow_rabbit}@rabbitmq:5672//
+    volumes:
+      - sde_data:/app/data
+
+  celery_wallet:
+    build: .
+    restart: unless-stopped
+    entrypoint: ["/app/docker/celery_entrypoint.sh"]
+    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "--concurrency=2", "-Q", "wallet", "--hostname=wallet@%h"]
     depends_on:
       db:
         condition: service_healthy
@@ -104,7 +89,6 @@ services:
 
   celery_beat:
     build: .
-    user: "0:0"
     restart: unless-stopped
     entrypoint: ["/app/docker/celery_entrypoint.sh"]
     command: ["celery", "-A", "app.celery_app", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]
@@ -120,22 +104,54 @@ services:
     volumes:
       - sde_data:/app/data
 
-  celery_ws:
-    build: .
+  # ── nginx reverse proxy + TLS ─────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
     restart: unless-stopped
-    entrypoint: ["/app/docker/celery_entrypoint.sh"]
-    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "--concurrency=1", "-Q", "ws", "--hostname=ws@%h"]
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./app/static:/app/static:ro
+      - certbot_www:/var/www/certbot:ro
+      - certbot_conf:/etc/letsencrypt:ro
+
+  # ── Let's Encrypt certificate renewal ────────────────────────────────────
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    volumes:
+      - certbot_www:/var/www/certbot
+      - certbot_conf:/etc/letsencrypt
+    # Renew twice daily; certbot only acts when cert is due for renewal (< 30d remaining)
+    entrypoint: ["/bin/sh", "-c", "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 43200 & wait $${!}; done"]
+
+  # ── Optional: PgBouncer connection pooler ─────────────────────────────────
+  # Start with: docker compose --profile pgbouncer up
+  pgbouncer:
+    image: pgbouncer/pgbouncer:latest
+    profiles: ["pgbouncer"]
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    env_file: .env
     environment:
-      DATABASE_URL: postgresql://planetflow:${DB_PASSWORD:-planetflow_secret}@db/planetflow
-      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-planetflow}:${RABBITMQ_PASS:-planetflow_rabbit}@rabbitmq:5672//
-    volumes:
-      - sde_data:/app/data
+      DATABASES_HOST: db
+      DATABASES_PORT: "5432"
+      DATABASES_USER: planetflow
+      DATABASES_PASSWORD: ${DB_PASSWORD:-planetflow_secret}
+      DATABASES_DBNAME: planetflow
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: "500"
+      PGBOUNCER_DEFAULT_POOL_SIZE: "20"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -U planetflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ── Optional: Flower — Celery task monitor ─────────────────────────────────
   # Start with: docker compose --profile monitoring up
@@ -150,24 +166,11 @@ services:
       CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-planetflow}:${RABBITMQ_PASS:-planetflow_rabbit}@rabbitmq:5672//
       FLOWER_BASIC_AUTH: ${FLOWER_USER:-admin}:${FLOWER_PASS:-flower_secret}
     ports:
-      - "127.0.0.1:5555:5555"   # localhost only — proxy through nginx if needed
-
-  # ── Optional: nginx reverse proxy ─────────────────────────────────────────
-  # Start with: docker compose --profile nginx up
-  # Skip this if you already have your own nginx/Caddy/Traefik in front.
-  nginx:
-    image: nginx:alpine
-    profiles: ["nginx"]
-    restart: unless-stopped
-    depends_on:
-      - app
-    ports:
-      - "${NGINX_PORT:-80}:80"
-    volumes:
-      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./app/static:/app/static:ro
+      - "127.0.0.1:5555:5555"
 
 volumes:
   postgres_data:
   rabbitmq_data:
   sde_data:
+  certbot_www:
+  certbot_conf:

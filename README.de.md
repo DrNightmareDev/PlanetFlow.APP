@@ -1,4 +1,4 @@
-# EVE PI Manager
+# PlanetFlow
 
 [Deutsch](README.de.md) | [English](README.en.md) | [简体中文](README.zh-Hans.md)
 
@@ -76,7 +76,7 @@ Danach `.env` ausfuellen und je nach Zielsystem Docker Compose, Linux oder Windo
 ### Pflichtwerte
 
 ```env
-DATABASE_URL=postgresql://evepi:PASSWORT@localhost/evepi
+DATABASE_URL=postgresql://planetflow:PASSWORT@localhost/planetflow
 EVE_CLIENT_ID=dein_client_id
 EVE_CLIENT_SECRET=dein_client_secret
 EVE_CALLBACK_URL=http://DEINE-IP-ODER-DOMAIN/auth/callback
@@ -92,9 +92,9 @@ SECRET_KEY=min_32_zeichen_langer_zufaelliger_schluessel
 ### RabbitMQ / Celery (fuer Hintergrund-Refresh erforderlich)
 
 ```env
-RABBITMQ_USER=evepi
+RABBITMQ_USER=planetflow
 RABBITMQ_PASS=change_me_rabbit
-CELERY_BROKER_URL=amqp://evepi:change_me_rabbit@rabbitmq:5672//
+CELERY_BROKER_URL=amqp://planetflow:change_me_rabbit@rabbitmq:5672//
 ```
 
 - `@rabbitmq:5672` fuer Docker Compose, `@localhost:5672` fuer native Linux-Installation.
@@ -132,7 +132,7 @@ NGINX_PORT=80
 ### Vollstaendiges Beispiel
 
 ```env
-DATABASE_URL=postgresql://evepi:supersecret@localhost/evepi
+DATABASE_URL=postgresql://planetflow:supersecret@localhost/planetflow
 DB_PASSWORD=supersecret
 EVE_CLIENT_ID=1234567890abcdef
 EVE_CLIENT_SECRET=abcdef1234567890
@@ -142,9 +142,9 @@ SECRET_KEY=replace_me_with_a_long_random_secret_key
 APP_PORT=8000
 DEBUG=false
 WEB_WORKERS=2
-RABBITMQ_USER=evepi
+RABBITMQ_USER=planetflow
 RABBITMQ_PASS=supersecret_rabbit
-CELERY_BROKER_URL=amqp://evepi:supersecret_rabbit@localhost:5672//
+CELERY_BROKER_URL=amqp://planetflow:supersecret_rabbit@localhost:5672//
 SENTRY_DSN=
 ```
 
@@ -223,9 +223,9 @@ Installiert und konfiguriert: PostgreSQL, RabbitMQ, Python venv, Alembic-Migrati
 
 | Service | Beschreibung |
 |---|---|
-| `eve-pi-manager` | Web-App (gunicorn) |
-| `eve-pi-manager-worker` | Celery Worker (ESI-Hintergrund-Refresh) |
-| `eve-pi-manager-beat` | Celery Beat Scheduler (triggert Refresh alle 5 Min.) |
+| `planetflow` | Web-App (gunicorn) |
+| `planetflow-worker` | Celery Worker (ESI-Hintergrund-Refresh) |
+| `planetflow-beat` | Celery Beat Scheduler (triggert Refresh alle 5 Min.) |
 
 ### Upgrade von einer alten Version
 
@@ -250,15 +250,15 @@ sudo bash scripts/update_linux.sh
 ### Service-Status pruefen
 
 ```bash
-systemctl status eve-pi-manager eve-pi-manager-worker eve-pi-manager-beat
+systemctl status planetflow planetflow-worker planetflow-beat
 ```
 
 ### Logs
 
 ```bash
-journalctl -u eve-pi-manager -f
-journalctl -u eve-pi-manager-worker -f
-journalctl -u eve-pi-manager-beat -f
+journalctl -u planetflow -f
+journalctl -u planetflow-worker -f
+journalctl -u planetflow-beat -f
 ```
 
 ### RAM-Orientierung
@@ -357,7 +357,7 @@ Das Manager Panel (`/manager`) ist fuer Administratoren:
 ## Administrator-Skripte
 
 ```bash
-cd /opt/eve-pi-manager
+cd /opt/planetflow
 ./scripts/add_administrator.py --name "Charaktername"
 ./scripts/add_administrator.py --eve-id 123456789
 ./scripts/remove_administrator.py --name "Charaktername"

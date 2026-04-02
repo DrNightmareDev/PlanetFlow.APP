@@ -21,7 +21,7 @@ SSO_VERIFY_URLS = (
 )
 SSO_AUTHORIZE_URL = "https://login.eveonline.com/v2/oauth/authorize"
 
-HEADERS = {"Accept": "application/json", "User-Agent": "EVE PI Manager / contact: admin"}
+HEADERS = {"Accept": "application/json", "User-Agent": "PlanetFlow / contact: admin"}
 
 
 def generate_auth_url(state: str) -> str:

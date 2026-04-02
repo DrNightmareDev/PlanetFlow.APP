@@ -1,4 +1,4 @@
-// EVE PI Manager – Service Worker
+// PlanetFlow – Service Worker
 // Sendet Browser-Benachrichtigungen wenn Extractor-Ablaufzeiten näher rücken.
 
 const CHECK_INTERVAL_MS = 60 * 1000; // jede Minute prüfen
@@ -85,7 +85,7 @@ function checkExpiries() {
                 body: `${e.name} (${e.system}) läuft in ${timeLabel} ab!`,
                 icon:  '/static/img/favicon.svg',
                 badge: '/static/img/favicon.svg',
-                tag:   `eve-pi-${char}`,
+                tag:   `planetflow-${char}`,
                 requireInteraction: e.minLeft <= 30,
                 data: { url: '/dashboard' },
             });
@@ -98,7 +98,7 @@ function checkExpiries() {
                 body: lines,
                 icon:  '/static/img/favicon.svg',
                 badge: '/static/img/favicon.svg',
-                tag:   `eve-pi-${char}`,
+                tag:   `planetflow-${char}`,
                 requireInteraction: true,
                 data: { url: '/dashboard' },
             });

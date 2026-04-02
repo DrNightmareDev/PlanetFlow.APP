@@ -5,7 +5,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # Datenbank
-    database_url: str = Field(default="postgresql://evepi:password@localhost/evepi", alias="DATABASE_URL")
+    database_url: str = Field(default="postgresql://planetflow:password@localhost/planetflow", alias="DATABASE_URL")
 
     # EVE Online SSO
     eve_client_id: str = Field(default="", alias="EVE_CLIENT_ID")

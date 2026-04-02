@@ -1,4 +1,4 @@
-# EVE PI Manager
+# PlanetFlow
 
 [Deutsch](README.de.md) | [English](README.en.md) | [简体中文](README.zh-Hans.md)
 
@@ -76,7 +76,7 @@ cp .env.example .env
 ### 必填项
 
 ```env
-DATABASE_URL=postgresql://evepi:PASSWORD@localhost/evepi
+DATABASE_URL=postgresql://planetflow:PASSWORD@localhost/planetflow
 EVE_CLIENT_ID=your_client_id
 EVE_CLIENT_SECRET=your_client_secret
 EVE_CALLBACK_URL=http://YOUR-IP-OR-DOMAIN/auth/callback
@@ -92,9 +92,9 @@ SECRET_KEY=a_long_random_secret_with_at_least_32_characters
 ### RabbitMQ / Celery（后台刷新所需）
 
 ```env
-RABBITMQ_USER=evepi
+RABBITMQ_USER=planetflow
 RABBITMQ_PASS=change_me_rabbit
-CELERY_BROKER_URL=amqp://evepi:change_me_rabbit@rabbitmq:5672//
+CELERY_BROKER_URL=amqp://planetflow:change_me_rabbit@rabbitmq:5672//
 ```
 
 - Docker Compose 使用 `@rabbitmq:5672`，Linux 原生安装使用 `@localhost:5672`
@@ -132,7 +132,7 @@ NGINX_PORT=80
 ### 完整示例
 
 ```env
-DATABASE_URL=postgresql://evepi:supersecret@localhost/evepi
+DATABASE_URL=postgresql://planetflow:supersecret@localhost/planetflow
 DB_PASSWORD=supersecret
 EVE_CLIENT_ID=1234567890abcdef
 EVE_CLIENT_SECRET=abcdef1234567890
@@ -142,9 +142,9 @@ SECRET_KEY=replace_me_with_a_long_random_secret_key
 APP_PORT=8000
 DEBUG=false
 WEB_WORKERS=2
-RABBITMQ_USER=evepi
+RABBITMQ_USER=planetflow
 RABBITMQ_PASS=supersecret_rabbit
-CELERY_BROKER_URL=amqp://evepi:supersecret_rabbit@localhost:5672//
+CELERY_BROKER_URL=amqp://planetflow:supersecret_rabbit@localhost:5672//
 SENTRY_DSN=
 ```
 
@@ -223,9 +223,9 @@ sudo bash scripts/setup_linux.sh
 
 | 服务 | 描述 |
 |---|---|
-| `eve-pi-manager` | Web 应用（gunicorn）|
-| `eve-pi-manager-worker` | Celery Worker（ESI 后台刷新）|
-| `eve-pi-manager-beat` | Celery Beat 调度器（每 5 分钟触发刷新）|
+| `planetflow` | Web 应用（gunicorn）|
+| `planetflow-worker` | Celery Worker（ESI 后台刷新）|
+| `planetflow-beat` | Celery Beat 调度器（每 5 分钟触发刷新）|
 
 ### 从旧版本升级
 
@@ -250,15 +250,15 @@ sudo bash scripts/update_linux.sh
 ### 查看服务状态
 
 ```bash
-systemctl status eve-pi-manager eve-pi-manager-worker eve-pi-manager-beat
+systemctl status planetflow planetflow-worker planetflow-beat
 ```
 
 ### 日志
 
 ```bash
-journalctl -u eve-pi-manager -f
-journalctl -u eve-pi-manager-worker -f
-journalctl -u eve-pi-manager-beat -f
+journalctl -u planetflow -f
+journalctl -u planetflow-worker -f
+journalctl -u planetflow-beat -f
 ```
 
 ### 内存参考
@@ -357,7 +357,7 @@ Manager 面板（`/manager`）供管理员使用：
 ## 管理员脚本
 
 ```bash
-cd /opt/eve-pi-manager
+cd /opt/planetflow
 ./scripts/add_administrator.py --name "Character Name"
 ./scripts/add_administrator.py --eve-id 123456789
 ./scripts/remove_administrator.py --name "Character Name"

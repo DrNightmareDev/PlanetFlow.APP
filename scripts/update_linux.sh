@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
-# EVE PI Manager - Linux update script
+# PlanetFlow - Linux update script
 #
 # Supported modes:
-#   native  - updates a systemd/venv installation from the git checkout in /opt/eve-pi-manager
+#   native  - updates a systemd/venv installation from the git checkout in /opt/planetflow
 #   compose - updates a Docker Compose installation from the current checkout
 #
 # Usage:
@@ -39,9 +39,9 @@ Options:
 EOF
 }
 
-APP_DIR="/opt/eve-pi-manager"
-APP_USER="evepi"
-SERVICE_NAME="eve-pi-manager"
+APP_DIR="/opt/planetflow"
+APP_USER="planetflow"
+SERVICE_NAME="planetflow"
 MODE="native"
 BRANCH="main"
 FITTINGS_SCOPE="esi-fittings.read_fittings.v1"
@@ -75,7 +75,7 @@ done
 
 echo ""
 echo -e "${BLUE}==================================================${NC}"
-echo -e "${BLUE}       EVE PI Manager - Update (${MODE})          ${NC}"
+echo -e "${BLUE}       PlanetFlow - Update (${MODE})          ${NC}"
 echo -e "${BLUE}==================================================${NC}"
 echo ""
 

@@ -47,9 +47,9 @@ if (-not (Test-Path $envPath)) {
     Write-Info ".env created from .env.example"
 }
 
-Ensure-EnvKey $envPath "RABBITMQ_USER" "evepi"
+Ensure-EnvKey $envPath "RABBITMQ_USER" "planetflow"
 Ensure-EnvKey $envPath "RABBITMQ_PASS" "change_me_rabbit"
-Ensure-EnvKey $envPath "CELERY_BROKER_URL" "amqp://evepi:change_me_rabbit@rabbitmq:5672//"
+Ensure-EnvKey $envPath "CELERY_BROKER_URL" "amqp://planetflow:change_me_rabbit@rabbitmq:5672//"
 Ensure-EnvKey $envPath "WEB_WORKERS" "2"
 Ensure-EnvKey $envPath "SENTRY_DSN" ""
 Ensure-EnvKey $envPath "FLOWER_USER" "admin"

@@ -4,13 +4,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: evepi
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-evepi_secret}
-      POSTGRES_DB: evepi
+      POSTGRES_USER: planetflow
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-planetflow_secret}
+      POSTGRES_DB: planetflow
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U evepi -d evepi"]
+      test: ["CMD-SHELL", "pg_isready -U planetflow -d planetflow"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -27,16 +27,16 @@ services:
     environment:
       DATABASES_HOST: db
       DATABASES_PORT: "5432"
-      DATABASES_USER: evepi
-      DATABASES_PASSWORD: ${DB_PASSWORD:-evepi_secret}
-      DATABASES_DBNAME: evepi
+      DATABASES_USER: planetflow
+      DATABASES_PASSWORD: ${DB_PASSWORD:-planetflow_secret}
+      DATABASES_DBNAME: planetflow
       PGBOUNCER_POOL_MODE: transaction
       PGBOUNCER_MAX_CLIENT_CONN: "500"
       PGBOUNCER_DEFAULT_POOL_SIZE: "20"
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h localhost -U evepi"]
+      test: ["CMD-SHELL", "pg_isready -h localhost -U planetflow"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -45,8 +45,8 @@ services:
     image: rabbitmq:3-management-alpine
     restart: unless-stopped
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-evepi}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-evepi_rabbit}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-planetflow}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-planetflow_rabbit}
     ports:
       - "127.0.0.1:15672:15672"   # management UI — localhost only
     volumes:
@@ -74,8 +74,8 @@ services:
       start_period: 20s
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://evepi:${DB_PASSWORD:-evepi_secret}@db/evepi
-      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-evepi}:${RABBITMQ_PASS:-evepi_rabbit}@rabbitmq:5672//
+      DATABASE_URL: postgresql://planetflow:${DB_PASSWORD:-planetflow_secret}@db/planetflow
+      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-planetflow}:${RABBITMQ_PASS:-planetflow_rabbit}@rabbitmq:5672//
     volumes:
       - ./app/static:/app/app/static:ro
       - sde_data:/app/data
@@ -97,8 +97,8 @@ services:
         condition: service_healthy
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://evepi:${DB_PASSWORD:-evepi_secret}@db/evepi
-      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-evepi}:${RABBITMQ_PASS:-evepi_rabbit}@rabbitmq:5672//
+      DATABASE_URL: postgresql://planetflow:${DB_PASSWORD:-planetflow_secret}@db/planetflow
+      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-planetflow}:${RABBITMQ_PASS:-planetflow_rabbit}@rabbitmq:5672//
     volumes:
       - sde_data:/app/data
 
@@ -115,8 +115,8 @@ services:
         condition: service_healthy
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://evepi:${DB_PASSWORD:-evepi_secret}@db/evepi
-      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-evepi}:${RABBITMQ_PASS:-evepi_rabbit}@rabbitmq:5672//
+      DATABASE_URL: postgresql://planetflow:${DB_PASSWORD:-planetflow_secret}@db/planetflow
+      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-planetflow}:${RABBITMQ_PASS:-planetflow_rabbit}@rabbitmq:5672//
     volumes:
       - sde_data:/app/data
 
@@ -132,8 +132,8 @@ services:
         condition: service_healthy
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://evepi:${DB_PASSWORD:-evepi_secret}@db/evepi
-      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-evepi}:${RABBITMQ_PASS:-evepi_rabbit}@rabbitmq:5672//
+      DATABASE_URL: postgresql://planetflow:${DB_PASSWORD:-planetflow_secret}@db/planetflow
+      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-planetflow}:${RABBITMQ_PASS:-planetflow_rabbit}@rabbitmq:5672//
     volumes:
       - sde_data:/app/data
 
@@ -147,7 +147,7 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
-      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-evepi}:${RABBITMQ_PASS:-evepi_rabbit}@rabbitmq:5672//
+      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-planetflow}:${RABBITMQ_PASS:-planetflow_rabbit}@rabbitmq:5672//
       FLOWER_BASIC_AUTH: ${FLOWER_USER:-admin}:${FLOWER_PASS:-flower_secret}
     ports:
       - "127.0.0.1:5555:5555"   # localhost only — proxy through nginx if needed

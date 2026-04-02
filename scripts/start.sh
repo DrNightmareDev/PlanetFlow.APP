@@ -25,5 +25,5 @@ if [[ ! -d "${VENV_DIR}" ]]; then
     "./${VENV_DIR}/bin/pip" install -r requirements.txt
 fi
 
-echo "Starte EVE PI Manager (Entwicklung)..."
+echo "Starte PlanetFlow (Entwicklung)..."
 "./${VENV_DIR}/bin/uvicorn" app.main:app --host 0.0.0.0 --port 8000 --reload

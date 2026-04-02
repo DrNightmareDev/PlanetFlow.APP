@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# EVE PI Manager - Vollständiges Linux Installations-Skript
+# PlanetFlow - Vollständiges Linux Installations-Skript
 # Getestet auf: Debian 12 (Bookworm), Ubuntu 22.04+
 # Verwendung: Als root auf einem Linux-Host ausführen
 # =============================================================================
@@ -19,12 +19,12 @@ log_ok()    { echo -e "${GREEN}[OK]${NC}    $1"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-APP_DIR="/opt/eve-pi-manager"
-APP_USER="evepi"
+APP_DIR="/opt/planetflow"
+APP_USER="planetflow"
 APP_PORT="80"
 GUNICORN_PORT="8000"
-SERVICE_NAME="eve-pi-manager"
-RABBITMQ_USER="evepi"
+SERVICE_NAME="planetflow"
+RABBITMQ_USER="planetflow"
 
 # All ESI scopes required by this application:
 #   esi-planets.manage_planets.v1          – read/write PI colonies
@@ -38,7 +38,7 @@ REQUIRED_SCOPES="esi-planets.manage_planets.v1 esi-planets.read_customs_offices.
 
 echo ""
 echo -e "${BLUE}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║       EVE PI Manager - Setup Linux           ║${NC}"
+echo -e "${BLUE}║       PlanetFlow - Setup Linux           ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -69,8 +69,8 @@ log_info "Starte PostgreSQL..."
 systemctl enable postgresql --quiet
 systemctl start postgresql
 
-DB_NAME="evepi"
-DB_USER="evepi"
+DB_NAME="planetflow"
+DB_USER="planetflow"
 DB_PASSWORD=""
 _src_env="${PROJECT_DIR}/.env"
 if [[ -f "${_src_env}" ]]; then
@@ -111,7 +111,7 @@ if [[ -z "$RABBITMQ_PASS" ]]; then
     log_info "Zufälliges RabbitMQ-Passwort generiert"
 fi
 
-# Create evepi vhost and user (ignore errors if they already exist)
+# Create planetflow vhost and user (ignore errors if they already exist)
 rabbitmqctl add_vhost "/" 2>/dev/null || true
 rabbitmqctl add_user "${RABBITMQ_USER}" "${RABBITMQ_PASS}" 2>/dev/null || \
     rabbitmqctl change_password "${RABBITMQ_USER}" "${RABBITMQ_PASS}"
@@ -192,7 +192,7 @@ CELERY_BROKER="amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@localhost:5672//"
 
 log_info "Generiere .env Datei..."
 cat > "${APP_DIR}/.env" << EOF
-# EVE PI Manager Konfiguration
+# PlanetFlow Konfiguration
 # Generiert am: $(date '+%Y-%m-%d %H:%M:%S')
 
 # Datenbank
@@ -256,7 +256,7 @@ WEB_WORKERS_VAL="${WEB_WORKERS_VAL:-2}"
 # ── Web (gunicorn) ────────────────────────────────────────────────────────────
 cat > "/etc/systemd/system/${SERVICE_NAME}.service" << EOF
 [Unit]
-Description=EVE PI Manager - Web
+Description=PlanetFlow - Web
 After=postgresql.service rabbitmq-server.service network.target
 Wants=postgresql.service rabbitmq-server.service
 
@@ -291,7 +291,7 @@ EOF
 # ── Celery Worker ─────────────────────────────────────────────────────────────
 cat > "/etc/systemd/system/${SERVICE_NAME}-worker.service" << EOF
 [Unit]
-Description=EVE PI Manager - Celery Worker
+Description=PlanetFlow - Celery Worker
 After=rabbitmq-server.service postgresql.service network.target
 Wants=rabbitmq-server.service postgresql.service
 
@@ -320,7 +320,7 @@ EOF
 # ── Celery Beat ───────────────────────────────────────────────────────────────
 cat > "/etc/systemd/system/${SERVICE_NAME}-beat.service" << EOF
 [Unit]
-Description=EVE PI Manager - Celery Beat Scheduler
+Description=PlanetFlow - Celery Beat Scheduler
 After=rabbitmq-server.service postgresql.service network.target
 Wants=rabbitmq-server.service postgresql.service
 
@@ -347,7 +347,7 @@ EOF
 # ── Celery WS Subscriber ──────────────────────────────────────────────────────
 cat > "/etc/systemd/system/${SERVICE_NAME}-ws.service" << EOF
 [Unit]
-Description=EVE PI Manager - zKillboard R2Z2 Poller
+Description=PlanetFlow - zKillboard R2Z2 Poller
 After=rabbitmq-server.service postgresql.service network.target
 Wants=rabbitmq-server.service postgresql.service
 
@@ -386,7 +386,7 @@ server {
     server_name _;
 
     location /static {
-        alias /opt/eve-pi-manager/app/static;
+        alias /opt/planetflow/app/static;
         expires 7d;
         add_header Cache-Control "public, immutable";
         access_log off;
@@ -407,8 +407,8 @@ server {
         client_max_body_size 1M;
     }
 
-    access_log /var/log/nginx/eve-pi-manager-access.log;
-    error_log  /var/log/nginx/eve-pi-manager-error.log;
+    access_log /var/log/nginx/planetflow-access.log;
+    error_log  /var/log/nginx/planetflow-error.log;
 }
 NGINX_EOF
 

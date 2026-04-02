@@ -46,9 +46,9 @@ if (-not (Test-Path $envPath)) {
     Write-Warn ".env wurde aus .env.example erstellt. Bitte EVE_CLIENT_ID, EVE_CLIENT_SECRET und DATABASE_URL ausfuellen."
 }
 
-Ensure-EnvKey $envPath "RABBITMQ_USER" "evepi"
+Ensure-EnvKey $envPath "RABBITMQ_USER" "planetflow"
 Ensure-EnvKey $envPath "RABBITMQ_PASS" "change_me_rabbit"
-Ensure-EnvKey $envPath "CELERY_BROKER_URL" "amqp://evepi:change_me_rabbit@rabbitmq:5672//"
+Ensure-EnvKey $envPath "CELERY_BROKER_URL" "amqp://planetflow:change_me_rabbit@rabbitmq:5672//"
 Ensure-EnvKey $envPath "COOKIE_SECURE" "false"
 Ensure-EnvKey $envPath "WEB_WORKERS" "2"
 Ensure-EnvKey $envPath "SENTRY_DSN" ""

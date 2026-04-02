@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# EVE PI Manager - Universal Upgrade Script
+# PlanetFlow - Universal Upgrade Script
 #
 # Brings any previous version to the current release.
 # Handles: RabbitMQ install, new systemd units, .env patching,
@@ -25,9 +25,9 @@ log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_step()  { echo -e "\n${BLUE}── $1 ${NC}"; }
 
-APP_DIR="/opt/eve-pi-manager"
-APP_USER="evepi"
-SERVICE_NAME="eve-pi-manager"
+APP_DIR="/opt/planetflow"
+APP_USER="planetflow"
+SERVICE_NAME="planetflow"
 MODE="native"
 BRANCH="main"
 FITTINGS_SCOPE="esi-fittings.read_fittings.v1"
@@ -60,7 +60,7 @@ PROJECT_DIR="$(dirname "${SCRIPT_DIR}")"
 
 echo ""
 echo -e "${BLUE}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║     EVE PI Manager — Universal Upgrade       ║${NC}"
+echo -e "${BLUE}║     PlanetFlow — Universal Upgrade       ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -121,9 +121,9 @@ if [[ "${MODE}" == "compose" ]]; then
         cp "${PROJECT_DIR}/.env.example" "${ENV_FILE}"
         log_warn ".env was missing — copied from .env.example. Please fill in EVE credentials."
     fi
-    env_add_if_missing "${ENV_FILE}" "RABBITMQ_USER"    "evepi"
+    env_add_if_missing "${ENV_FILE}" "RABBITMQ_USER"    "planetflow"
     env_add_if_missing "${ENV_FILE}" "RABBITMQ_PASS"    "change_me_rabbit"
-    env_add_if_missing "${ENV_FILE}" "CELERY_BROKER_URL" "amqp://evepi:change_me_rabbit@rabbitmq:5672//"
+    env_add_if_missing "${ENV_FILE}" "CELERY_BROKER_URL" "amqp://planetflow:change_me_rabbit@rabbitmq:5672//"
     env_add_if_missing "${ENV_FILE}" "WEB_WORKERS"      "4"
     env_add_if_missing "${ENV_FILE}" "SENTRY_DSN"       ""
     env_add_if_missing "${ENV_FILE}" "FLOWER_USER"      "admin"
@@ -201,7 +201,7 @@ else
     log_info "Generated new RabbitMQ password"
 fi
 
-env_add_if_missing "${ENV_FILE}" "RABBITMQ_USER"     "evepi"
+env_add_if_missing "${ENV_FILE}" "RABBITMQ_USER"     "planetflow"
 # Replace placeholder or add if missing
 if grep -q "^RABBITMQ_PASS=change_me_rabbit" "${ENV_FILE}"; then
     sed -i "s|^RABBITMQ_PASS=.*|RABBITMQ_PASS=${RABBITMQ_PASS_VAL}|" "${ENV_FILE}"
@@ -209,17 +209,17 @@ if grep -q "^RABBITMQ_PASS=change_me_rabbit" "${ENV_FILE}"; then
 else
     env_add_if_missing "${ENV_FILE}" "RABBITMQ_PASS" "${RABBITMQ_PASS_VAL}"
 fi
-env_add_if_missing "${ENV_FILE}" "CELERY_BROKER_URL" "amqp://evepi:${RABBITMQ_PASS_VAL}@localhost:5672//"
+env_add_if_missing "${ENV_FILE}" "CELERY_BROKER_URL" "amqp://planetflow:${RABBITMQ_PASS_VAL}@localhost:5672//"
 env_add_if_missing "${ENV_FILE}" "WEB_WORKERS"       "4"
 env_add_if_missing "${ENV_FILE}" "SENTRY_DSN"        ""
 env_ensure_scope "${ENV_FILE}" "${FITTINGS_SCOPE}"
 chmod 600 "${ENV_FILE}"
 
 # ── Step 4: Set up RabbitMQ user ─────────────────────────────────────────────
-log_step "RabbitMQ user 'evepi'"
-rabbitmqctl add_user "evepi" "${RABBITMQ_PASS_VAL}" 2>/dev/null || \
-    rabbitmqctl change_password "evepi" "${RABBITMQ_PASS_VAL}"
-rabbitmqctl set_permissions -p "/" "evepi" ".*" ".*" ".*" 2>/dev/null || true
+log_step "RabbitMQ user 'planetflow'"
+rabbitmqctl add_user "planetflow" "${RABBITMQ_PASS_VAL}" 2>/dev/null || \
+    rabbitmqctl change_password "planetflow" "${RABBITMQ_PASS_VAL}"
+rabbitmqctl set_permissions -p "/" "planetflow" ".*" ".*" ".*" 2>/dev/null || true
 log_ok "RabbitMQ user configured"
 
 # ── Step 5: File permissions ──────────────────────────────────────────────────
@@ -259,7 +259,7 @@ fi
 
 cat > "/etc/systemd/system/${SERVICE_NAME}.service" << EOF
 [Unit]
-Description=EVE PI Manager - Web
+Description=PlanetFlow - Web
 After=postgresql.service rabbitmq-server.service network.target
 Wants=postgresql.service rabbitmq-server.service
 
@@ -293,7 +293,7 @@ EOF
 
 cat > "/etc/systemd/system/${SERVICE_NAME}-worker.service" << EOF
 [Unit]
-Description=EVE PI Manager - Celery Worker
+Description=PlanetFlow - Celery Worker
 After=rabbitmq-server.service postgresql.service network.target
 Wants=rabbitmq-server.service postgresql.service
 
@@ -321,7 +321,7 @@ EOF
 
 cat > "/etc/systemd/system/${SERVICE_NAME}-beat.service" << EOF
 [Unit]
-Description=EVE PI Manager - Celery Beat
+Description=PlanetFlow - Celery Beat
 After=rabbitmq-server.service postgresql.service network.target
 Wants=rabbitmq-server.service postgresql.service
 
@@ -347,7 +347,7 @@ EOF
 
 cat > "/etc/systemd/system/${SERVICE_NAME}-ws.service" << EOF
 [Unit]
-Description=EVE PI Manager - zKillboard R2Z2 Poller
+Description=PlanetFlow - zKillboard R2Z2 Poller
 After=rabbitmq-server.service postgresql.service network.target
 Wants=rabbitmq-server.service postgresql.service
 

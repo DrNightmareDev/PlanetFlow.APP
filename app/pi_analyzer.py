@@ -1,5 +1,5 @@
 """
-EVE PI System-Analyzer - Analysiert mögliche PI-Produktionsketten
+PlanetFlow System-Analyzer - Analysiert mögliche PI-Produktionsketten
 """
 from app.pi_data import (
     PLANET_RESOURCES, P0_TO_P1, P1_TO_P2, P2_TO_P3, P3_TO_P4,

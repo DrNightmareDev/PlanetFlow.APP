@@ -1,5 +1,5 @@
 /* ===================================================
-   EVE PI Manager - Custom EVE Online Dark Theme
+   PlanetFlow - Custom EVE Online Dark Theme
    =================================================== */
 
 :root {
@@ -554,7 +554,7 @@ main {
     align-items: center;
 }
 
-.eve-pip {
+.planetflowp {
     width: 10px;
     height: 10px;
     border-radius: 2px;
@@ -562,7 +562,7 @@ main {
     display: block;
 }
 
-.eve-pip-active {
+.planetflowp-active {
     background: var(--eve-accent);
     box-shadow: 0 0 4px rgba(0, 180, 216, 0.5);
 }

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Dashboard - EVE PI Manager{% endblock %}
+{% block title %}Dashboard - PlanetFlow{% endblock %}
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -203,7 +203,7 @@
     </div>
     <script>
     (function(){
-        const KEY = 'eve_pi_token_banner_dismissed';
+        const KEY = 'planetflow_token_banner_dismissed';
         const sig = {{ token_error_chars | tojson }}.slice().sort().join(',');
         if (localStorage.getItem(KEY) === sig) {
             const el = document.getElementById('tokenErrorBannerWrap');
@@ -842,8 +842,8 @@ const COLONY_LOCATION = [
 ];
 const DASHBOARD_PRODUCT_LABELS = {{ product_labels | tojson }};
 const MARKET_LAST_UPDATED_ISO = {{ market_last_updated_iso | tojson }};
-const EXTRACTOR_RATE_THRESHOLD_KEY = 'eve_pi_extractor_rate_threshold';
-const SINGLE_EXTRACTOR_RATE_THRESHOLD_KEY = 'eve_pi_single_extractor_rate_threshold';
+const EXTRACTOR_RATE_THRESHOLD_KEY = 'planetflow_extractor_rate_threshold';
+const SINGLE_EXTRACTOR_RATE_THRESHOLD_KEY = 'planetflow_single_extractor_rate_threshold';
 const BALANCE_LABELS = {
     totalOutput: {{ 'Total Output' | tojson }},
     cycleTime: {{ 'Cycle Time' | tojson }},
@@ -880,7 +880,7 @@ const PI_CHECK_LABELS = {
     chainUnavailable: {{ t('dashboard.pi_check.chain_unavailable') | tojson }},
     loadError: {{ t('dashboard.pi_check.load_error') | tojson }},
 };
-const BALANCE_THRESHOLD_KEY = 'eve_pi_balance_threshold_pct';
+const BALANCE_THRESHOLD_KEY = 'planetflow_balance_threshold_pct';
 
 function localizePiCheckModal() {
     const modal = document.getElementById('piCheckModal');
@@ -1233,8 +1233,8 @@ const COLONY_EXPIRIES = [
 ];
 
 let swReg = null;
-const NOTIFY_KEY       = 'eve_pi_notify';
-const NOTIFY_THRESH_KEY = 'eve_pi_notify_threshold'; // Minuten: 1440/720/60/15
+const NOTIFY_KEY       = 'planetflow_notify';
+const NOTIFY_THRESH_KEY = 'planetflow_notify_threshold'; // Minuten: 1440/720/60/15
 
 function getThreshold() {
     return parseInt(localStorage.getItem(NOTIFY_THRESH_KEY) || '60', 10);

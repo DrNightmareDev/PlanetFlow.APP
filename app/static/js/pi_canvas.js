@@ -134,7 +134,7 @@ function extractLinks(layoutData) {
 
 // ── Azimuthal equidistant projection ──────────────────────────────────────────
 // La = colatitude (0=north pole, π/2=equator, π=south pole), Lo = longitude
-// Same spherical convention as Three.js setFromSphericalCoords used by calli-eve/eve-pi
+// Same spherical convention as Three.js setFromSphericalCoords used by calli-eve/planetflow
 
 function buildProjection(pins, W, H, pad, extraTransform) {
   if (!pins.length) return null;

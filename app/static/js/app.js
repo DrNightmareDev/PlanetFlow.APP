@@ -1,5 +1,5 @@
 ﻿/**
- * EVE PI Manager - App JavaScript
+ * PlanetFlow - App JavaScript
  * MIT License. If you enjoy this project, ISK donations to DrNightmare are appreciated.
  */
 
@@ -193,7 +193,7 @@ const EVE_ZH_OVERRIDES = {
     'PI Chain Planner': 'PI \u751f\u4ea7\u94fe\u89c4\u5212\u5668',
     'System Analyzer': '\u661f\u7cfb\u5206\u6790\u5668',
     'System Mix': '\u661f\u7cfb\u7ec4\u5408',
-    'System Mix - EVE PI Manager': '\u661f\u7cfb\u7ec4\u5408 - EVE PI \u7ba1\u7406\u5668',
+    'System Mix - PlanetFlow': '\u661f\u7cfb\u7ec4\u5408 - EVE PI \u7ba1\u7406\u5668',
     'Vergleich': '\u6bd4\u8f83',
     'Jita Markt': '\u5409\u4ed6\u5e02\u573a',
     'Corporation': '\u519b\u56e2',
@@ -201,10 +201,10 @@ const EVE_ZH_OVERRIDES = {
     'Sprache wechseln': '\u5207\u6362\u8bed\u8a00',
     'Theme wechseln': '\u5207\u6362\u4e3b\u9898',
     'PI Manager': 'PI \u7ba1\u7406\u5668',
-    'Dashboard - EVE PI Manager': '\u4eea\u8868\u76d8 - EVE PI \u7ba1\u7406\u5668',
-    'System Analyzer - EVE PI Manager': '\u661f\u7cfb\u5206\u6790\u5668 - EVE PI \u7ba1\u7406\u5668',
-    'PI Chain Planner - EVE PI Manager': 'PI \u751f\u4ea7\u94fe\u89c4\u5212\u5668 - EVE PI \u7ba1\u7406\u5668',
-    'Manager - EVE PI Manager': '\u7ecf\u7406 - EVE PI \u7ba1\u7406\u5668',
+    'Dashboard - PlanetFlow': '\u4eea\u8868\u76d8 - EVE PI \u7ba1\u7406\u5668',
+    'System Analyzer - PlanetFlow': '\u661f\u7cfb\u5206\u6790\u5668 - EVE PI \u7ba1\u7406\u5668',
+    'PI Chain Planner - PlanetFlow': 'PI \u751f\u4ea7\u94fe\u89c4\u5212\u5668 - EVE PI \u7ba1\u7406\u5668',
+    'Manager - PlanetFlow': '\u7ecf\u7406 - EVE PI \u7ba1\u7406\u5668',
     'Manager Panel': '\u7ecf\u7406\u9762\u677f',
     'Charaktere': '\u89d2\u8272',
     'PI Kolonien': 'PI \u690d\u6c11\u5730',
@@ -352,7 +352,7 @@ const EVE_ZH_OVERRIDES = {
     'Details anzeigen': '\u663e\u793a\u8be6\u60c5',
     'Details ausblenden': '\u9690\u85cf\u8be6\u60c5',
     'System Vergleich': '\u661f\u7cfb\u6bd4\u8f83',
-    'System Vergleich - EVE PI Manager': '\u661f\u7cfb\u6bd4\u8f83 - EVE PI \u7ba1\u7406\u5668',
+    'System Vergleich - PlanetFlow': '\u661f\u7cfb\u6bd4\u8f83 - EVE PI \u7ba1\u7406\u5668',
     'Keine Systeme zum Vergleich': '\u6ca1\u6709\u53ef\u7528\u4e8e\u6bd4\u8f83\u7684\u661f\u7cfb',
     'Analysiere ein System im': '\u8bf7\u5148\u5728',
     'und klicke dort auf "Vergleich".': '\u4e2d\u5206\u6790\u4e00\u4e2a\u661f\u7cfb\uff0c\u7136\u540e\u70b9\u51fb\u201c\u6bd4\u8f83\u201d\u3002',
@@ -408,7 +408,7 @@ const EVE_ZH_OVERRIDES = {
     'Als Main setzen': '\u8bbe\u4e3a\u4e3b\u53f7',
     'Verknuepfe weitere EVE-Charaktere mit deinem Account': '\u5c06\u66f4\u591a EVE \u89d2\u8272\u5173\u8054\u5230\u4f60\u7684\u8d26\u6237',
     'Verknüpfe weitere EVE-Charaktere mit deinem Account': '\u5c06\u66f4\u591a EVE \u89d2\u8272\u5173\u8054\u5230\u4f60\u7684\u8d26\u6237',
-    'PI Chain Planner â€“ EVE PI Manager': 'PI \u751f\u4ea7\u94fe\u89c4\u5212\u5668 - EVE PI \u7ba1\u7406\u5668',
+    'PI Chain Planner â€“ PlanetFlow': 'PI \u751f\u4ea7\u94fe\u89c4\u5212\u5668 - EVE PI \u7ba1\u7406\u5668',
     'Produkt suchen / auswÃ¤hlen': '\u641c\u7d22 / \u9009\u62e9\u4ea7\u54c1',
     'Auswahl lÃ¶schen': '\u6e05\u9664\u9009\u62e9',
     'WÃ¤hle ein Produkt um die vollstÃ¤ndige Produktionskette zu sehen.': '\u9009\u62e9\u4e00\u4e2a\u4ea7\u54c1\u4ee5\u67e5\u770b\u5b8c\u6574\u751f\u4ea7\u94fe\u3002',
@@ -426,7 +426,7 @@ const EVE_ZH_OVERRIDES = {
 };
 
 const EVE_EXTRA_TRANSLATIONS = {
-    'EVE PI Manager - Anmelden': { en: 'EVE PI Manager - Sign In', 'zh-Hans': 'EVE PI 管理器 - 登录' },
+    'PlanetFlow - Anmelden': { en: 'PlanetFlow - Sign In', 'zh-Hans': 'EVE PI 管理器 - 登录' },
     'EVE Online und alle zugehoerigen Marken sind Eigentum von CCP Games.': { en: 'EVE Online and all related trademarks are owned by CCP Games.', 'zh-Hans': 'EVE Online 及所有相关商标均归 CCP Games 所有。' },
     'Du siehst das Dashboard als': { en: 'You are viewing the dashboard as', 'zh-Hans': '你当前正在以此身份查看仪表盘：' },
     'Zurueck zu meinem Account': { en: 'Back to my account', 'zh-Hans': '返回我的账号' },

@@ -81,7 +81,7 @@ async def lifespan(app: FastAPI):
     if not settings.eve_client_secret:
         raise RuntimeError("EVE_CLIENT_SECRET ist nicht konfiguriert.")
 
-    logger.info("EVE PI Manager startet...")
+    logger.info("PlanetFlow startet...")
     from app import sde
     sde.init()
     inserted_translations = bootstrap_translations()
@@ -116,11 +116,11 @@ async def lifespan(app: FastAPI):
     # Shutdown
     if scheduler:
         scheduler.shutdown(wait=False)
-    logger.info("EVE PI Manager beendet.")
+    logger.info("PlanetFlow beendet.")
 
 
 app = FastAPI(
-    title="EVE PI Manager",
+    title="PlanetFlow",
     description="Planetary Industry Dashboard für EVE Online",
     version="1.0.0",
     lifespan=lifespan,

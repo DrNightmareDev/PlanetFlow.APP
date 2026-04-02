@@ -1,5 +1,5 @@
 {
-  "app.name": "EVE PI Manager",
+  "app.name": "PlanetFlow",
   "app.short_name": "PI Manager",
   "common.none": "—",
   "common.unknown": "Unbekannt",
@@ -440,7 +440,7 @@
   "characters.last_successful": "Zuletzt erfolgreich: {count} Kolonien",
   "characters.scope_missing_short": "Scope fehlt",
   "characters.set_main_short": "Main",
-  "index.title": "EVE PI Manager - Anmelden",
+  "index.title": "PlanetFlow - Anmelden",
   "index.subtitle": "Planetary Industry Dashboard",
   "index.feature_chains": "PI Chains Visualisierung",
   "index.feature_systems": "System Analyzer fuer optimale Planeten",

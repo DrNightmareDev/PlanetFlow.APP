@@ -1,15 +1,15 @@
 [Unit]
-Description=EVE PI Manager - Web
+Description=PlanetFlow - Web
 After=postgresql.service rabbitmq-server.service network.target
 Wants=postgresql.service rabbitmq-server.service
 
 [Service]
 Type=simple
-User=evepi
-Group=evepi
-WorkingDirectory=/opt/eve-pi-manager
-EnvironmentFile=/opt/eve-pi-manager/.env
-ExecStart=/opt/eve-pi-manager/venv/bin/gunicorn app.main:app \
+User=planetflow
+Group=planetflow
+WorkingDirectory=/opt/planetflow
+EnvironmentFile=/opt/planetflow/.env
+ExecStart=/opt/planetflow/venv/bin/gunicorn app.main:app \
     -k uvicorn.workers.UvicornWorker \
     --workers 2 \
     --bind 127.0.0.1:8000 \
@@ -21,11 +21,11 @@ Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=eve-pi-manager
+SyslogIdentifier=planetflow
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/opt/eve-pi-manager
+ReadWritePaths=/opt/planetflow
 
 [Install]
 WantedBy=multi-user.target

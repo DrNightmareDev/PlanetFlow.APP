@@ -75,7 +75,7 @@ Run database migrations after pulling:
 docker compose exec app alembic upgrade head
 
 # Native Linux
-cd /opt/eve-pi-manager && alembic upgrade head
+cd /opt/planetflow && alembic upgrade head
 ```
 
 No breaking changes to `.env`. New optional env vars:

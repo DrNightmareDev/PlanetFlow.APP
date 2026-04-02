@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# EVE PI Manager - Docker Compose update script
+# PlanetFlow - Docker Compose update script
 #
 # Updates a Docker Compose deployment from the current git checkout.
 #
@@ -71,7 +71,7 @@ done
 
 echo ""
 echo -e "${BLUE}==================================================${NC}"
-echo -e "${BLUE}   EVE PI Manager - Docker Compose Update         ${NC}"
+echo -e "${BLUE}   PlanetFlow - Docker Compose Update         ${NC}"
 echo -e "${BLUE}==================================================${NC}"
 echo ""
 

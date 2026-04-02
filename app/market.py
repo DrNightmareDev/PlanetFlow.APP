@@ -167,7 +167,7 @@ def _fetch_janice_prices(item_names: list[str]) -> dict[str, dict]:
     headers = {
         "Content-Type": "text/plain",
         "Accept": "application/json",
-        "User-Agent": "EVE PI Manager",
+        "User-Agent": "PlanetFlow",
     }
     api_key = _get_janice_api_key()
     if api_key:
@@ -210,7 +210,7 @@ def _fetch_fuzzwork_prices(type_ids: list[int]) -> dict[int, dict]:
     response = requests.get(
         FUZZWORK_API_URL,
         params=params,
-        headers={"Accept": "application/json", "User-Agent": "EVE PI Manager"},
+        headers={"Accept": "application/json", "User-Agent": "PlanetFlow"},
         timeout=30,
     )
     response.raise_for_status()
@@ -545,7 +545,7 @@ def _get_market_history(type_id: int) -> list[dict]:
         resp = requests.get(
             ESI_HISTORY_URL,
             params={"type_id": type_id, "datasource": "tranquility"},
-            headers={"Accept": "application/json", "User-Agent": "EVE PI Manager"},
+            headers={"Accept": "application/json", "User-Agent": "PlanetFlow"},
             timeout=15,
         )
         resp.raise_for_status()

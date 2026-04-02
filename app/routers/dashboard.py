@@ -2423,7 +2423,7 @@ def test_webhook(
     try:
         resp = _requests.post(
             webhook_url,
-            json={"content": "✅ **EVE PI Manager** — Webhook test erfolgreich!"},
+            json={"content": "✅ **PlanetFlow** — Webhook test erfolgreich!"},
             timeout=10,
         )
         if resp.status_code in (200, 204):

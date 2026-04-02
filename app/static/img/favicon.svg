@@ -1,39 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="PlanetFlow.app favicon">
   <defs>
-    <radialGradient id="planet" cx="42%" cy="38%" r="55%">
-      <stop offset="0%" stop-color="#4fc3f7"/>
-      <stop offset="45%" stop-color="#0077b6"/>
-      <stop offset="100%" stop-color="#023e8a"/>
-    </radialGradient>
-    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#00b4d8" stop-opacity="0.4"/>
-      <stop offset="100%" stop-color="#00b4d8" stop-opacity="0"/>
-    </radialGradient>
-    <filter id="blur">
-      <feGaussianBlur stdDeviation="1.2"/>
-    </filter>
+    <linearGradient id="space" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#16120e"/>
+      <stop offset="100%" stop-color="#08090b"/>
+    </linearGradient>
+    <linearGradient id="planet" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f2c46f"/>
+      <stop offset="100%" stop-color="#9b6328"/>
+    </linearGradient>
+    <linearGradient id="flow" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#ffe2a8"/>
+      <stop offset="100%" stop-color="#df8f32"/>
+    </linearGradient>
   </defs>
-
-  <!-- Outer glow -->
-  <circle cx="16" cy="16" r="14" fill="url(#glow)" filter="url(#blur)"/>
-
-  <!-- Planet body -->
-  <circle cx="16" cy="16" r="10" fill="url(#planet)"/>
-
-  <!-- Surface highlight -->
-  <ellipse cx="13" cy="13" rx="3.5" ry="2.2" fill="white" opacity="0.18"/>
-
-  <!-- Orbital ring (ellipse, tilted) -->
-  <ellipse cx="16" cy="16" rx="14.5" ry="5" fill="none"
-           stroke="#00b4d8" stroke-width="1.5" stroke-opacity="0.75"
-           transform="rotate(-22 16 16)"/>
-
-  <!-- Ring shadow behind planet (mask with dark arc) -->
-  <path d="M 7.5 14.5 A 14.5 5 -22 0 1 24.5 17.5" fill="none"
-        stroke="#0a0e1a" stroke-width="1.8"
-        transform="rotate(-22 16 16)"/>
-
-  <!-- Small dot on ring (station / satellite) -->
-  <circle cx="29" cy="14.2" r="1.2" fill="#00b4d8"
-          transform="rotate(-22 16 16)"/>
+  <rect width="128" height="128" rx="28" fill="url(#space)"/>
+  <circle cx="47" cy="52" r="26" fill="url(#planet)"/>
+  <path d="M70 43c18 0 33 6 40 16-9 6-18 10-28 13 4 7 9 14 16 22-18-4-31-12-40-24 11-3 21-8 31-14-6-3-12-5-19-6z" fill="url(#flow)"/>
+  <path d="M37 44c7-9 17-12 28-10-6 1-11 5-15 10 4 2 7 5 10 9-10-3-18-6-23-9z" fill="#ffd391" opacity=".72"/>
+  <circle cx="92" cy="33" r="3" fill="#f6ead6" opacity=".8"/>
+  <circle cx="102" cy="49" r="2" fill="#f6ead6" opacity=".55"/>
+  <circle cx="22" cy="28" r="2" fill="#f6ead6" opacity=".4"/>
 </svg>

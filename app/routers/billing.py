@@ -22,7 +22,6 @@ from app.models import (
     BillingWalletReceiver,
     Character,
 )
-from app.session import add_flash
 from app.templates_env import templates
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -104,6 +103,7 @@ def _active_grants(db: Session, *, account: Account) -> list[BillingGrant]:
 @router.get("/", response_class=HTMLResponse)
 def billing_page(
     request: Request,
+    msg: str = "",
     account: Account = Depends(require_account),
     db: Session = Depends(get_db),
 ):
@@ -129,6 +129,7 @@ def billing_page(
         "receivers": receivers,
         "recent_redemptions": recent_redemptions,
         "now": datetime.now(UTC),
+        "msg": msg,
     })
 
 
@@ -144,7 +145,5 @@ def redeem_code(
     success, message = redeem_bonus_code(db, code_value=code, account_id=account.id)
     if success:
         db.commit()
-        add_flash(request, message, "success")
-    else:
-        add_flash(request, message, "error")
-    return RedirectResponse(url="/billing", status_code=303)
+    from urllib.parse import quote
+    return RedirectResponse(url=f"/billing?msg={quote(message)}", status_code=303)

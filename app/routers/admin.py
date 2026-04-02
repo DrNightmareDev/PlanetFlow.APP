@@ -535,7 +535,6 @@ def admin_billing_plan_save(
     db: Session = Depends(get_db),
 ):
     from app.models import BillingSubscriptionPlan
-    from app.session import add_flash
     plan = db.query(BillingSubscriptionPlan).filter(BillingSubscriptionPlan.scope == scope).first()
     if plan:
         plan.display_name = display_name
@@ -548,7 +547,6 @@ def admin_billing_plan_save(
             daily_price_isk=daily_price_isk,
         ))
     db.commit()
-    add_flash(request, f"Plan '{scope}' gespeichert.", "success")
     return RedirectResponse(url="/manager/billing", status_code=303)
 
 
@@ -563,7 +561,6 @@ def admin_billing_tier_save(
     db: Session = Depends(get_db),
 ):
     from app.models import BillingPricingTier
-    from app.session import add_flash
     tier = db.query(BillingPricingTier).filter(
         BillingPricingTier.scope == scope,
         BillingPricingTier.min_members == min_members,
@@ -579,7 +576,6 @@ def admin_billing_tier_save(
             daily_price_isk=daily_price_isk,
         ))
     db.commit()
-    add_flash(request, "Preisstufe gespeichert.", "success")
     return RedirectResponse(url="/manager/billing", status_code=303)
 
 
@@ -591,12 +587,10 @@ def admin_billing_tier_delete(
     db: Session = Depends(get_db),
 ):
     from app.models import BillingPricingTier
-    from app.session import add_flash
     tier = db.get(BillingPricingTier, tier_id)
     if tier:
         db.delete(tier)
         db.commit()
-    add_flash(request, "Preisstufe gelöscht.", "success")
     return RedirectResponse(url="/manager/billing", status_code=303)
 
 
@@ -610,7 +604,6 @@ def admin_billing_receiver_save(
     db: Session = Depends(get_db),
 ):
     from app.models import BillingWalletReceiver
-    from app.session import add_flash
     existing = db.query(BillingWalletReceiver).filter(
         BillingWalletReceiver.eve_character_id == eve_character_id
     ).first()
@@ -625,7 +618,6 @@ def admin_billing_receiver_save(
             notes=notes or None,
         ))
     db.commit()
-    add_flash(request, f"Empfänger '{character_name}' gespeichert.", "success")
     return RedirectResponse(url="/manager/billing", status_code=303)
 
 
@@ -637,12 +629,10 @@ def admin_billing_receiver_toggle(
     db: Session = Depends(get_db),
 ):
     from app.models import BillingWalletReceiver
-    from app.session import add_flash
     rec = db.get(BillingWalletReceiver, receiver_id)
     if rec:
         rec.is_active = not rec.is_active
         db.commit()
-        add_flash(request, f"Empfänger {'aktiviert' if rec.is_active else 'deaktiviert'}.", "success")
     return RedirectResponse(url="/manager/billing", status_code=303)
 
 
@@ -659,7 +649,6 @@ def admin_billing_grant_create(
 ):
     from datetime import timedelta
     from app.services.billing import create_grant
-    from app.session import add_flash
     expires_at = None
     if expires_days and expires_days > 0:
         from datetime import UTC, datetime
@@ -674,7 +663,6 @@ def admin_billing_grant_create(
         note=note,
     )
     db.commit()
-    add_flash(request, "Grant erstellt.", "success")
     return RedirectResponse(url="/manager/billing", status_code=303)
 
 
@@ -687,12 +675,10 @@ def admin_billing_grant_revoke(
 ):
     from app.models import BillingGrant
     from app.services.billing import revoke_grant
-    from app.session import add_flash
     grant = db.get(BillingGrant, grant_id)
     if grant:
         revoke_grant(db, grant=grant, actor_account_id=account.id)
         db.commit()
-        add_flash(request, "Grant widerrufen.", "success")
     return RedirectResponse(url="/manager/billing", status_code=303)
 
 
@@ -710,12 +696,10 @@ def admin_billing_code_create(
 ):
     from datetime import UTC, datetime, timedelta
     from app.models import BillingBonusCode
-    from app.session import add_flash
     existing = db.query(BillingBonusCode).filter(
         BillingBonusCode.code == code.upper().strip()
     ).first()
     if existing:
-        add_flash(request, f"Code '{code}' existiert bereits.", "error")
         return RedirectResponse(url="/manager/billing", status_code=303)
     expires_at = None
     if expires_days and expires_days > 0:
@@ -730,7 +714,6 @@ def admin_billing_code_create(
         note=note or None,
     ))
     db.commit()
-    add_flash(request, f"Code '{code.upper().strip()}' erstellt.", "success")
     return RedirectResponse(url="/manager/billing", status_code=303)
 
 
@@ -742,12 +725,10 @@ def admin_billing_code_toggle(
     db: Session = Depends(get_db),
 ):
     from app.models import BillingBonusCode
-    from app.session import add_flash
     code = db.get(BillingBonusCode, code_id)
     if code:
         code.is_active = not code.is_active
         db.commit()
-        add_flash(request, f"Code {'aktiviert' if code.is_active else 'deaktiviert'}.", "success")
     return RedirectResponse(url="/manager/billing", status_code=303)
 
 
@@ -763,7 +744,6 @@ def admin_billing_subscription_grant(
 ):
     from decimal import Decimal
     from app.services.billing import extend_subscription
-    from app.session import add_flash
     extend_subscription(
         db,
         subject_type=subject_type,
@@ -775,5 +755,4 @@ def admin_billing_subscription_grant(
         actor_account_id=account.id,
     )
     db.commit()
-    add_flash(request, f"{days} Tage Subscription für Account {target_account_id} vergeben.", "success")
     return RedirectResponse(url="/manager/billing", status_code=303)

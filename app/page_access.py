@@ -18,19 +18,19 @@ class PageDefinition:
 
 
 PAGE_DEFINITIONS: tuple[PageDefinition, ...] = (
-    PageDefinition("dashboard_characters", "Characters", "/dashboard/characters", "member"),
-    PageDefinition("dashboard", "Dashboard", "/dashboard", "member"),
-    PageDefinition("skyhook", "Skyhooks", "/skyhook", "member"),
-    PageDefinition("planner", "Planner", "/planner", "member"),
+    PageDefinition("dashboard_characters", "Characters", "/dashboard/characters", "member,paid"),
+    PageDefinition("dashboard", "Dashboard", "/dashboard", "member,paid"),
+    PageDefinition("skyhook", "Skyhooks", "/skyhook", "member,paid"),
+    PageDefinition("planner", "Planner", "/planner", "member,paid"),
     PageDefinition("inventory", "Inventory", "/inventory", "admin"),
-    PageDefinition("colony_plan", "Colony Plan", "/colony-plan", "member"),
-    PageDefinition("pi_templates", "PI Templates", "/templates", "member"),
-    PageDefinition("hauling", "Hauling", "/hauling", "manager"),
-    PageDefinition("system", "System Analysis", "/system", "member"),
-    PageDefinition("market", "Market", "/market", "member"),
-    PageDefinition("intel_map", "Combat Intel Map", "/intel/map", "manager"),
+    PageDefinition("colony_plan", "Colony Plan", "/colony-plan", "member,paid"),
+    PageDefinition("pi_templates", "PI Templates", "/templates", "member,paid"),
+    PageDefinition("hauling", "Hauling", "/hauling", "manager,paid"),
+    PageDefinition("system", "System Analysis", "/system", "member,paid"),
+    PageDefinition("market", "Market", "/market", "member,paid"),
+    PageDefinition("intel_map", "Combat Intel Map", "/intel/map", "manager,paid"),
     PageDefinition("admin", "Admin Panel", "/admin", "manager"),
-    PageDefinition("director", "Director Panel", "/director", "director"),
+    PageDefinition("director", "Director Panel", "/director", "director,paid"),
     PageDefinition("billing", "Subscription", "/billing", "member", nav_group="account"),
 )
 
@@ -46,20 +46,35 @@ _DEFINITION_BY_KEY = {page.key: page for page in PAGE_DEFINITIONS}
 
 def ensure_page_access_settings(db: Session) -> None:
     try:
-        existing = {
-            row.page_key
-            for row in db.query(PageAccessSetting.page_key).all()
-        }
+        rows = db.query(PageAccessSetting).all()
     except Exception:
         db.rollback()
         return
+    existing = {row.page_key for row in rows}
+    existing_rows = {row.page_key: row for row in rows}
     created = False
+    updated = False
     for page in PAGE_DEFINITIONS:
         if page.admin_only or page.key in existing:
             continue
         db.add(PageAccessSetting(page_key=page.key, access_level=page.default_access))
         created = True
-    if created:
+    # Backward-compat migration:
+    # legacy defaults without paid should be lifted to the new default (role + paid).
+    # This closes accidental free-access after permission model changes.
+    for page in PAGE_DEFINITIONS:
+        row = existing_rows.get(page.key)
+        if row is None or page.admin_only:
+            continue
+        default_tokens = {t.strip() for t in (page.default_access or "").split(",") if t.strip()}
+        if "paid" not in default_tokens:
+            continue
+        current = (row.access_level or "").strip()
+        legacy_role = next((t for t in ("member", "manager", "fc", "director") if t in default_tokens), None)
+        if legacy_role and current == legacy_role:
+            row.access_level = page.default_access
+            updated = True
+    if created or updated:
         db.commit()
 
 
@@ -168,15 +183,14 @@ def can_account_access_page(
     def _has_paid_access() -> bool:
         if bool(getattr(account, "is_admin", False)):
             return True
+        if db is not None:
+            from app.services.entitlements import _resolve_page_entitlement
+
+            # Use live DB resolution for correctness.
+            # Cached maps may be stale right after permission-model changes.
+            return _resolve_page_entitlement(db, account=account, page_key=page_key, access_level="paid")
         if entitlement_map is not None:
             return entitlement_map.get(page_key, False)
-        if db is not None:
-            from app.services.entitlements import get_cached_page_entitlements, _resolve_page_entitlement
-
-            cached = get_cached_page_entitlements(db, account_id=account.id)
-            if cached is not None:
-                return cached.get(page_key, False)
-            return _resolve_page_entitlement(db, account=account, page_key=page_key, access_level="paid")
         return False
 
     role_tokens = {"member", "manager", "fc", "director", "admin"}

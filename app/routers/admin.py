@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -12,6 +13,60 @@ from app.session import create_session, create_impersonate_session, read_session
 from app.templates_env import templates
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+# Minimum scope required for colony data
+_REQUIRED_SCOPE = "esi-planets.manage_planets.v1"
+_CACHE_STALE_HOURS = 2.0
+
+
+def _char_scope_ok(char: Character) -> bool:
+    """True if the character has the planet-management scope."""
+    scopes = char.scopes or ""
+    return _REQUIRED_SCOPE in scopes
+
+
+def _account_data_status(acc: Account, chars: list, cache_fetched_at) -> dict:
+    """
+    Returns a status dict for an account's data completeness:
+      status: 'ok' | 'stale' | 'empty' | 'error' | 'no_token'
+      issues: list of human-readable problem strings
+    """
+    issues = []
+    active = [c for c in chars if not getattr(c, "vacation_mode", False)]
+
+    if not active:
+        return {"status": "ok", "issues": []}
+
+    # Token / scope issues
+    no_token = [c for c in active if not c.refresh_token]
+    scope_missing = [c for c in active if c.refresh_token and not _char_scope_ok(c)]
+    esi_errors = [c for c in active if (c.esi_consecutive_errors or 0) >= 3]
+
+    for c in no_token:
+        issues.append(f"{c.character_name}: kein Refresh-Token")
+    for c in scope_missing:
+        issues.append(f"{c.character_name}: Scope fehlt ({_REQUIRED_SCOPE})")
+    for c in esi_errors:
+        issues.append(f"{c.character_name}: {c.esi_consecutive_errors} ESI-Fehler")
+
+    # Cache completeness
+    if cache_fetched_at is None:
+        issues.append("Kein Cache vorhanden")
+        status = "empty"
+    else:
+        if cache_fetched_at.tzinfo is None:
+            cache_fetched_at = cache_fetched_at.replace(tzinfo=timezone.utc)
+        age_h = (datetime.now(timezone.utc) - cache_fetched_at).total_seconds() / 3600.0
+        if age_h > _CACHE_STALE_HOURS:
+            issues.append(f"Cache veraltet ({age_h:.1f}h)")
+            status = "stale"
+        else:
+            status = "ok"
+
+    if esi_errors or scope_missing or no_token:
+        status = "error" if not cache_fetched_at else ("error" if esi_errors else "stale")
+
+    return {"status": status, "issues": issues}
 
 
 def _colony_count_per_account(db: Session) -> dict[int, int]:
@@ -51,10 +106,16 @@ def admin_panel(
         c.id: c for c in db.query(Character).filter(Character.id.in_(_main_ids)).all()
     } if _main_ids else {}
 
+    # Batch-load dashboard cache timestamps
+    from app.models import DashboardCache
+    cache_rows = db.query(DashboardCache.account_id, DashboardCache.fetched_at).all()
+    cache_fetched: dict[int, datetime] = {r.account_id: r.fetched_at for r in cache_rows}
+
     accounts_data = []
     for acc in accounts:
         chars = chars_by_account.get(acc.id, [])
         main = _mains_by_id.get(acc.main_character_id) if acc.main_character_id else None
+        data_status = _account_data_status(acc, chars, cache_fetched.get(acc.id))
         accounts_data.append({
             "account": acc,
             "characters": chars,
@@ -64,7 +125,29 @@ def admin_panel(
             "is_ceo": False,
             "is_director": False,
             "roles_scope_missing": False,
+            "data_status": data_status["status"],
+            "data_issues": data_status["issues"],
+            "char_scope_ok": {c.id: _char_scope_ok(c) for c in chars},
+            "cache_fetched_at": cache_fetched.get(acc.id),
         })
+
+    # Auto-trigger background refresh for accounts with missing/stale cache and valid scopes
+    try:
+        from app.tasks import refresh_account_task
+        for entry in accounts_data:
+            if entry["data_status"] in ("empty", "stale"):
+                acc_obj = entry["account"]
+                active_with_scope = [
+                    c for c in entry["characters"]
+                    if not getattr(c, "vacation_mode", False)
+                    and c.refresh_token
+                    and _char_scope_ok(c)
+                    and (c.esi_consecutive_errors or 0) < 3
+                ]
+                if active_with_scope:
+                    refresh_account_task.apply_async((acc_obj.id,), countdown=2)
+    except Exception:
+        pass  # Celery not available
 
     policy = db.get(AccessPolicy, 1)
     policy_entries = (
@@ -530,6 +613,31 @@ def admin_reload_account(
     except Exception as e:
         _logger.exception("admin_reload_account %s failed", target_account_id)
         return JSONResponse({"ok": False, "error": "Laden fehlgeschlagen"}, status_code=500)
+
+
+@router.post("/trigger-refresh/{target_account_id}")
+def admin_trigger_refresh(
+    target_account_id: int,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Admin: dispatch async Celery refresh for any account — returns immediately."""
+    target = db.query(Account).filter(Account.id == target_account_id).first()
+    if not target:
+        raise HTTPException(status_code=404)
+    # Reset ESI errors on all chars so the refresh isn't blocked by backoff
+    chars = db.query(Character).filter(Character.account_id == target_account_id).all()
+    for char in chars:
+        if (char.esi_consecutive_errors or 0) > 0:
+            char.esi_consecutive_errors = 0
+            char.colony_sync_issue = False
+    db.commit()
+    try:
+        from app.tasks import refresh_account_task
+        refresh_account_task.apply_async((target_account_id,), countdown=1)
+        return JSONResponse({"ok": True, "queued": True})
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
 
 
 # ── Admin Billing ─────────────────────────────────────────────────────────────

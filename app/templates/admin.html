@@ -173,6 +173,7 @@
         {% set acc = entry.account %}
         {% set chars = entry.characters %}
         {% set main = entry.main %}
+        {% set dstatus = entry.data_status %}
         <div class="eve-account-entry p-3 rounded mb-3 acc-entry"
              data-main-name="{{ main.character_name | lower if main else '' }}"
              data-all-chars="{% for c in chars %}{{ c.character_name | lower }} {% endfor %}"
@@ -224,6 +225,27 @@
                             <i class="bi bi-globe2 me-1"></i>{{ entry.colony_count }} Kolonien
                         </span>
                         {% endif %}
+                        {# Data status badge #}
+                        {% if dstatus == 'ok' %}
+                        <span class="badge" style="background:#2dc65322;color:#2dc653;border:1px solid #2dc65340;" title="Daten vollständig">
+                            <i class="bi bi-check-circle-fill me-1"></i>Daten OK
+                        </span>
+                        {% elif dstatus == 'stale' %}
+                        <span class="badge" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;"
+                              title="{{ entry.data_issues | join(' · ') }}">
+                            <i class="bi bi-clock-history me-1"></i>Veraltet
+                        </span>
+                        {% elif dstatus == 'empty' %}
+                        <span class="badge" style="background:#e6394622;color:#e63946;border:1px solid #e6394640;"
+                              title="{{ entry.data_issues | join(' · ') }}">
+                            <i class="bi bi-database-x me-1"></i>Kein Cache
+                        </span>
+                        {% elif dstatus == 'error' %}
+                        <span class="badge" style="background:#e6394622;color:#e63946;border:1px solid #e6394640;"
+                              title="{{ entry.data_issues | join(' · ') }}">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>Fehler
+                        </span>
+                        {% endif %}
                         {% if acc.id == account.id %}
                         <span class="badge eve-badge-self">Du</span>
                         {% endif %}
@@ -249,6 +271,14 @@
 
                 <!-- Aktionen -->
                 <div class="d-flex gap-2 flex-wrap">
+                    {# Reload button always visible for admins #}
+                    <button type="button"
+                            class="btn btn-sm eve-btn-ghost admin-reload-btn"
+                            data-account-id="{{ acc.id }}"
+                            title="ESI-Daten neu laden (async)"
+                            onclick="adminTriggerRefresh({{ acc.id }}, this)">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
                     {% if acc.id == account.id %}
                     <span class="btn btn-sm eve-btn-outline disabled">
                         <i class="bi bi-lock me-1"></i>Eigener Account
@@ -320,11 +350,13 @@
                                     <th>Korporation</th>
                                     <th>EVE ID</th>
                                     <th>Status</th>
+                                    <th>Sync</th>
                                     <th>Aktion</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for char in chars %}
+                                {% set scope_ok = entry.char_scope_ok.get(char.id, False) %}
                                 <tr>
                                     <td>
                                         <img src="{{ char.portrait_url }}"
@@ -341,10 +373,53 @@
                                         {% else %}
                                         <span class="badge eve-badge-alt">Alt</span>
                                         {% endif %}
-                                        {% if char.esi_consecutive_errors >= 3 %}
-                                        <span class="badge bg-danger ms-1" title="{{ char.esi_consecutive_errors }}× ESI-Fehler">
-                                            <i class="bi bi-exclamation-triangle-fill"></i> ESI
+                                        {% if char.vacation_mode %}
+                                        <span class="badge" style="background:#1a2a3a;color:#7fbfff;border:1px solid #7fbfff40;" title="Urlaubsmodus">
+                                            <i class="bi bi-moon-stars-fill"></i>
                                         </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {# Scope #}
+                                        {% if not char.refresh_token %}
+                                        <span class="badge bg-danger" title="Kein Refresh-Token — Charakter muss sich neu einloggen">
+                                            <i class="bi bi-key-fill me-1"></i>Token fehlt
+                                        </span>
+                                        {% elif not scope_ok %}
+                                        <span class="badge" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;"
+                                              title="Scope 'esi-planets.manage_planets.v1' fehlt — Charakter muss sich neu einloggen">
+                                            <i class="bi bi-shield-exclamation me-1"></i>Scope fehlt
+                                        </span>
+                                        {% elif char.esi_consecutive_errors >= 3 %}
+                                        <span class="badge bg-danger" title="{{ char.esi_consecutive_errors }}× ESI-Fehler — blockiert bis Reset">
+                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ char.esi_consecutive_errors }}× Fehler
+                                        </span>
+                                        {% elif char.esi_consecutive_errors >= 1 %}
+                                        <span class="badge" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;"
+                                              title="{{ char.esi_consecutive_errors }}× ESI-Fehler">
+                                            <i class="bi bi-exclamation me-1"></i>{{ char.esi_consecutive_errors }}× Fehler
+                                        </span>
+                                        {% else %}
+                                        {% if char.last_esi_refresh_at %}
+                                        <span class="badge" style="background:#2dc65318;color:#2dc653;border:1px solid #2dc65330;"
+                                              title="Zuletzt sync: {{ char.last_esi_refresh_at.strftime('%d.%m %H:%M') }} UTC">
+                                            <i class="bi bi-check-circle-fill me-1"></i>OK
+                                        </span>
+                                        {% else %}
+                                        <span class="badge" style="background:#58687520;color:#8899aa;border:1px solid #58687540;" title="Noch nie synchronisiert">
+                                            <i class="bi bi-dash-circle me-1"></i>Nie sync
+                                        </span>
+                                        {% endif %}
+                                        {% endif %}
+                                        {# Colony count hint #}
+                                        {% if char.last_known_colony_count > 0 %}
+                                        <span class="badge" style="background:#00b4d812;color:#00b4d8;border:1px solid #00b4d825;margin-left:2px;"
+                                              title="Bekannte Kolonien">
+                                            {{ char.last_known_colony_count }}
+                                        </span>
+                                        {% elif scope_ok and char.refresh_token and char.last_esi_refresh_at %}
+                                        <span class="badge" style="background:#58687520;color:#8899aa;border:1px solid #58687540;margin-left:2px;"
+                                              title="0 Kolonien bekannt">0</span>
                                         {% endif %}
                                     </td>
                                     <td>
@@ -368,9 +443,6 @@
                                                 onclick="adminResetCharErrors({{ char.id }}, '{{ char.character_name }}', this)">
                                             <i class="bi bi-arrow-counterclockwise"></i>
                                         </button>
-                                        {% endif %}
-                                        {% if char.id == acc.main_character_id and char.esi_consecutive_errors < 1 %}
-                                        <span class="text-muted small">—</span>
                                         {% endif %}
                                         </div>
                                     </td>
@@ -1084,6 +1156,37 @@ async function adminResetCharErrors(charId, charName, btn) {
     } catch(e) {
         showToast('Netzwerkfehler', 'error');
         btn.disabled = false;
+    }
+}
+
+async function adminTriggerRefresh(accountId, btn) {
+    btn.disabled = true;
+    const icon = btn.querySelector('i');
+    if (icon) icon.className = 'spinner-border spinner-border-sm';
+    try {
+        const resp = await fetch(`/admin/trigger-refresh/${accountId}`, { method: 'POST' });
+        const data = await resp.json();
+        if (data.ok) {
+            showToast('Reload gestartet — Daten werden im Hintergrund aktualisiert', 'success');
+            // Update status badge to "loading" state
+            const entry = btn.closest('.eve-account-entry');
+            if (entry) {
+                const staleOrError = entry.querySelectorAll('.badge[style*="#e63946"], .badge[style*="#f4a300"]');
+                staleOrError.forEach(b => {
+                    if (b.textContent.includes('Veraltet') || b.textContent.includes('Kein Cache') || b.textContent.includes('Fehler')) {
+                        b.style.cssText = 'background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;';
+                        b.innerHTML = '<span class="spinner-border spinner-border-sm me-1" style="width:.6rem;height:.6rem;border-width:2px;"></span>Lädt…';
+                    }
+                });
+            }
+        } else {
+            showToast(`Reload fehlgeschlagen: ${data.error || 'Unbekannter Fehler'}`, 'error');
+        }
+    } catch(e) {
+        showToast('Netzwerkfehler beim Reload', 'error');
+    } finally {
+        btn.disabled = false;
+        if (icon) icon.className = 'bi bi-arrow-clockwise';
     }
 }
 </script>

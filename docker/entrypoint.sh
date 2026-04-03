@@ -1,6 +1,48 @@
 #!/bin/sh
 set -e
 
+# ── Env-Variablen Vollständigkeitsprüfung ────────────────────
+# Liest alle Schlüssel aus .env.example und prüft ob sie als
+# Umgebungsvariablen gesetzt sind (Docker setzt sie via env_file).
+ENV_EXAMPLE="/app/.env.example"
+if [ -f "$ENV_EXAMPLE" ]; then
+    missing=""
+    while IFS= read -r line; do
+        # Skip blank lines and comments
+        case "$line" in
+            ""|"#"*) continue ;;
+        esac
+        # Must contain '='
+        case "$line" in
+            *"="*) ;;
+            *) continue ;;
+        esac
+        key="${line%%=*}"
+        # Strip leading whitespace from key
+        key="$(echo "$key" | sed 's/^[[:space:]]*//')"
+        [ -z "$key" ] && continue
+        # Use printenv to check if the variable is set in the environment
+        if ! printenv "$key" > /dev/null 2>&1; then
+            missing="${missing}  → ${key}\n"
+        fi
+    done < "$ENV_EXAMPLE"
+
+    if [ -n "$missing" ]; then
+        echo ""
+        echo "════════════════════════════════════════"
+        echo "  FEHLER: Umgebungsvariablen fehlen"
+        echo "════════════════════════════════════════"
+        echo ""
+        echo "Folgende Variablen aus .env.example sind nicht gesetzt:"
+        printf "%b" "$missing"
+        echo ""
+        echo "Prüfe die .env Datei auf dem Host."
+        echo ""
+        exit 1
+    fi
+    echo ".env Prüfung OK"
+fi
+
 echo "Warte auf Datenbank..."
 until python -c "
 import os, re, sys, time

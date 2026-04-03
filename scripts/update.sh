@@ -39,7 +39,41 @@ echo ""
 command -v docker &>/dev/null  || die "Docker nicht gefunden."
 docker compose version &>/dev/null || die "Docker Compose Plugin nicht gefunden."
 [[ -d "$APP_DIR/.git" ]]       || die "$APP_DIR ist kein Git-Repository."
-[[ -f "$APP_DIR/.env" ]]       || die ".env nicht gefunden — stelle sicher dass die Datei existiert."
+[[ -f "$APP_DIR/.env" ]]       || die ".env nicht gefunden — kopiere .env.example und fülle alle Werte aus."
+
+# ── .env Vollständigkeitsprüfung ─────────────────────────────
+if [[ -f "$APP_DIR/.env.example" ]]; then
+    info "Prüfe .env auf fehlende Einträge..."
+    missing=()
+    while IFS= read -r line; do
+        # Skip blank lines, comments, and lines that don't contain '='
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+        key="${line%%=*}"
+        [[ -z "$key" ]] && continue
+        # Check if key exists in .env (as KEY= at start of a non-commented line)
+        if ! grep -qE "^[[:space:]]*${key}[[:space:]]*=" "$APP_DIR/.env" 2>/dev/null; then
+            missing+=("$key")
+        fi
+    done < "$APP_DIR/.env.example"
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        echo ""
+        echo -e "${RED}══════════════════════════════════════════${NC}"
+        echo -e "${RED}  .env unvollständig — Update abgebrochen ${NC}"
+        echo -e "${RED}══════════════════════════════════════════${NC}"
+        echo ""
+        echo -e "${RED}Folgende Einträge fehlen in .env:${NC}"
+        for key in "${missing[@]}"; do
+            echo -e "  ${YELLOW}→ ${key}${NC}"
+        done
+        echo ""
+        echo "  Füge die fehlenden Einträge zu .env hinzu."
+        echo "  Vorlage: $APP_DIR/.env.example"
+        echo ""
+        exit 1
+    fi
+    ok ".env vollständig"
+fi
 
 # ── 1. Git pull ──────────────────────────────────────────────
 info "Hole aktuelle Version von GitHub (origin/$BRANCH)..."

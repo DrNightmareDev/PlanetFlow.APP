@@ -808,8 +808,29 @@ const translationUiText = {
     saved: '{{ t("manager.i18n.saved") }}',
     saveError: '{{ t("manager.i18n.save_error") }}'
 };
+const MANAGER_ACTIVE_SECTION_KEY = 'eve_manager_active_section';
+const managerSections = Array.from(document.querySelectorAll('.manager-section')).map(s => s.id);
+const managerSectionSet = new Set(managerSections);
 
-function switchManagerSection(targetId) {
+function managerSectionFromHash() {
+    const hash = (window.location.hash || '').replace('#', '').trim();
+    if (!hash) return null;
+    if (hash === 'page-access') return 'manager-section-pages';
+    if (hash === 'access-policy') return 'manager-section-policy';
+    if (managerSectionSet.has(hash)) return hash;
+    return null;
+}
+
+function managerHashForSection(sectionId) {
+    if (sectionId === 'manager-section-pages') return '#page-access';
+    if (sectionId === 'manager-section-policy') return '#access-policy';
+    return `#${sectionId}`;
+}
+
+function switchManagerSection(targetId, opts = {}) {
+    const persist = opts.persist !== false;
+    const updateHash = opts.updateHash !== false;
+    if (!managerSectionSet.has(targetId)) return;
     document.querySelectorAll('.manager-section').forEach(section => {
         section.classList.toggle('d-none', section.id !== targetId);
     });
@@ -817,6 +838,15 @@ function switchManagerSection(targetId) {
         btn.classList.toggle('eve-btn-primary', btn.dataset.target === targetId);
         btn.classList.toggle('eve-btn-ghost', btn.dataset.target !== targetId);
     });
+    if (persist) {
+        try { localStorage.setItem(MANAGER_ACTIVE_SECTION_KEY, targetId); } catch (_) {}
+    }
+    if (updateHash) {
+        const targetHash = managerHashForSection(targetId);
+        if (window.location.hash !== targetHash) {
+            history.replaceState(null, '', targetHash);
+        }
+    }
 }
 
 try {
@@ -1116,10 +1146,35 @@ document.getElementById('i18nReseedBtn')?.addEventListener('click', async () => 
 document.querySelectorAll('.manager-subnav-btn').forEach(btn => {
     btn.addEventListener('click', () => switchManagerSection(btn.dataset.target));
 });
+window.addEventListener('hashchange', () => {
+    const fromHash = managerSectionFromHash();
+    if (fromHash) {
+        switchManagerSection(fromHash, { persist: true, updateHash: false });
+    }
+});
+document.querySelectorAll('form[method="post"]').forEach(form => {
+    form.addEventListener('submit', () => {
+        const active = document.querySelector('.manager-section:not(.d-none)')?.id;
+        if (!active) return;
+        try { localStorage.setItem(MANAGER_ACTIVE_SECTION_KEY, active); } catch (_) {}
+    });
+});
 renderTranslationRows();
 entries.forEach(el => { el.dataset.accMatch = '1'; });
 renderAccountPage();
-switchManagerSection('manager-section-accounts');
+let initialManagerSection = managerSectionFromHash();
+if (!initialManagerSection) {
+    try {
+        const savedSection = localStorage.getItem(MANAGER_ACTIVE_SECTION_KEY) || '';
+        if (managerSectionSet.has(savedSection)) {
+            initialManagerSection = savedSection;
+        }
+    } catch (_) {}
+}
+if (!initialManagerSection) {
+    initialManagerSection = 'manager-section-accounts';
+}
+switchManagerSection(initialManagerSection, { persist: false, updateHash: false });
 
 // ── Admin Reload All ─────────────────────────────────────────────────────
 const ADMIN_RELOAD_ACCOUNTS = [

@@ -372,6 +372,7 @@
               <th class="px-3 py-2 text-muted fw-normal">Page</th>
               <th class="py-2 text-muted fw-normal">Route</th>
               <th class="py-2 text-muted fw-normal">Current</th>
+              <th class="py-2 text-muted fw-normal">Visual Badge</th>
               <th class="py-2 text-muted fw-normal text-end">Set Access</th>
             </tr>
           </thead>
@@ -393,15 +394,27 @@
                   <span class="badge" style="background:#2dc65322;color:#2dc653;border:1px solid #2dc65340;font-size:.72rem;">Free</span>
                 {% endif %}
               </td>
+              <td class="py-2">
+                {% if row.show_subscription_badge %}
+                  <span class="badge" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.72rem;">Subscription</span>
+                {% else %}
+                  <span class="text-muted small">Off</span>
+                {% endif %}
+              </td>
               <td class="py-2 text-end">
                 <form method="post" action="/billing/admin/page-access" class="d-inline-flex align-items-center gap-1">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                   <input type="hidden" name="page_key" value="{{ row.page.key }}">
+                  <input type="hidden" name="show_subscription_badge" value="0">
                   <select name="billing_mode" class="form-select form-select-sm eve-input" style="min-width:150px;">
                     <option value="free" {% if row.access_level not in ('none','paid') and 'paid' not in row.access_level.split(',') %}selected{% endif %}>Free (Members)</option>
                     <option value="paid" {% if 'paid' in row.access_level.split(',') %}selected{% endif %}>Subscription</option>
                     <option value="none" {% if 'none' in row.access_level.split(',') %}selected{% endif %}>No Access</option>
                   </select>
+                  <label class="d-inline-flex align-items-center gap-1 text-muted small mb-0" style="white-space:nowrap;">
+                    <input type="checkbox" name="show_subscription_badge" value="1" {% if row.show_subscription_badge %}checked{% endif %}>
+                    Badge
+                  </label>
                   <button type="submit" class="btn btn-sm eve-btn-gold">
                     <i class="bi bi-save"></i>
                   </button>

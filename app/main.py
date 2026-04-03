@@ -12,7 +12,13 @@ from app.config import get_settings
 from app.database import engine, SessionLocal
 from app.i18n import bootstrap_pi_type_translations, bootstrap_static_planets, bootstrap_static_stargates, bootstrap_translations, reseed_translations
 from app.models import Character, SSOState
-from app.page_access import get_access_settings_map, get_page_visibility, is_public_path, match_page_for_path
+from app.page_access import (
+    get_access_settings_map,
+    get_page_visibility,
+    get_subscription_badge_settings_map,
+    is_public_path,
+    match_page_for_path,
+)
 from app.security import decrypt_text, encrypt_text, require_strong_secret_key
 from app.routers import auth, dashboard, admin, director, pi, market, system, planner, skyhook, colony_plan, pi_templates, hauling, killboard, intel, inventory, billing
 from app.templates_env import templates
@@ -178,6 +184,7 @@ async def impersonate_middleware(request: Request, call_next):
     request.state.account = None
     request.state.page_permissions = {}
     request.state.page_access_levels = {}
+    request.state.page_subscription_badges = {}
     request.state.show_director_nav = False
 
     path = request.url.path
@@ -196,7 +203,9 @@ async def impersonate_middleware(request: Request, call_next):
         account = db.query(Account).filter(Account.id == account_id).first() if account_id else None
         request.state.account = account
         settings_map = get_access_settings_map(db)
+        badge_map = get_subscription_badge_settings_map(db)
         request.state.page_access_levels = settings_map
+        request.state.page_subscription_badges = badge_map
 
         # Load entitlement cache once per request (only for paid pages, avoids extra query otherwise)
         entitlement_map: dict[str, bool] | None = None

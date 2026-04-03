@@ -90,6 +90,16 @@ def get_access_settings_map(db: Session) -> dict[str, str]:
     return {row.page_key: row.access_level for row in rows}
 
 
+def get_subscription_badge_settings_map(db: Session) -> dict[str, bool]:
+    ensure_page_access_settings(db)
+    try:
+        rows = db.query(PageAccessSetting).all()
+    except Exception:
+        db.rollback()
+        return {page.key: False for page in PAGE_DEFINITIONS if not page.admin_only}
+    return {row.page_key: bool(getattr(row, "show_subscription_badge", False)) for row in rows}
+
+
 def get_effective_access_level(page_key: str, db: Session | None = None, settings_map: dict[str, str] | None = None) -> str | None:
     page = get_page_definition(page_key)
     if not page:

@@ -363,6 +363,7 @@ class PageAccessSetting(Base):
 
     page_key = Column(String(100), primary_key=True)
     access_level = Column(String(20), nullable=False, default="member")
+    show_subscription_badge = Column(Boolean, nullable=False, default=False, server_default="false")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 

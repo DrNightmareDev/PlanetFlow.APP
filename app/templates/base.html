@@ -67,11 +67,13 @@
 
         <div class="collapse navbar-collapse" id="navMain">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0 gap-1">
+                {% set nav_sub_badges = request.state.page_subscription_badges or {} %}
                 {% if request.state.page_permissions.get('dashboard', True) %}
                 <li class="nav-item">
                     <a class="nav-link {% if request.url.path.startswith('/dashboard') and not request.url.path.startswith('/dashboard/characters') %}active{% endif %}"
                        href="/dashboard">
                         <i class="bi bi-speedometer2 me-1"></i>{{ t('nav.dashboard') }}
+                        {% if nav_sub_badges.get('dashboard', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                     </a>
                 </li>
                 {% endif %}
@@ -80,6 +82,7 @@
                     <a class="nav-link {% if request.url.path.startswith('/skyhook') %}active{% endif %}"
                        href="/skyhook">
                         <i class="bi bi-box-seam me-1"></i>{{ t('nav.skyhooks') }}
+                        {% if nav_sub_badges.get('skyhook', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                     </a>
                 </li>
                 {% endif %}
@@ -97,6 +100,7 @@
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/planner') %}active{% endif %}" href="/planner">
                                 <i class="bi bi-diagram-3 me-2 text-muted"></i>{{ t('nav.planner') }}
+                                {% if nav_sub_badges.get('planner', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                             </a>
                         </li>
                         {% endif %}
@@ -104,6 +108,7 @@
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/inventory') %}active{% endif %}" href="/inventory">
                                 <i class="bi bi-boxes me-2 text-muted"></i>Inventory
+                                {% if nav_sub_badges.get('inventory', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                             </a>
                         </li>
                         {% endif %}
@@ -111,6 +116,7 @@
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/colony-plan') %}active{% endif %}" href="/colony-plan">
                                 <i class="bi bi-diagram-2 me-2 text-muted"></i>{{ t('nav.colony_plan') }}
+                                {% if nav_sub_badges.get('colony_plan', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                             </a>
                         </li>
                         {% endif %}
@@ -118,6 +124,7 @@
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/templates') %}active{% endif %}" href="/templates">
                                 <i class="bi bi-geo-alt me-2 text-muted"></i>{{ t('nav.templates', default='PI Templates') }}
+                                {% if nav_sub_badges.get('pi_templates', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                             </a>
                         </li>
                         {% endif %}
@@ -125,6 +132,7 @@
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/hauling') %}active{% endif %}" href="/hauling">
                                 <i class="bi bi-truck me-2 text-muted"></i>{{ t('nav.hauling') }}
+                                {% if nav_sub_badges.get('hauling', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                             </a>
                         </li>
                         {% endif %}
@@ -146,21 +154,25 @@
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/system') and not request.url.path.startswith('/system/compare') and not request.url.path.startswith('/system/mix') and not request.url.path.startswith('/system/fittings') %}active{% endif %}" href="/system">
                                 <i class="bi bi-globe2 me-2 text-muted"></i>{{ t('nav.system') }}
+                                {% if nav_sub_badges.get('system', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                             </a>
                         </li>
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/system/mix') %}active{% endif %}" href="/system/mix">
                                 <i class="bi bi-collection me-2 text-muted"></i>{{ t('nav.system_mix') }}
+                                {% if nav_sub_badges.get('system', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                             </a>
                         </li>
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/system/compare') %}active{% endif %}" href="/system/compare">
                                 <i class="bi bi-layout-split me-2 text-muted"></i>{{ t('nav.compare') }}
+                                {% if nav_sub_badges.get('system', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                             </a>
                         </li>
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/system/fittings') %}active{% endif %}" href="/system/fittings">
                                 <i class="bi bi-cpu me-2 text-muted"></i>{{ t('nav.fittings', default='Fittings') }}
+                                {% if nav_sub_badges.get('system', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                             </a>
                         </li>
                         {% endif %}
@@ -169,6 +181,7 @@
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/intel/map') %}active{% endif %}" href="/intel/map">
                                 <i class="bi bi-broadcast-pin me-2 text-muted"></i>Combat Intel Map
+                                {% if nav_sub_badges.get('intel_map', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                             </a>
                         </li>
                         {% endif %}
@@ -181,6 +194,7 @@
                     <a class="nav-link {% if request.url.path.startswith('/market') %}active{% endif %}"
                        href="/market">
                         <i class="bi bi-graph-up-arrow me-1"></i>{{ t('nav.market') }}
+                        {% if nav_sub_badges.get('market', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                     </a>
                 </li>
                 {% endif %}
@@ -189,6 +203,7 @@
                     <a class="nav-link {% if request.url.path.startswith('/director') %}active{% endif %}"
                        href="/director" style="color:#f4a300;">
                         <i class="bi bi-building-fill me-1"></i>Director
+                        {% if nav_sub_badges.get('director', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                     </a>
                 </li>
                 {% endif %}
@@ -271,6 +286,7 @@
                     <li>
                         <a class="dropdown-item {% if request.url.path.startswith('/billing') %}active{% endif %}" href="/billing">
                             <i class="bi bi-currency-exchange me-2"></i>Subscription
+                            {% if nav_sub_badges.get('billing', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                         </a>
                     </li>
                     <li><hr class="dropdown-divider eve-divider"></li>

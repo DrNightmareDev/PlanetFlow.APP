@@ -141,12 +141,14 @@ def billing_page(
     page_access_rows = []
     if account.is_admin or account.is_owner:
         settings_map = get_access_settings_map(db)
+        page_rows = {row.page_key: row for row in db.query(PageAccessSetting).all()}
         for page in get_page_definitions():
             if page.admin_only or page.key == "admin":
                 continue
             page_access_rows.append({
                 "page": page,
                 "access_level": settings_map.get(page.key, page.default_access),
+                "show_subscription_badge": bool(getattr(page_rows.get(page.key), "show_subscription_badge", False)),
             })
 
     return templates.TemplateResponse("billing/index.html", {
@@ -180,6 +182,7 @@ async def billing_admin_page_access(
 
     page_key = (form.get("page_key") or "").strip()
     billing_mode = (form.get("billing_mode") or "").strip()
+    show_subscription_badge = str(form.get("show_subscription_badge") or "").strip().lower() in {"1", "true", "on", "yes"}
 
     page = next((p for p in get_page_definitions() if p.key == page_key), None)
     if not page:
@@ -202,10 +205,15 @@ async def billing_admin_page_access(
     access_level = _mode_map[billing_mode]
     row = db.get(PageAccessSetting, page_key)
     if row is None:
-        row = PageAccessSetting(page_key=page_key, access_level=access_level)
+        row = PageAccessSetting(
+            page_key=page_key,
+            access_level=access_level,
+            show_subscription_badge=show_subscription_badge,
+        )
         db.add(row)
     else:
         row.access_level = access_level
+        row.show_subscription_badge = show_subscription_badge
     db.commit()
     return RedirectResponse(url="/billing?msg=Access+level+updated", status_code=303)
 

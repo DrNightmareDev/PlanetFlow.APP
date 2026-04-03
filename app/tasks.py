@@ -158,6 +158,7 @@ def _refresh_character_data(char, db) -> dict | None:
         colonies.append({
             "character_name": char.character_name,
             "eve_character_id": char.eve_character_id,
+            "character_portrait": char.portrait_url,
             "planet_id": planet_id,
             "planet_name": planet_name,
             "planet_type": planet_type,

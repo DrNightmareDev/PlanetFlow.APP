@@ -264,6 +264,12 @@
                     </li>
                     <li><hr class="dropdown-divider eve-divider"></li>
                     <li>
+                        <a class="dropdown-item {% if request.url.path.startswith('/billing') %}active{% endif %}" href="/billing">
+                            <i class="bi bi-currency-exchange me-2"></i>Subscription
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider eve-divider"></li>
+                    <li>
                         <a class="dropdown-item" href="/auth/add-character">
                             <i class="bi bi-person-plus me-2"></i>{{ t('common.add_alt') }}
                         </a>

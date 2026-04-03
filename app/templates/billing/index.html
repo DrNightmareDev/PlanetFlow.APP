@@ -2,54 +2,142 @@
 {% block title %}Subscription — {{ t('app.name') }}{% endblock %}
 
 {% block content %}
-<div class="container py-4" style="max-width:860px">
-  <h2 class="mb-4"><i class="bi bi-credit-card me-2"></i>Subscription</h2>
+<div class="container py-4" style="max-width:900px">
 
-  {# Feedback message from redirect #}
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <div style="width:42px;height:42px;background:linear-gradient(135deg,#0a1628,#1a2d3d);border:1px solid #1e3a5f;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+      <i class="bi bi-currency-exchange" style="font-size:1.2rem;color:#7ec8e3;"></i>
+    </div>
+    <div>
+      <h4 class="mb-0 fw-semibold">Subscription</h4>
+      <div class="text-muted small">Zugang &amp; ISK-Zahlung</div>
+    </div>
+  </div>
+
   {% if msg %}
-    <div class="alert alert-info alert-dismissible fade show" role="alert">
-      {{ msg }}
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    <div class="alert alert-dismissible fade show mb-4" role="alert"
+         style="background:#0a1e14;border:1px solid #2dc65360;color:#2dc653;">
+      <i class="bi bi-check-circle me-2"></i>{{ msg }}
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
     </div>
   {% endif %}
 
-  {# Active subscriptions #}
-  <div class="card mb-4">
-    <div class="card-header fw-semibold"><i class="bi bi-check-circle me-1"></i>Aktive Subscriptions</div>
+  {# ── Status overview ─────────────────────────────────────────────────────── #}
+  <div class="row g-3 mb-4">
+
+    {# Active individual sub #}
+    {% set ind = active_periods | selectattr('scope', 'equalto', 'Individual') | list %}
+    <div class="col-12 col-sm-6 col-lg-4">
+      <div class="eve-stat-card card border-0 h-100 p-3">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <i class="bi bi-person-check" style="color:#7ec8e3;font-size:1.1rem;"></i>
+          <span class="small fw-semibold text-muted">Personal</span>
+        </div>
+        {% if ind %}
+          <div class="fw-bold" style="color:#2dc653;">Aktiv</div>
+          <div class="text-muted small mt-1">bis {{ ind[0].ends_at.strftime('%Y-%m-%d') }}</div>
+        {% else %}
+          <div class="fw-bold text-muted">Inaktiv</div>
+          <div class="text-muted small mt-1">kein aktives Abo</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Corp/Alliance coverage #}
+    {% set group_periods = active_periods | rejectattr('scope', 'equalto', 'Individual') | list %}
+    <div class="col-12 col-sm-6 col-lg-4">
+      <div class="eve-stat-card card border-0 h-100 p-3">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <i class="bi bi-building" style="color:#7ec8e3;font-size:1.1rem;"></i>
+          <span class="small fw-semibold text-muted">Corp / Alliance</span>
+        </div>
+        {% if group_periods %}
+          <div class="fw-bold" style="color:#2dc653;">Abgedeckt</div>
+          <div class="text-muted small mt-1">{{ group_periods | length }} aktiv</div>
+        {% else %}
+          <div class="fw-bold text-muted">Keine</div>
+          <div class="text-muted small mt-1">kein Gruppen-Abo</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Grants #}
+    <div class="col-12 col-sm-6 col-lg-4">
+      <div class="eve-stat-card card border-0 h-100 p-3">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <i class="bi bi-gift" style="color:#7ec8e3;font-size:1.1rem;"></i>
+          <span class="small fw-semibold text-muted">Freischaltungen</span>
+        </div>
+        {% if active_grants %}
+          <div class="fw-bold" style="color:#f4a300;">{{ active_grants | length }} aktiv</div>
+          <div class="text-muted small mt-1">manuell vergeben</div>
+        {% else %}
+          <div class="fw-bold text-muted">Keine</div>
+          <div class="text-muted small mt-1">keine Sonderzugänge</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ── Active subscriptions detail ─────────────────────────────────────────── #}
+  <div class="eve-card card border-0 mb-4">
+    <div class="card-header eve-card-header d-flex align-items-center gap-2">
+      <i class="bi bi-check-circle" style="color:#2dc653;"></i>
+      <span class="fw-semibold">Aktive Subscriptions</span>
+    </div>
     <div class="card-body p-0">
       {% if active_periods %}
-        <table class="table table-sm mb-0">
-          <thead><tr><th>Scope</th><th>Gültig bis</th><th>Quelle</th></tr></thead>
+        <table class="table table-sm mb-0" style="font-size:.88rem;">
+          <thead style="background:#0a1220;">
+            <tr>
+              <th class="px-3 py-2 text-muted fw-normal">Scope</th>
+              <th class="py-2 text-muted fw-normal">Gültig bis</th>
+              <th class="py-2 text-muted fw-normal">Quelle</th>
+            </tr>
+          </thead>
           <tbody>
           {% for p in active_periods %}
             <tr>
-              <td>{{ p.scope }}</td>
-              <td>{{ p.ends_at.strftime('%Y-%m-%d %H:%M') }} UTC</td>
-              <td><span class="badge bg-secondary">{{ p.source }}</span></td>
+              <td class="px-3 py-2">{{ p.scope }}</td>
+              <td class="py-2">{{ p.ends_at.strftime('%Y-%m-%d %H:%M') }} UTC</td>
+              <td class="py-2"><span class="badge" style="background:#1a2d3d;color:#7ec8e3;border:1px solid #2a4a6b;font-size:.7rem;">{{ p.source }}</span></td>
             </tr>
           {% endfor %}
           </tbody>
         </table>
       {% else %}
-        <p class="text-muted p-3 mb-0">Keine aktive Subscription.</p>
+        <div class="p-4 text-center text-muted">
+          <i class="bi bi-dash-circle mb-2 d-block" style="font-size:1.5rem;opacity:.4;"></i>
+          Keine aktive Subscription. Sende ISK um Zugang zu erhalten.
+        </div>
       {% endif %}
     </div>
   </div>
 
-  {# Active grants #}
+  {# ── Active grants ───────────────────────────────────────────────────────── #}
   {% if active_grants %}
-  <div class="card mb-4">
-    <div class="card-header fw-semibold"><i class="bi bi-gift me-1"></i>Manuelle Freischaltungen</div>
+  <div class="eve-card card border-0 mb-4">
+    <div class="card-header eve-card-header d-flex align-items-center gap-2">
+      <i class="bi bi-gift" style="color:#f4a300;"></i>
+      <span class="fw-semibold">Manuelle Freischaltungen</span>
+    </div>
     <div class="card-body p-0">
-      <table class="table table-sm mb-0">
-        <thead><tr><th>Typ</th><th>Seite/Feature</th><th>Gültig bis</th><th>Hinweis</th></tr></thead>
+      <table class="table table-sm mb-0" style="font-size:.88rem;">
+        <thead style="background:#0a1220;">
+          <tr>
+            <th class="px-3 py-2 text-muted fw-normal">Typ</th>
+            <th class="py-2 text-muted fw-normal">Seite / Feature</th>
+            <th class="py-2 text-muted fw-normal">Gültig bis</th>
+            <th class="py-2 text-muted fw-normal">Hinweis</th>
+          </tr>
+        </thead>
         <tbody>
         {% for g in active_grants %}
           <tr>
-            <td>{{ g.scope_type }}</td>
-            <td>{{ g.scope_key or '—' }}</td>
-            <td>{{ g.expires_at.strftime('%Y-%m-%d') if g.expires_at else 'Unbegrenzt' }}</td>
-            <td class="text-muted small">{{ g.note or '' }}</td>
+            <td class="px-3 py-2">{{ g.scope_type }}</td>
+            <td class="py-2">{{ g.scope_key or '—' }}</td>
+            <td class="py-2">{{ g.expires_at.strftime('%Y-%m-%d') if g.expires_at else 'Unbegrenzt' }}</td>
+            <td class="py-2 text-muted small">{{ g.note or '' }}</td>
           </tr>
         {% endfor %}
         </tbody>
@@ -58,57 +146,97 @@
   </div>
   {% endif %}
 
-  {# Payment instructions #}
+  {# ── How to pay ──────────────────────────────────────────────────────────── #}
   {% if receivers %}
-  <div class="card mb-4">
-    <div class="card-header fw-semibold"><i class="bi bi-bank me-1"></i>ISK-Zahlung</div>
+  <div class="eve-card card border-0 mb-4">
+    <div class="card-header eve-card-header d-flex align-items-center gap-2">
+      <i class="bi bi-bank" style="color:#7ec8e3;"></i>
+      <span class="fw-semibold">Wie bezahle ich?</span>
+    </div>
     <div class="card-body">
-      <p class="mb-2">Sende ISK direkt im Spiel an einen der folgenden Charaktere:</p>
-      <ul class="list-group list-group-flush mb-3">
-        {% for r in receivers %}
-          <li class="list-group-item d-flex align-items-center gap-2">
-            <img src="https://images.evetech.net/characters/{{ r.eve_character_id }}/portrait?size=32"
-                 class="rounded" width="32" height="32">
-            <strong>{{ r.character_name }}</strong>
-            {% if r.notes %}<span class="text-muted small ms-2">{{ r.notes }}</span>{% endif %}
-          </li>
-        {% endfor %}
-      </ul>
-      <p class="text-muted small mb-0">
-        <i class="bi bi-info-circle me-1"></i>
-        Deine Zahlung wird automatisch erkannt und deinem Account gutgeschrieben.
-        Bitte stelle sicher, dass dein EVE-Charakter in dieser App angemeldet ist.
-      </p>
+
+      <div class="mb-3 p-3 rounded" style="background:#060e18;border:1px solid #1e2d3d;">
+        <div class="fw-semibold mb-2" style="color:#7ec8e3;">
+          <i class="bi bi-1-circle me-2"></i>Schritt 1 — ISK im Spiel senden
+        </div>
+        <p class="text-muted small mb-2">
+          Öffne in EVE Online den <strong style="color:#cdd6f4;">Wallet</strong>, klicke auf
+          <strong style="color:#cdd6f4;">Send Money</strong> und sende den ISK-Betrag an einen der folgenden Charaktere.
+          Gib als Verwendungszweck (Reason) nichts Besonderes an — die Zahlung wird automatisch erkannt.
+        </p>
+        <div class="d-flex flex-wrap gap-3">
+          {% for r in receivers %}
+            <div class="d-flex align-items-center gap-2 p-2 rounded"
+                 style="background:#0a1628;border:1px solid #1e3a5f;min-width:220px;">
+              <img src="https://images.evetech.net/characters/{{ r.eve_character_id }}/portrait?size=64"
+                   class="rounded" width="40" height="40" style="border:1px solid #1e3a5f;">
+              <div>
+                <div class="fw-semibold" style="font-size:.9rem;">{{ r.character_name }}</div>
+                {% if r.notes %}<div class="text-muted small">{{ r.notes }}</div>{% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="p-3 rounded" style="background:#060e18;border:1px solid #1e2d3d;">
+        <div class="fw-semibold mb-2" style="color:#7ec8e3;">
+          <i class="bi bi-2-circle me-2"></i>Schritt 2 — Warten
+        </div>
+        <p class="text-muted small mb-0">
+          Deine Zahlung wird innerhalb weniger Minuten automatisch erkannt und deinem Account gutgeschrieben.
+          Stelle sicher, dass der sendende EVE-Charakter in dieser App angemeldet ist —
+          sonst kann die Zahlung nicht zugeordnet werden.
+        </p>
+      </div>
+
     </div>
   </div>
   {% endif %}
 
-  {# Bonus code #}
-  <div class="card mb-4">
-    <div class="card-header fw-semibold"><i class="bi bi-ticket-perforated me-1"></i>Bonus-Code einlösen</div>
+  {# ── Bonus code ──────────────────────────────────────────────────────────── #}
+  <div class="eve-card card border-0 mb-4">
+    <div class="card-header eve-card-header d-flex align-items-center gap-2">
+      <i class="bi bi-ticket-perforated" style="color:#7ec8e3;"></i>
+      <span class="fw-semibold">Bonus-Code einlösen</span>
+    </div>
     <div class="card-body">
-      <form method="post" action="/billing/redeem" class="d-flex gap-2">
-        <input type="text" name="code" class="form-control" placeholder="CODE-HIER-EINGEBEN"
-               style="font-family:monospace;text-transform:uppercase;max-width:280px" required>
-        <button type="submit" class="btn btn-primary">Einlösen</button>
+      <p class="text-muted small mb-3">Hast du einen Bonus-Code erhalten? Gib ihn hier ein, um Subscription-Tage oder Sonderzugänge zu aktivieren.</p>
+      <form method="post" action="/billing/redeem" class="d-flex gap-2 flex-wrap">
+        <input type="text" name="code" class="form-control"
+               placeholder="CODE-HIER-EINGEBEN"
+               style="font-family:monospace;text-transform:uppercase;max-width:280px;background:#0a1220;border-color:#1e2d3d;color:#cdd6f4;"
+               required>
+        <button type="submit" class="btn eve-btn-primary">
+          <i class="bi bi-lightning-charge me-1"></i>Einlösen
+        </button>
       </form>
     </div>
   </div>
 
-  {# Redemption history #}
+  {# ── Redemption history ──────────────────────────────────────────────────── #}
   {% if recent_redemptions %}
-  <div class="card">
-    <div class="card-header fw-semibold"><i class="bi bi-clock-history me-1"></i>Letzte Einlösungen</div>
+  <div class="eve-card card border-0">
+    <div class="card-header eve-card-header d-flex align-items-center gap-2">
+      <i class="bi bi-clock-history" style="color:#7ec8e3;"></i>
+      <span class="fw-semibold">Letzte Einlösungen</span>
+    </div>
     <div class="card-body p-0">
-      <table class="table table-sm mb-0">
-        <thead><tr><th>Code</th><th>Reward</th><th>Eingelöst am</th></tr></thead>
+      <table class="table table-sm mb-0" style="font-size:.86rem;">
+        <thead style="background:#0a1220;">
+          <tr>
+            <th class="px-3 py-2 text-muted fw-normal">Code</th>
+            <th class="py-2 text-muted fw-normal">Reward</th>
+            <th class="py-2 text-muted fw-normal">Eingelöst am</th>
+          </tr>
+        </thead>
         <tbody>
         {% for r in recent_redemptions %}
           {% set snap = r.reward_snapshot | from_json if r.reward_snapshot else {} %}
           <tr>
-            <td class="font-monospace">{{ snap.get('code', '—') }}</td>
-            <td>{{ snap.get('reward_type', '—') }}: {{ snap.get('reward_value', '') }}</td>
-            <td>{{ r.redeemed_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td class="px-3 py-2 font-monospace">{{ snap.get('code', '—') }}</td>
+            <td class="py-2">{{ snap.get('reward_type', '—') }}: {{ snap.get('reward_value', '') }}</td>
+            <td class="py-2 text-muted">{{ r.redeemed_at.strftime('%Y-%m-%d %H:%M') }}</td>
           </tr>
         {% endfor %}
         </tbody>

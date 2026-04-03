@@ -1663,23 +1663,35 @@ def _corp_access_flags(account: Account, main_char: Character | None, db: Sessio
     is_director = False
     roles_scope_missing = False
 
-    if own_corp_id and main_char:
+    # All characters on this account — CEO/Director may be on any char, not just main
+    all_chars = db.query(Character).filter(Character.account_id == account.id).all()
+
+    if own_corp_id:
         try:
             corp_info = get_corporation_info(own_corp_id)
             own_corp_name = corp_info.get("name", own_corp_name or f"Corp #{own_corp_id}")
-            is_ceo = corp_info.get("ceo_id") == main_char.eve_character_id
+            ceo_id = corp_info.get("ceo_id")
+            # CEO if any character on this account is the corp CEO
+            is_ceo = any(c.eve_character_id == ceo_id for c in all_chars)
         except Exception:
             pass
 
-        scopes = set((main_char.scopes or "").split())
-        if "esi-characters.read_corporation_roles.v1" in scopes:
-            access_token = ensure_valid_token(main_char, db)
-            if access_token:
-                roles_data = get_character_roles(main_char.eve_character_id, access_token)
-                roles = roles_data.get("roles", []) if isinstance(roles_data, dict) else []
-                is_director = "Director" in roles
-        else:
-            roles_scope_missing = True
+        # Check Director role on any character in the same corp
+        ROLES_SCOPE = "esi-characters.read_corporation_roles.v1"
+        for char in all_chars:
+            if char.corporation_id != own_corp_id:
+                continue
+            scopes = set((char.scopes or "").split())
+            if ROLES_SCOPE in scopes:
+                access_token = ensure_valid_token(char, db)
+                if access_token:
+                    roles_data = get_character_roles(char.eve_character_id, access_token)
+                    roles = roles_data.get("roles", []) if isinstance(roles_data, dict) else []
+                    if "Director" in roles:
+                        is_director = True
+                        break
+            else:
+                roles_scope_missing = True
 
     has_access = bool(
         own_corp_id and (account.is_owner or account.is_admin or is_ceo or is_director)

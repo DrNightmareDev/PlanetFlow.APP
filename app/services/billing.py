@@ -90,15 +90,19 @@ def extend_subscription(
     note: str,
     actor_account_id: int | None = None,
     source_code_id: int | None = None,
+    effective_at: datetime | None = None,
 ) -> BillingSubscriptionPeriod:
     """
     Extend (or create) a subscription period.
     If an active period already exists, the new period starts where the old one ends.
     """
     now = datetime.now(UTC)
-    starts_at = _active_period_end(db, subject_type=subject_type, subject_id=subject_id) or now
-    if starts_at < now:
-        starts_at = now
+    base_time = effective_at or now
+    if base_time.tzinfo is None:
+        base_time = base_time.replace(tzinfo=UTC)
+    starts_at = _active_period_end(db, subject_type=subject_type, subject_id=subject_id) or base_time
+    if starts_at < base_time:
+        starts_at = base_time
     ends_at = starts_at + timedelta(seconds=float(days * Decimal(86400)))
     period = BillingSubscriptionPeriod(
         subject_type=subject_type,
@@ -124,6 +128,7 @@ def extend_subscription(
             "days": str(days),
             "source_type": source_type,
             "note": note,
+            "effective_at": base_time.isoformat(),
         },
     )
     return period
@@ -232,6 +237,25 @@ def match_wallet_transaction(
                     return (m.group(1) or "").strip() or None
             return None
 
+        def _account_from_designated_username(description: str | None) -> tuple[Account | None, str | None]:
+            text = (description or "").strip()
+            if not text:
+                return None, None
+            chars = db.query(Character).all()
+            # Prefer longer names first to avoid partial matches.
+            candidates = sorted(
+                [(c.account_id, (c.character_name or "").strip()) for c in chars if (c.character_name or "").strip()],
+                key=lambda item: len(item[1]),
+                reverse=True,
+            )
+            for account_id, char_name in candidates:
+                pattern = r"(?<![A-Za-z0-9])" + re.escape(char_name) + r"(?![A-Za-z0-9])"
+                if re.search(pattern, text, flags=re.IGNORECASE):
+                    acc = db.query(Account).filter(Account.id == int(account_id)).first()
+                    if acc:
+                        return acc, char_name
+            return None, None
+
         char = None
         if tx.sender_character_id:
             char = db.query(Character).filter(
@@ -247,36 +271,62 @@ def match_wallet_transaction(
             parsed_name = _extract_name_from_description(tx.description)
             char = _char_from_name(parsed_name)
 
-        if char:
+        account = None
+        designated_name = None
+        if char is not None:
             account = db.query(Account).filter(Account.id == char.account_id).first()
-            if account:
-                plan = db.query(BillingSubscriptionPlan).filter(
-                    BillingSubscriptionPlan.scope == "individual",
-                    BillingSubscriptionPlan.is_active == True,
-                ).order_by(BillingSubscriptionPlan.id.asc()).first()
-                if plan and Decimal(plan.daily_price_isk) > 0:
-                    days = (amount / Decimal(plan.daily_price_isk)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-                    extend_subscription(
-                        db,
-                        subject_type="account",
-                        subject_id=account.id,
-                        plan_id=plan.id,
-                        days=days,
-                        source_type="payment",
-                        note=f"Wallet tx {tx.id}",
-                        actor_account_id=actor_account_id,
-                    )
-                    db.add(BillingTransactionMatch(
-                        transaction_id=tx.id,
-                        subject_type="account",
-                        subject_id=account.id,
-                        plan_id=plan.id,
-                        days_granted=days,
-                        match_status="matched",
-                        notes=f"Player donation from char {char.eve_character_id}",
-                    ))
-                    _invalidate_entitlement_cache(db, account_id=account.id)
-                    return True, f"Matched to account {account.id} ({days} days)."
+        if account is None:
+            account, designated_name = _account_from_designated_username(tx.description)
+            if account and designated_name:
+                _audit(
+                    db,
+                    event_type="payment.designated_username_detected",
+                    actor_account_id=actor_account_id,
+                    target_account_id=account.id,
+                    detail={
+                        "transaction_id": int(tx.id),
+                        "receiver_id": int(tx.receiver_id),
+                        "designated_username": designated_name,
+                        "description": tx.description or "",
+                        "amount_isk": int(tx.amount_isk or 0),
+                        "occurred_at": tx.occurred_at.isoformat() if tx.occurred_at else None,
+                    },
+                )
+
+        if account:
+            plan = db.query(BillingSubscriptionPlan).filter(
+                BillingSubscriptionPlan.scope == "individual",
+                BillingSubscriptionPlan.is_active == True,
+            ).order_by(BillingSubscriptionPlan.id.asc()).first()
+            if plan and Decimal(plan.daily_price_isk) > 0:
+                days = (amount / Decimal(plan.daily_price_isk)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                extend_subscription(
+                    db,
+                    subject_type="account",
+                    subject_id=account.id,
+                    plan_id=plan.id,
+                    days=days,
+                    source_type="payment",
+                    note=f"Wallet tx {tx.id}",
+                    actor_account_id=actor_account_id,
+                    effective_at=tx.occurred_at,
+                )
+                source_note = (
+                    f"Player donation designated username: {designated_name}"
+                    if designated_name
+                    else (f"Player donation from char {char.eve_character_id}" if char else "Player donation (fallback)")
+                )
+                db.add(BillingTransactionMatch(
+                    transaction_id=tx.id,
+                    subject_type="account",
+                    subject_id=account.id,
+                    plan_id=plan.id,
+                    days_granted=days,
+                    match_status="matched",
+                    notes=source_note,
+                ))
+                _invalidate_entitlement_cache(db, account_id=account.id)
+                return True, f"Matched to account {account.id} ({days} days)."
 
     # ── Corporation: corporation_account_withdrawal ───────────────────────────
     if tx.ref_type == "corporation_account_withdrawal" and tx.sender_corporation_id:
@@ -323,6 +373,7 @@ def match_wallet_transaction(
                             source_type="payment",
                             note=f"Wallet tx {tx.id}",
                             actor_account_id=actor_account_id,
+                            effective_at=tx.occurred_at,
                         )
                         db.add(BillingTransactionMatch(
                             transaction_id=tx.id,
@@ -357,6 +408,7 @@ def match_wallet_transaction(
                         source_type="payment",
                         note=f"Wallet tx {tx.id}",
                         actor_account_id=actor_account_id,
+                        effective_at=tx.occurred_at,
                     )
                     db.add(BillingTransactionMatch(
                         transaction_id=tx.id,

@@ -56,15 +56,35 @@ def clear_session(response: Response) -> None:
     response.delete_cookie(key=COOKIE_NAME, samesite="lax", secure=settings.cookie_secure)
 
 
+CSRF_COOKIE_NAME = "planetflow_csrf"
+CSRF_MAX_AGE = 60 * 60 * 8  # 8 hours
+
+
 def get_csrf_token(request: Request) -> str:
-    token = request.session.get("csrf_token")
+    token = request.cookies.get(CSRF_COOKIE_NAME)
     if not token:
         token = secrets.token_urlsafe(32)
-        request.session["csrf_token"] = token
+        # Store on request state so the response middleware can set the cookie
+        request.state.csrf_token_new = token
+    else:
+        request.state.csrf_token_new = None
     return token
 
 
+def set_csrf_cookie_if_needed(request: Request, response: Response) -> None:
+    token = getattr(request.state, "csrf_token_new", None)
+    if token:
+        response.set_cookie(
+            key=CSRF_COOKIE_NAME,
+            value=token,
+            max_age=CSRF_MAX_AGE,
+            httponly=False,  # needs to be readable by the CSRF check
+            samesite="lax",
+            secure=settings.cookie_secure,
+        )
+
+
 def validate_csrf(request: Request, token: str) -> None:
-    expected = request.session.get("csrf_token")
+    expected = request.cookies.get(CSRF_COOKIE_NAME)
     if not expected or not token or not secrets.compare_digest(expected, token):
         raise HTTPException(status_code=403, detail="Invalid CSRF token")

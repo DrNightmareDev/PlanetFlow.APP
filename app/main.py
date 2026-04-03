@@ -181,7 +181,10 @@ async def impersonate_middleware(request: Request, call_next):
 
     path = request.url.path
     if is_public_path(path):
-        return await call_next(request)
+        response = await call_next(request)
+        from app.session import set_csrf_cookie_if_needed
+        set_csrf_cookie_if_needed(request, response)
+        return response
 
     if path == "/admin/impersonate-exit" and request.state.is_impersonating:
         return await call_next(request)
@@ -222,7 +225,10 @@ async def impersonate_middleware(request: Request, call_next):
                 "account": account,
                 "required_role": level,
             }, status_code=403)
-        return await call_next(request)
+        response = await call_next(request)
+        from app.session import set_csrf_cookie_if_needed
+        set_csrf_cookie_if_needed(request, response)
+        return response
     finally:
         db.close()
 

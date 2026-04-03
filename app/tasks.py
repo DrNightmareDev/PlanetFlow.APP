@@ -993,17 +993,25 @@ def zkill_websocket_subscriber(self):
 
         db = SessionLocal()
         try:
-            if db.query(IntelKillEvent).filter_by(killmail_id=killmail_id).first():
-                return
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-            db.add(IntelKillEvent(
-                killmail_id=killmail_id,
-                region_id=region_id,
-                solar_system_id=system_id,
-                killmail_time=kill_time,
-                kill_json=normalized_json,
-                created_at=now_utc,
-            ))
+            insert_stmt = (
+                pg_insert(IntelKillEvent)
+                .values(
+                    killmail_id=killmail_id,
+                    region_id=region_id,
+                    solar_system_id=system_id,
+                    killmail_time=kill_time,
+                    kill_json=normalized_json,
+                    created_at=now_utc,
+                )
+                .on_conflict_do_nothing(index_elements=["killmail_id"])
+            )
+            inserted = db.execute(insert_stmt)
+            if int(getattr(inserted, "rowcount", 0) or 0) == 0:
+                # Duplicate killmail already persisted by another worker/tick.
+                db.rollback()
+                return
 
             cache_row = db.get(KillActivityCache, system_id)
             if cache_row is None:

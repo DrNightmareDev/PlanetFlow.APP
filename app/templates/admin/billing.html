@@ -23,7 +23,16 @@
             {% for entry in receivers %}
               {% set r = entry.receiver %}
               <tr>
-                <td>{{ r.character_name }}</td>
+                <td>
+                  <span
+                    class="receiver-donations-tooltip"
+                    data-tooltip-base="{{ entry.recent_donations_tooltip }}"
+                    style="cursor:help;"
+                  >{{ r.character_name }}</span>
+                  <div class="text-muted small">
+                    Next update in <span class="wallet-next-sync">--:--</span>
+                  </div>
+                </td>
                 <td class="text-muted small">{{ r.eve_character_id }}</td>
                 <td><span class="badge {{ 'bg-success' if r.is_active else 'bg-secondary' }}">{{ 'Active' if r.is_active else 'Inactive' }}</span></td>
                 <td>
@@ -396,4 +405,34 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let walletSyncCountdown = Number({{ wallet_sync_interval_seconds | int }}) || 180;
+
+function formatWalletSyncCountdown(seconds) {
+  const s = Math.max(0, Number(seconds) || 0);
+  const mm = Math.floor(s / 60);
+  const ss = s % 60;
+  return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+}
+
+function refreshWalletSyncUi() {
+  const countdownText = formatWalletSyncCountdown(walletSyncCountdown);
+  document.querySelectorAll('.wallet-next-sync').forEach((el) => {
+    el.textContent = countdownText;
+  });
+  document.querySelectorAll('.receiver-donations-tooltip').forEach((el) => {
+    const base = el.dataset.tooltipBase || 'No donations yet.';
+    el.title = `Last 15 donations to this wallet\nNext update in: ${countdownText}\n\n${base}`;
+  });
+}
+
+refreshWalletSyncUi();
+setInterval(() => {
+  walletSyncCountdown = walletSyncCountdown <= 1 ? (Number({{ wallet_sync_interval_seconds | int }}) || 180) : walletSyncCountdown - 1;
+  refreshWalletSyncUi();
+}, 1000);
+</script>
 {% endblock %}

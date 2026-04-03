@@ -696,12 +696,30 @@ def admin_billing(
     _MAIL_SCOPE = "esi-mail.send_mail.v1"
     _raw_receivers = db.query(BillingWalletReceiver).order_by(BillingWalletReceiver.id).all()
     receivers = []
+    wallet_sync_interval_seconds = 180
     for r in _raw_receivers:
         char = None
         if r.character_fk:
             char = db.get(Character, r.character_fk)
         if not char:
             char = db.query(Character).filter(Character.eve_character_id == r.eve_character_id).first()
+        recent_txs = (
+            db.query(BillingWalletTransaction)
+            .filter(
+                BillingWalletTransaction.receiver_id == r.id,
+                BillingWalletTransaction.amount_isk > 0,
+            )
+            .order_by(BillingWalletTransaction.occurred_at.desc())
+            .limit(15)
+            .all()
+        )
+        donation_lines: list[str] = []
+        for tx in recent_txs:
+            sender = tx.sender_character_name or (f"Corp {tx.sender_corporation_id}" if tx.sender_corporation_id else "Unknown")
+            when = tx.occurred_at.strftime("%Y-%m-%d %H:%M")
+            amount = f"{int(tx.amount_isk or 0):,}".replace(",", ".")
+            donation_lines.append(f"{when} UTC | {amount} ISK | {sender}")
+        donations_tooltip = "\n".join(donation_lines) if donation_lines else "No donations yet."
         has_wallet_scope = bool(char and char.scopes and _WALLET_SCOPE in char.scopes)
         has_mail_scope = bool(char and char.scopes and _MAIL_SCOPE in char.scopes)
         has_token = bool(char and char.refresh_token)
@@ -711,6 +729,7 @@ def admin_billing(
             "has_mail_scope": has_mail_scope,
             "has_token": has_token,
             "char": char,
+            "recent_donations_tooltip": donations_tooltip,
         })
     codes = db.query(BillingBonusCode).order_by(BillingBonusCode.created_at.desc()).limit(50).all()
     join_codes = db.query(BillingSubscriptionJoinCode).order_by(BillingSubscriptionJoinCode.created_at.desc()).limit(50).all()
@@ -775,6 +794,7 @@ def admin_billing(
         "corp_targets": corp_targets,
         "alliance_targets": alliance_targets,
         "now": datetime.now(timezone.utc),
+        "wallet_sync_interval_seconds": wallet_sync_interval_seconds,
     })
 
 

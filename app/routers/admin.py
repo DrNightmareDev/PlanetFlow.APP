@@ -687,7 +687,7 @@ def admin_billing(
     from app.models import (
         BillingAuditLog, BillingBonusCode, BillingGrant,
         BillingPricingTier, BillingSubscriptionPlan, BillingWalletReceiver,
-        BillingTransactionMatch, BillingWalletTransaction,
+        BillingSubscriptionJoinCode, BillingTransactionMatch, BillingWalletTransaction,
     )
     plans = db.query(BillingSubscriptionPlan).order_by(BillingSubscriptionPlan.id).all()
     tiers = db.query(BillingPricingTier).order_by(BillingPricingTier.scope, BillingPricingTier.min_members).all()
@@ -704,6 +704,7 @@ def admin_billing(
         has_token = bool(char and char.refresh_token)
         receivers.append({"receiver": r, "has_scope": has_scope, "has_token": has_token, "char": char})
     codes = db.query(BillingBonusCode).order_by(BillingBonusCode.created_at.desc()).limit(50).all()
+    join_codes = db.query(BillingSubscriptionJoinCode).order_by(BillingSubscriptionJoinCode.created_at.desc()).limit(50).all()
     grants = (
         db.query(BillingGrant, Account)
         .join(Account, Account.id == BillingGrant.account_id)
@@ -726,6 +727,21 @@ def admin_billing(
         .all()
     )
     all_accounts = db.query(Account).order_by(Account.id).all()
+    all_characters = db.query(Character).order_by(Character.character_name.asc()).all()
+    corp_targets = (
+        db.query(Character.corporation_id, Character.corporation_name)
+        .filter(Character.corporation_id.isnot(None))
+        .distinct()
+        .order_by(Character.corporation_name.asc())
+        .all()
+    )
+    alliance_targets = (
+        db.query(Character.alliance_id, Character.alliance_name)
+        .filter(Character.alliance_id.isnot(None))
+        .distinct()
+        .order_by(Character.alliance_name.asc())
+        .all()
+    )
     return templates.TemplateResponse("admin/billing.html", {
         "request": request,
         "account": account,
@@ -733,10 +749,14 @@ def admin_billing(
         "tiers": tiers,
         "receivers": receivers,
         "codes": codes,
+        "join_codes": join_codes,
         "grants": grants,
         "unmatched_txs": unmatched_txs,
         "audit_rows": audit_rows,
         "all_accounts": all_accounts,
+        "all_characters": all_characters,
+        "corp_targets": corp_targets,
+        "alliance_targets": alliance_targets,
     })
 
 
@@ -947,10 +967,44 @@ def admin_billing_code_toggle(
     return RedirectResponse(url="/admin/billing", status_code=303)
 
 
+@router.post("/billing/code/revoke/{code_id}", response_class=HTMLResponse)
+def admin_billing_code_revoke(
+    request: Request,
+    code_id: int,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from app.models import BillingBonusCode
+    from app.services.billing import revoke_bonus_code
+
+    code = db.get(BillingBonusCode, code_id)
+    if code:
+        revoke_bonus_code(db, code=code, actor_account_id=account.id)
+        db.commit()
+    return RedirectResponse(url="/admin/billing", status_code=303)
+
+
+@router.post("/billing/join-code/revoke/{join_code_id}", response_class=HTMLResponse)
+def admin_billing_join_code_revoke(
+    request: Request,
+    join_code_id: int,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from datetime import UTC, datetime
+    from app.models import BillingSubscriptionJoinCode
+
+    code = db.get(BillingSubscriptionJoinCode, join_code_id)
+    if code and code.revoked_at is None:
+        code.revoked_at = datetime.now(UTC)
+        db.commit()
+    return RedirectResponse(url="/admin/billing", status_code=303)
+
+
 @router.post("/billing/subscription/grant", response_class=HTMLResponse)
 def admin_billing_subscription_grant(
     request: Request,
-    target_account_id: int = Form(...),
+    target_subject_id: int = Form(...),
     subject_type: str = Form("account"),
     days: int = Form(...),
     note: str = Form(""),
@@ -958,16 +1012,39 @@ def admin_billing_subscription_grant(
     db: Session = Depends(get_db),
 ):
     from decimal import Decimal
-    from app.services.billing import extend_subscription
+    from app.services.billing import extend_subscription, invalidate_subject_entitlements
+
+    if days <= 0:
+        return RedirectResponse(url="/admin/billing?msg=days_must_be_positive", status_code=303)
+
+    final_subject_type = subject_type
+    final_subject_id = int(target_subject_id)
+
+    if subject_type == "character":
+        char = db.get(Character, target_subject_id)
+        if not char:
+            return RedirectResponse(url="/admin/billing?msg=character_not_found", status_code=303)
+        final_subject_type = "account"
+        final_subject_id = int(char.account_id)
+        if not note:
+            note = f"Manual character grant via {char.character_name} ({char.eve_character_id})"
+    elif subject_type in ("corporation", "alliance"):
+        required = "CORP" if subject_type == "corporation" else "ALLIANCE"
+        if required not in (note or "").upper():
+            return RedirectResponse(url=f"/admin/billing?msg=reason_must_contain_{required.lower()}", status_code=303)
+    elif subject_type != "account":
+        return RedirectResponse(url="/admin/billing?msg=invalid_subject_type", status_code=303)
+
     extend_subscription(
         db,
-        subject_type=subject_type,
-        subject_id=target_account_id,
+        subject_type=final_subject_type,
+        subject_id=final_subject_id,
         plan_id=None,
         days=Decimal(days),
         source_type="manual_grant",
         note=note or f"Manual grant by admin {account.id}",
         actor_account_id=account.id,
     )
+    invalidate_subject_entitlements(db, subject_type=final_subject_type, subject_id=final_subject_id)
     db.commit()
     return RedirectResponse(url="/admin/billing", status_code=303)

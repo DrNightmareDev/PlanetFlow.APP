@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Billing Admin — {{ t('app.name') }}{% endblock %}
+{% block title %}Billing Admin - {{ t('app.name') }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -13,28 +13,24 @@
   {% endif %}
 
   <div class="row g-4">
-
-    {# ── Wallet Receivers ─────────────────────────────────────────────────── #}
     <div class="col-12 col-xl-6">
       <div class="card h-100">
-        <div class="card-header fw-semibold">ISK-Empfänger</div>
+        <div class="card-header fw-semibold">ISK Receivers</div>
         <div class="card-body">
           <table class="table table-sm mb-3">
-            <thead><tr><th>Charakter</th><th>ID</th><th>Status</th><th>Wallet Scope</th><th></th></tr></thead>
+            <thead><tr><th>Character</th><th>ID</th><th>Status</th><th>Wallet Scope</th><th></th></tr></thead>
             <tbody>
             {% for entry in receivers %}
               {% set r = entry.receiver %}
               <tr>
                 <td>{{ r.character_name }}</td>
                 <td class="text-muted small">{{ r.eve_character_id }}</td>
-                <td><span class="badge {{ 'bg-success' if r.is_active else 'bg-secondary' }}">{{ 'Aktiv' if r.is_active else 'Inaktiv' }}</span></td>
+                <td><span class="badge {{ 'bg-success' if r.is_active else 'bg-secondary' }}">{{ 'Active' if r.is_active else 'Inactive' }}</span></td>
                 <td>
                   {% if not entry.has_token %}
-                    <span class="badge bg-danger" title="Charakter nicht in der App eingeloggt">Kein Token</span>
+                    <span class="badge bg-danger">No token</span>
                   {% elif not entry.has_scope %}
-                    <span class="badge bg-warning text-dark" title="esi-wallet.read_character_wallet.v1 fehlt — Charakter muss sich neu einloggen">
-                      <i class="bi bi-exclamation-triangle-fill me-1"></i>Scope fehlt
-                    </span>
+                    <span class="badge bg-warning text-dark">Wallet scope missing</span>
                   {% else %}
                     <span class="badge bg-success">OK</span>
                   {% endif %}
@@ -46,24 +42,23 @@
                 </td>
               </tr>
             {% else %}
-              <tr><td colspan="5" class="text-muted">Kein Empfänger konfiguriert.</td></tr>
+              <tr><td colspan="5" class="text-muted">No receiver configured.</td></tr>
             {% endfor %}
             </tbody>
           </table>
           <a href="/auth/wallet-receiver" class="btn btn-sm btn-primary">
-            <i class="bi bi-box-arrow-in-right me-1"></i>Empfänger per EVE-Login hinzufügen
+            <i class="bi bi-box-arrow-in-right me-1"></i>Add receiver via EVE login
           </a>
-          <div class="text-muted small mt-1">
-            Der eingeloggte Charakter erhält automatisch den Wallet-Scope und wird als Empfänger registriert.
+          <div class="text-muted small mt-2">
+            Receiver login requests wallet and mail scopes only for receiver characters.
           </div>
         </div>
       </div>
     </div>
 
-    {# ── Subscription Plans ────────────────────────────────────────────────── #}
     <div class="col-12 col-xl-6">
       <div class="card h-100">
-        <div class="card-header fw-semibold">Subscription-Pläne (Basispreis ISK/Tag)</div>
+        <div class="card-header fw-semibold">Subscription Plans (base ISK/day)</div>
         <div class="card-body">
           {% for scope in ['individual', 'corporation', 'alliance'] %}
             {% set plan = plans | selectattr('scope', 'equalto', scope) | first | default(none) %}
@@ -76,37 +71,36 @@
               </div>
               <div class="col-3">
                 <input type="number" name="daily_price_isk" class="form-control form-control-sm"
-                       value="{{ plan.daily_price_isk if plan else 0 }}" placeholder="ISK/Tag">
+                       value="{{ plan.daily_price_isk if plan else 0 }}" placeholder="ISK/day">
               </div>
-              <div class="col-2"><button class="btn btn-sm btn-outline-primary w-100">Speichern</button></div>
+              <div class="col-2"><button class="btn btn-sm btn-outline-primary w-100">Save</button></div>
             </form>
           {% endfor %}
         </div>
       </div>
     </div>
 
-    {# ── Pricing Tiers ─────────────────────────────────────────────────────── #}
     <div class="col-12">
       <div class="card">
-        <div class="card-header fw-semibold">Preisstufen nach Mitgliederanzahl (Corp/Alliance)</div>
+        <div class="card-header fw-semibold">Pricing tiers by member count (Corp/Alliance)</div>
         <div class="card-body">
           <table class="table table-sm mb-3">
-            <thead><tr><th>Scope</th><th>Min</th><th>Max</th><th>ISK/Tag</th><th></th></tr></thead>
+            <thead><tr><th>Scope</th><th>Min</th><th>Max</th><th>ISK/day</th><th></th></tr></thead>
             <tbody>
             {% for tier in tiers %}
               <tr>
                 <td>{{ tier.scope }}</td>
                 <td>{{ tier.min_members }}</td>
-                <td>{{ tier.max_members or '∞' }}</td>
+                <td>{{ tier.max_members or 'inf' }}</td>
                 <td>{{ "{:,.0f}".format(tier.daily_price_isk) }}</td>
                 <td>
                   <form method="post" action="/admin/billing/tier/delete/{{ tier.id }}" class="d-inline">
-                    <button class="btn btn-xs btn-outline-danger py-0 px-1">✕</button>
+                    <button class="btn btn-xs btn-outline-danger py-0 px-1">Delete</button>
                   </form>
                 </td>
               </tr>
             {% else %}
-              <tr><td colspan="5" class="text-muted">Keine Stufen konfiguriert — Basispreis gilt.</td></tr>
+              <tr><td colspan="5" class="text-muted">No tiers configured. Base price will be used.</td></tr>
             {% endfor %}
             </tbody>
           </table>
@@ -118,66 +112,87 @@
               </select>
             </div>
             <div class="col-auto"><input type="number" name="min_members" class="form-control form-control-sm" placeholder="Min" required></div>
-            <div class="col-auto"><input type="number" name="max_members" class="form-control form-control-sm" placeholder="Max (leer=∞)"></div>
-            <div class="col-auto"><input type="number" name="daily_price_isk" class="form-control form-control-sm" placeholder="ISK/Tag" required></div>
-            <div class="col-auto"><button class="btn btn-sm btn-primary">Hinzufügen</button></div>
+            <div class="col-auto"><input type="number" name="max_members" class="form-control form-control-sm" placeholder="Max (empty=inf)"></div>
+            <div class="col-auto"><input type="number" name="daily_price_isk" class="form-control form-control-sm" placeholder="ISK/day" required></div>
+            <div class="col-auto"><button class="btn btn-sm btn-primary">Add</button></div>
           </form>
         </div>
       </div>
     </div>
 
-    {# ── Manual Subscription Grant ─────────────────────────────────────────── #}
     <div class="col-12 col-xl-6">
       <div class="card">
-        <div class="card-header fw-semibold">Subscription manuell vergeben</div>
+        <div class="card-header fw-semibold">Manual subscription grant</div>
         <div class="card-body">
           <form method="post" action="/admin/billing/subscription/grant" class="row g-2">
-            <div class="col-12">
-              <select name="target_account_id" class="form-select form-select-sm" required>
+            <div class="col-4">
+              <select name="subject_type" class="form-select form-select-sm" required>
+                <option value="account">Account</option>
+                <option value="character">Character</option>
+                <option value="corporation">Corporation</option>
+                <option value="alliance">Alliance</option>
+              </select>
+            </div>
+            <div class="col-8">
+              <select name="target_subject_id" class="form-select form-select-sm" required>
+                <optgroup label="Accounts">
                 {% for a in all_accounts %}
-                  <option value="{{ a.id }}">{{ a.id }} — {{ a.main_character.character_name if a.main_character else 'Account ' ~ a.id }}</option>
+                  <option value="{{ a.id }}">{{ a.id }} - {{ a.main_character.character_name if a.main_character else ('Account ' ~ a.id) }}</option>
                 {% endfor %}
+                </optgroup>
+                <optgroup label="Characters">
+                {% for c in all_characters %}
+                  <option value="{{ c.id }}">{{ c.id }} - {{ c.character_name }} (eve {{ c.eve_character_id }})</option>
+                {% endfor %}
+                </optgroup>
+                <optgroup label="Corporations">
+                {% for corp_id, corp_name in corp_targets %}
+                  <option value="{{ corp_id }}">{{ corp_id }} - {{ corp_name or ('Corp ' ~ corp_id) }}</option>
+                {% endfor %}
+                </optgroup>
+                <optgroup label="Alliances">
+                {% for alliance_id, alliance_name in alliance_targets %}
+                  <option value="{{ alliance_id }}">{{ alliance_id }} - {{ alliance_name or ('Alliance ' ~ alliance_id) }}</option>
+                {% endfor %}
+                </optgroup>
               </select>
             </div>
-            <div class="col-auto">
-              <select name="subject_type" class="form-select form-select-sm">
-                <option value="account">Account (Individual)</option>
-              </select>
-            </div>
-            <div class="col-auto"><input type="number" name="days" class="form-control form-control-sm" placeholder="Tage" required min="1"></div>
-            <div class="col"><input type="text" name="note" class="form-control form-control-sm" placeholder="Notiz"></div>
-            <div class="col-auto"><button class="btn btn-sm btn-success">Vergeben</button></div>
+            <div class="col-auto"><input type="number" name="days" class="form-control form-control-sm" placeholder="Days" required min="1"></div>
+            <div class="col"><input type="text" name="note" class="form-control form-control-sm" placeholder="Reason / note"></div>
+            <div class="col-auto"><button class="btn btn-sm btn-success">Grant</button></div>
           </form>
+          <div class="small text-muted mt-2">
+            Required: corp grants need <code>CORP</code> in reason. Alliance grants need <code>ALLIANCE</code>.
+          </div>
         </div>
       </div>
     </div>
 
-    {# ── Free Grants ───────────────────────────────────────────────────────── #}
     <div class="col-12 col-xl-6">
       <div class="card">
-        <div class="card-header fw-semibold">Free Grants (Seiten-/Feature-Zugang)</div>
+        <div class="card-header fw-semibold">Free grants (page / feature access)</div>
         <div class="card-body">
           <table class="table table-sm mb-3" style="font-size:.85em">
-            <thead><tr><th>Account</th><th>Typ</th><th>Key</th><th>Läuft ab</th><th></th></tr></thead>
+            <thead><tr><th>Account</th><th>Type</th><th>Key</th><th>Expires</th><th></th></tr></thead>
             <tbody>
             {% for grant, acc in grants %}
               <tr class="{{ 'text-muted' if grant.revoked_at }}">
                 <td>{{ acc.main_character.character_name if acc.main_character else acc.id }}</td>
                 <td>{{ grant.scope_type }}</td>
-                <td>{{ grant.scope_key or '—' }}</td>
-                <td>{{ grant.expires_at.strftime('%Y-%m-%d') if grant.expires_at else '∞' }}</td>
+                <td>{{ grant.scope_key or '-' }}</td>
+                <td>{{ grant.expires_at.strftime('%Y-%m-%d') if grant.expires_at else 'inf' }}</td>
                 <td>
                   {% if not grant.revoked_at %}
                   <form method="post" action="/admin/billing/grant/revoke/{{ grant.id }}" class="d-inline">
-                    <button class="btn btn-xs btn-outline-danger py-0 px-1">Widerrufen</button>
+                    <button class="btn btn-xs btn-outline-danger py-0 px-1">Revoke</button>
                   </form>
                   {% else %}
-                    <span class="badge bg-secondary">Widerrufen</span>
+                    <span class="badge bg-secondary">Revoked</span>
                   {% endif %}
                 </td>
               </tr>
             {% else %}
-              <tr><td colspan="5" class="text-muted">Keine Grants.</td></tr>
+              <tr><td colspan="5" class="text-muted">No grants.</td></tr>
             {% endfor %}
             </tbody>
           </table>
@@ -185,7 +200,7 @@
             <div class="col-12">
               <select name="target_account_id" class="form-select form-select-sm" required>
                 {% for a in all_accounts %}
-                  <option value="{{ a.id }}">{{ a.id }} — {{ a.main_character.character_name if a.main_character else 'Account ' ~ a.id }}</option>
+                  <option value="{{ a.id }}">{{ a.id }} - {{ a.main_character.character_name if a.main_character else ('Account ' ~ a.id) }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -196,22 +211,21 @@
                 <option value="feature">Feature</option>
               </select>
             </div>
-            <div class="col"><input type="text" name="scope_key" class="form-control form-control-sm" placeholder="page_key oder feature_key"></div>
-            <div class="col-auto"><input type="number" name="expires_days" class="form-control form-control-sm" placeholder="Tage (leer=∞)" min="1"></div>
-            <div class="col"><input type="text" name="note" class="form-control form-control-sm" placeholder="Notiz"></div>
-            <div class="col-auto"><button class="btn btn-sm btn-primary">Erstellen</button></div>
+            <div class="col"><input type="text" name="scope_key" class="form-control form-control-sm" placeholder="page_key or feature_key"></div>
+            <div class="col-auto"><input type="number" name="expires_days" class="form-control form-control-sm" placeholder="Days (empty=inf)" min="1"></div>
+            <div class="col"><input type="text" name="note" class="form-control form-control-sm" placeholder="Note"></div>
+            <div class="col-auto"><button class="btn btn-sm btn-primary">Create</button></div>
           </form>
         </div>
       </div>
     </div>
 
-    {# ── Bonus Codes ───────────────────────────────────────────────────────── #}
     <div class="col-12">
       <div class="card">
-        <div class="card-header fw-semibold">Bonus-Codes</div>
+        <div class="card-header fw-semibold">Bonus codes</div>
         <div class="card-body">
           <table class="table table-sm mb-3" style="font-size:.85em">
-            <thead><tr><th>Code</th><th>Reward-Typ</th><th>Wert</th><th>Einlösungen</th><th>Läuft ab</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Code</th><th>Reward type</th><th>Value</th><th>Redemptions</th><th>Expires</th><th>Status</th><th></th></tr></thead>
             <tbody>
             {% for c in codes %}
               <tr class="{{ 'text-muted' if not c.is_active }}">
@@ -219,16 +233,21 @@
                 <td>{{ c.reward_type }}</td>
                 <td>{{ c.reward_value }}</td>
                 <td>{{ c.redemption_count }}{{ ' / ' ~ c.max_redemptions if c.max_redemptions else '' }}</td>
-                <td>{{ c.expires_at.strftime('%Y-%m-%d') if c.expires_at else '—' }}</td>
-                <td><span class="badge {{ 'bg-success' if c.is_active else 'bg-secondary' }}">{{ 'Aktiv' if c.is_active else 'Inaktiv' }}</span></td>
-                <td>
+                <td>{{ c.expires_at.strftime('%Y-%m-%d') if c.expires_at else '-' }}</td>
+                <td><span class="badge {{ 'bg-success' if c.is_active else 'bg-secondary' }}">{{ 'Active' if c.is_active else 'Inactive' }}</span></td>
+                <td class="text-nowrap">
                   <form method="post" action="/admin/billing/code/toggle/{{ c.id }}" class="d-inline">
                     <button class="btn btn-xs btn-outline-secondary py-0 px-1">Toggle</button>
                   </form>
+                  {% if c.is_active %}
+                  <form method="post" action="/admin/billing/code/revoke/{{ c.id }}" class="d-inline ms-1">
+                    <button class="btn btn-xs btn-outline-danger py-0 px-1">Revoke + remove benefits</button>
+                  </form>
+                  {% endif %}
                 </td>
               </tr>
             {% else %}
-              <tr><td colspan="7" class="text-muted">Keine Codes.</td></tr>
+              <tr><td colspan="7" class="text-muted">No codes.</td></tr>
             {% endfor %}
             </tbody>
           </table>
@@ -236,37 +255,67 @@
             <div class="col-auto"><input type="text" name="code" class="form-control form-control-sm font-monospace" placeholder="CODE" required style="text-transform:uppercase;width:180px"></div>
             <div class="col-auto">
               <select name="reward_type" class="form-select form-select-sm">
-                <option value="subscription_days">Subscription-Tage</option>
-                <option value="page_access">Seiten-Zugang</option>
-                <option value="feature_access">Feature-Zugang</option>
-                <option value="global_access">Global-Zugang</option>
+                <option value="subscription_days">Subscription days</option>
+                <option value="page_access">Page access</option>
+                <option value="feature_access">Feature access</option>
+                <option value="global_access">Global access</option>
               </select>
             </div>
-            <div class="col-auto"><input type="text" name="reward_value" class="form-control form-control-sm" placeholder="Wert (z.B. 30 oder skyhook:30)" required></div>
-            <div class="col-auto"><input type="number" name="max_redemptions" class="form-control form-control-sm" placeholder="Max. (leer=∞)" min="1"></div>
-            <div class="col-auto"><input type="number" name="expires_days" class="form-control form-control-sm" placeholder="Läuft ab (Tage)" min="1"></div>
-            <div class="col"><input type="text" name="note" class="form-control form-control-sm" placeholder="Notiz"></div>
-            <div class="col-auto"><button class="btn btn-sm btn-primary">Erstellen</button></div>
+            <div class="col-auto"><input type="text" name="reward_value" class="form-control form-control-sm" placeholder="Value (e.g. 30 or skyhook:30)" required></div>
+            <div class="col-auto"><input type="number" name="max_redemptions" class="form-control form-control-sm" placeholder="Max (empty=inf)" min="1"></div>
+            <div class="col-auto"><input type="number" name="expires_days" class="form-control form-control-sm" placeholder="Expires in days" min="1"></div>
+            <div class="col"><input type="text" name="note" class="form-control form-control-sm" placeholder="Note"></div>
+            <div class="col-auto"><button class="btn btn-sm btn-primary">Create</button></div>
           </form>
         </div>
       </div>
     </div>
 
-    {# ── Unmatched Transactions ────────────────────────────────────────────── #}
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header fw-semibold">Subscription join codes</div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0" style="font-size:.85em">
+            <thead><tr><th>Code</th><th>Subject</th><th>Uses</th><th>Expires</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+            {% for jc in join_codes %}
+              <tr class="{{ 'text-muted' if jc.revoked_at }}">
+                <td class="font-monospace">{{ jc.code }}</td>
+                <td>{{ jc.subject_type }}: {{ jc.subject_id }}</td>
+                <td>{{ jc.redemption_count }}{{ ' / ' ~ jc.max_redemptions if jc.max_redemptions else '' }}</td>
+                <td>{{ jc.expires_at.strftime('%Y-%m-%d %H:%M') if jc.expires_at else '-' }}</td>
+                <td>{{ 'revoked' if jc.revoked_at else 'active' }}</td>
+                <td>
+                  {% if not jc.revoked_at %}
+                  <form method="post" action="/admin/billing/join-code/revoke/{{ jc.id }}" class="d-inline">
+                    <button class="btn btn-xs btn-outline-danger py-0 px-1">Revoke</button>
+                  </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% else %}
+              <tr><td colspan="6" class="text-muted p-3">No join codes yet.</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     {% if unmatched_txs %}
     <div class="col-12">
       <div class="card border-warning">
-        <div class="card-header fw-semibold text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Nicht zugeordnete Zahlungen</div>
+        <div class="card-header fw-semibold text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Unmatched payments</div>
         <div class="card-body p-0">
           <table class="table table-sm mb-0">
-            <thead><tr><th>ID</th><th>Typ</th><th>Sender Char</th><th>Sender Corp</th><th>Betrag (ISK)</th><th>Datum</th></tr></thead>
+            <thead><tr><th>ID</th><th>Type</th><th>Sender char</th><th>Sender corp</th><th>Amount (ISK)</th><th>Date</th></tr></thead>
             <tbody>
             {% for match, tx in unmatched_txs %}
               <tr>
                 <td class="font-monospace small">{{ tx.id }}</td>
                 <td>{{ tx.ref_type }}</td>
-                <td>{{ tx.sender_character_name or tx.sender_character_id or '—' }}</td>
-                <td>{{ tx.sender_corporation_name or tx.sender_corporation_id or '—' }}</td>
+                <td>{{ tx.sender_character_name or tx.sender_character_id or '-' }}</td>
+                <td>{{ tx.sender_corporation_name or tx.sender_corporation_id or '-' }}</td>
                 <td>{{ "{:,.0f}".format(tx.amount_isk) }}</td>
                 <td>{{ tx.occurred_at.strftime('%Y-%m-%d %H:%M') }}</td>
               </tr>
@@ -278,31 +327,29 @@
     </div>
     {% endif %}
 
-    {# ── Audit Log ─────────────────────────────────────────────────────────── #}
     <div class="col-12">
       <div class="card">
-        <div class="card-header fw-semibold">Audit-Log (letzte 100 Einträge)</div>
+        <div class="card-header fw-semibold">Audit log (last 100 entries)</div>
         <div class="card-body p-0">
           <table class="table table-sm mb-0" style="font-size:.82em">
-            <thead><tr><th>Zeitpunkt</th><th>Event</th><th>Actor</th><th>Target</th><th>Details</th></tr></thead>
+            <thead><tr><th>Time</th><th>Event</th><th>Actor</th><th>Target</th><th>Details</th></tr></thead>
             <tbody>
             {% for row in audit_rows %}
               <tr>
                 <td class="text-nowrap">{{ row.created_at.strftime('%m-%d %H:%M') }}</td>
                 <td class="font-monospace">{{ row.event_type }}</td>
-                <td>{{ row.actor_account_id or '—' }}</td>
-                <td>{{ row.target_account_id or '—' }}</td>
+                <td>{{ row.actor_account_id or '-' }}</td>
+                <td>{{ row.target_account_id or '-' }}</td>
                 <td class="text-muted small text-truncate" style="max-width:320px">{{ row.detail_json }}</td>
               </tr>
             {% else %}
-              <tr><td colspan="5" class="text-muted">Kein Einträge.</td></tr>
+              <tr><td colspan="5" class="text-muted">No entries.</td></tr>
             {% endfor %}
             </tbody>
           </table>
         </div>
       </div>
     </div>
-
-  </div>{# /row #}
+  </div>
 </div>
 {% endblock %}

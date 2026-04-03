@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import secrets
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -22,6 +23,8 @@ from app.models import (
     BillingEntitlementCache,
     BillingGrant,
     BillingPricingTier,
+    BillingSubscriptionJoinCode,
+    BillingSubscriptionJoinRedemption,
     BillingSubscriptionPeriod,
     BillingSubscriptionPlan,
     BillingTransactionMatch,
@@ -85,6 +88,7 @@ def extend_subscription(
     source_type: str,
     note: str,
     actor_account_id: int | None = None,
+    source_code_id: int | None = None,
 ) -> BillingSubscriptionPeriod:
     """
     Extend (or create) a subscription period.
@@ -99,6 +103,7 @@ def extend_subscription(
         subject_type=subject_type,
         subject_id=subject_id,
         plan_id=plan_id,
+        source_code_id=source_code_id,
         source_type=source_type,
         starts_at=starts_at,
         ends_at=ends_at,
@@ -153,6 +158,11 @@ def _count_corp_members(db: Session, corporation_id: int) -> int:
 def _count_alliance_members(db: Session, alliance_id: int) -> int:
     """Count characters in DB with this alliance_id — no ESI call."""
     return db.query(Character).filter(Character.alliance_id == alliance_id).count()
+
+
+def _contains_reason_keyword(description: str | None, keyword: str) -> bool:
+    text = (description or "").upper()
+    return keyword.upper() in text
 
 
 # ── Wallet transaction matching ───────────────────────────────────────────────
@@ -230,65 +240,77 @@ def match_wallet_transaction(
     # ── Corporation: corporation_account_withdrawal ───────────────────────────
     if tx.ref_type == "corporation_account_withdrawal" and tx.sender_corporation_id:
         corp_id = tx.sender_corporation_id
+        wants_corp = _contains_reason_keyword(tx.description, "CORP")
+        wants_alliance = _contains_reason_keyword(tx.description, "ALLIANCE")
 
-        # Try corp subscription first
-        plan = db.query(BillingSubscriptionPlan).filter(
-            BillingSubscriptionPlan.scope == "corporation",
-            BillingSubscriptionPlan.is_active == True,
-        ).order_by(BillingSubscriptionPlan.id.asc()).first()
-        if plan:
-            member_count = _count_corp_members(db, corp_id)
-            daily_price = _get_tier_daily_price(db, scope="corporation", member_count=member_count)
-            if daily_price is None:
-                daily_price = Decimal(plan.daily_price_isk)
-            if daily_price > 0:
-                days = (amount / daily_price).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-                extend_subscription(
-                    db,
-                    subject_type="corporation",
-                    subject_id=corp_id,
-                    plan_id=plan.id,
-                    days=days,
-                    source_type="payment",
-                    note=f"Wallet tx {tx.id}",
-                    actor_account_id=actor_account_id,
-                )
-                db.add(BillingTransactionMatch(
-                    transaction_id=tx.id,
-                    subject_type="corporation",
-                    subject_id=corp_id,
-                    plan_id=plan.id,
-                    days_granted=days,
-                    match_status="matched",
-                    notes=f"Corp withdrawal from corp {corp_id}",
-                ))
-                # Invalidate cache for all accounts in this corp
-                _invalidate_entitlement_cache_for_corp(db, corporation_id=corp_id)
-                return True, f"Matched to corporation {corp_id} ({days} days)."
+        if not wants_corp and not wants_alliance:
+            db.add(BillingTransactionMatch(
+                transaction_id=tx.id,
+                subject_type="unknown",
+                subject_id=0,
+                plan_id=None,
+                days_granted=Decimal(0),
+                match_status="unmatched",
+                notes='Reason missing required keyword: use "CORP" or "ALLIANCE".',
+            ))
+            return False, 'Reason must contain "CORP" or "ALLIANCE".'
 
-        # Try alliance subscription (corp is holding corp of an alliance payment)
-        # Check if any character from this corp has an alliance_id
-        sample_char = db.query(Character).filter(
-            Character.corporation_id == corp_id,
-            Character.alliance_id.isnot(None),
-        ).first()
-        if sample_char and sample_char.alliance_id:
-            alliance_id = sample_char.alliance_id
+        if wants_alliance:
+            sample_char = db.query(Character).filter(
+                Character.corporation_id == corp_id,
+                Character.alliance_id.isnot(None),
+            ).first()
+            if sample_char and sample_char.alliance_id:
+                alliance_id = int(sample_char.alliance_id)
+                plan = db.query(BillingSubscriptionPlan).filter(
+                    BillingSubscriptionPlan.scope == "alliance",
+                    BillingSubscriptionPlan.is_active == True,
+                ).order_by(BillingSubscriptionPlan.id.asc()).first()
+                if plan:
+                    member_count = _count_alliance_members(db, alliance_id)
+                    daily_price = _get_tier_daily_price(db, scope="alliance", member_count=member_count)
+                    if daily_price is None:
+                        daily_price = Decimal(plan.daily_price_isk)
+                    if daily_price > 0:
+                        days = (amount / daily_price).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                        extend_subscription(
+                            db,
+                            subject_type="alliance",
+                            subject_id=alliance_id,
+                            plan_id=plan.id,
+                            days=days,
+                            source_type="payment",
+                            note=f"Wallet tx {tx.id}",
+                            actor_account_id=actor_account_id,
+                        )
+                        db.add(BillingTransactionMatch(
+                            transaction_id=tx.id,
+                            subject_type="alliance",
+                            subject_id=alliance_id,
+                            plan_id=plan.id,
+                            days_granted=days,
+                            match_status="matched",
+                            notes=f'Alliance payment via corp {corp_id} (reason contains "ALLIANCE")',
+                        ))
+                        _invalidate_entitlement_cache_for_alliance(db, alliance_id=alliance_id)
+                        return True, f"Matched to alliance {alliance_id} ({days} days)."
+
+        if wants_corp:
             plan = db.query(BillingSubscriptionPlan).filter(
-                BillingSubscriptionPlan.scope == "alliance",
+                BillingSubscriptionPlan.scope == "corporation",
                 BillingSubscriptionPlan.is_active == True,
             ).order_by(BillingSubscriptionPlan.id.asc()).first()
             if plan:
-                member_count = _count_alliance_members(db, alliance_id)
-                daily_price = _get_tier_daily_price(db, scope="alliance", member_count=member_count)
+                member_count = _count_corp_members(db, corp_id)
+                daily_price = _get_tier_daily_price(db, scope="corporation", member_count=member_count)
                 if daily_price is None:
                     daily_price = Decimal(plan.daily_price_isk)
                 if daily_price > 0:
                     days = (amount / daily_price).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
                     extend_subscription(
                         db,
-                        subject_type="alliance",
-                        subject_id=alliance_id,
+                        subject_type="corporation",
+                        subject_id=corp_id,
                         plan_id=plan.id,
                         days=days,
                         source_type="payment",
@@ -297,15 +319,15 @@ def match_wallet_transaction(
                     )
                     db.add(BillingTransactionMatch(
                         transaction_id=tx.id,
-                        subject_type="alliance",
-                        subject_id=alliance_id,
+                        subject_type="corporation",
+                        subject_id=corp_id,
                         plan_id=plan.id,
                         days_granted=days,
                         match_status="matched",
-                        notes=f"Alliance payment via corp {corp_id}",
+                        notes=f'Corp withdrawal from corp {corp_id} (reason contains "CORP")',
                     ))
-                    _invalidate_entitlement_cache_for_alliance(db, alliance_id=alliance_id)
-                    return True, f"Matched to alliance {alliance_id} ({days} days)."
+                    _invalidate_entitlement_cache_for_corp(db, corporation_id=corp_id)
+                    return True, f"Matched to corporation {corp_id} ({days} days)."
 
     # Store as unmatched so admin can manually resolve
     db.add(BillingTransactionMatch(
@@ -359,6 +381,15 @@ def _invalidate_entitlement_cache_for_alliance(db: Session, *, alliance_id: int)
         ).delete(synchronize_session=False)
 
 
+def invalidate_subject_entitlements(db: Session, *, subject_type: str, subject_id: int) -> None:
+    if subject_type == "account":
+        _invalidate_entitlement_cache(db, account_id=int(subject_id))
+    elif subject_type == "corporation":
+        _invalidate_entitlement_cache_for_corp(db, corporation_id=int(subject_id))
+    elif subject_type == "alliance":
+        _invalidate_entitlement_cache_for_alliance(db, alliance_id=int(subject_id))
+
+
 # ── Grants ────────────────────────────────────────────────────────────────────
 
 def create_grant(
@@ -371,6 +402,7 @@ def create_grant(
     expires_at: datetime | None = None,
     granted_by_account_id: int | None = None,
     note: str = "",
+    source_code_id: int | None = None,
 ) -> BillingGrant:
     if starts_at is None:
         starts_at = datetime.now(UTC)
@@ -380,6 +412,7 @@ def create_grant(
         scope_key=scope_key,
         starts_at=starts_at,
         expires_at=expires_at,
+        source_code_id=source_code_id,
         granted_by_account_id=granted_by_account_id,
         note=note,
     )
@@ -465,6 +498,7 @@ def redeem_bonus_code(
             source_type="bonus_code",
             note=f"Code {code.code}",
             actor_account_id=account_id,
+            source_code_id=code.id,
         )
 
     elif code.reward_type in ("page_access", "feature_access", "global_access"):
@@ -491,6 +525,7 @@ def redeem_bonus_code(
             expires_at=now + timedelta(seconds=float(days * Decimal(86400))),
             granted_by_account_id=None,
             note=f"Code {code.code}",
+            source_code_id=code.id,
         )
     else:
         return False, f"Unbekannter Reward-Typ: {code.reward_type}"
@@ -510,3 +545,194 @@ def redeem_bonus_code(
     )
     _invalidate_entitlement_cache(db, account_id=account_id)
     return True, "Code erfolgreich eingelöst."
+
+
+def revoke_bonus_code(
+    db: Session,
+    *,
+    code: BillingBonusCode,
+    actor_account_id: int | None = None,
+) -> dict:
+    """
+    Revoke a bonus code and remove all previously granted benefits from that code.
+    Returns counters for admin feedback.
+    """
+    now = datetime.now(UTC)
+    code.is_active = False
+    if code.expires_at is None or code.expires_at > now:
+        code.expires_at = now
+
+    affected_accounts: set[int] = set()
+
+    grants = db.query(BillingGrant).filter(
+        BillingGrant.source_code_id == code.id,
+        BillingGrant.revoked_at.is_(None),
+    ).all()
+    for grant in grants:
+        grant.revoked_at = now
+        affected_accounts.add(grant.account_id)
+
+    periods = db.query(BillingSubscriptionPeriod).filter(
+        BillingSubscriptionPeriod.source_code_id == code.id,
+        BillingSubscriptionPeriod.ends_at > now,
+    ).all()
+    for period in periods:
+        period.ends_at = now
+        if period.subject_type == "account":
+            affected_accounts.add(int(period.subject_id))
+        elif period.subject_type == "corporation":
+            _invalidate_entitlement_cache_for_corp(db, corporation_id=int(period.subject_id))
+        elif period.subject_type == "alliance":
+            _invalidate_entitlement_cache_for_alliance(db, alliance_id=int(period.subject_id))
+
+    for account_id in affected_accounts:
+        _invalidate_entitlement_cache(db, account_id=account_id)
+
+    _audit(
+        db,
+        event_type="bonus_code.revoked",
+        actor_account_id=actor_account_id,
+        detail={
+            "code_id": code.id,
+            "code": code.code,
+            "revoked_grants": len(grants),
+            "ended_periods": len(periods),
+            "affected_accounts": sorted(affected_accounts),
+        },
+    )
+    return {
+        "revoked_grants": len(grants),
+        "ended_periods": len(periods),
+        "affected_accounts": len(affected_accounts),
+    }
+
+
+def create_subscription_join_code(
+    db: Session,
+    *,
+    subject_type: str,
+    subject_id: int,
+    source_period_id: int | None = None,
+    source_transaction_id: int | None = None,
+    issued_by_receiver_id: int | None = None,
+    target_character_id: int | None = None,
+    expires_at: datetime | None = None,
+    max_redemptions: int | None = None,
+    note: str = "",
+    actor_account_id: int | None = None,
+) -> BillingSubscriptionJoinCode:
+    if subject_type not in ("corporation", "alliance"):
+        raise ValueError("subject_type must be corporation or alliance")
+
+    code_value = secrets.token_urlsafe(9).replace("-", "").replace("_", "").upper()
+    code = BillingSubscriptionJoinCode(
+        code=code_value,
+        subject_type=subject_type,
+        subject_id=int(subject_id),
+        source_period_id=source_period_id,
+        source_transaction_id=source_transaction_id,
+        issued_by_receiver_id=issued_by_receiver_id,
+        target_character_id=target_character_id,
+        max_redemptions=max_redemptions,
+        expires_at=expires_at,
+        note=note or None,
+    )
+    db.add(code)
+    db.flush()
+    _audit(
+        db,
+        event_type="subscription.join_code.created",
+        actor_account_id=actor_account_id,
+        detail={
+            "join_code_id": code.id,
+            "subject_type": subject_type,
+            "subject_id": int(subject_id),
+            "source_transaction_id": source_transaction_id,
+            "target_character_id": target_character_id,
+            "expires_at": expires_at.isoformat() if expires_at else None,
+        },
+    )
+    return code
+
+
+def redeem_subscription_join_code(
+    db: Session,
+    *,
+    code_value: str,
+    account_id: int,
+) -> tuple[bool, str]:
+    now = datetime.now(UTC)
+    normalized = (code_value or "").strip().upper()
+    if not normalized:
+        return False, "Join-Code fehlt."
+
+    code = db.query(BillingSubscriptionJoinCode).filter(
+        BillingSubscriptionJoinCode.code == normalized
+    ).first()
+    if not code:
+        return False, "Join-Code nicht gefunden."
+    if code.revoked_at is not None:
+        return False, "Dieser Join-Code wurde widerrufen."
+    if code.expires_at and code.expires_at <= now:
+        return False, "Dieser Join-Code ist abgelaufen."
+    if code.max_redemptions is not None and code.redemption_count >= code.max_redemptions:
+        return False, "Dieser Join-Code hat keine verbleibenden Einlösungen."
+
+    already = db.query(BillingSubscriptionJoinRedemption).filter(
+        BillingSubscriptionJoinRedemption.code_id == code.id,
+        BillingSubscriptionJoinRedemption.account_id == account_id,
+    ).first()
+    if already:
+        return False, "Du hast diesen Join-Code bereits genutzt."
+
+    chars = db.query(Character).filter(Character.account_id == account_id).all()
+    if code.subject_type == "corporation":
+        eligible = any(int(c.corporation_id or 0) == int(code.subject_id) for c in chars)
+        if not eligible:
+            return False, "Join-Code nur für Mitglieder der passenden Corporation."
+    else:
+        eligible = any(int(c.alliance_id or 0) == int(code.subject_id) for c in chars)
+        if not eligible:
+            return False, "Join-Code nur für Mitglieder der passenden Alliance."
+
+    source_period = None
+    if code.source_period_id:
+        source_period = db.get(BillingSubscriptionPeriod, code.source_period_id)
+    if not source_period or source_period.ends_at <= now:
+        return False, "Die zugrunde liegende Subscription ist nicht mehr aktiv."
+
+    remaining_days = Decimal(
+        str(max((source_period.ends_at - now).total_seconds(), 0) / 86400)
+    ).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+    if remaining_days <= 0:
+        return False, "Keine verbleibende Laufzeit vorhanden."
+
+    extend_subscription(
+        db,
+        subject_type="account",
+        subject_id=account_id,
+        plan_id=source_period.plan_id,
+        days=remaining_days,
+        source_type="manual_grant",
+        note=f"Join code {code.code} ({code.subject_type}:{code.subject_id})",
+        actor_account_id=account_id,
+    )
+    db.add(BillingSubscriptionJoinRedemption(
+        code_id=code.id,
+        account_id=account_id,
+    ))
+    code.redemption_count += 1
+    _invalidate_entitlement_cache(db, account_id=account_id)
+    _audit(
+        db,
+        event_type="subscription.join_code.redeemed",
+        actor_account_id=account_id,
+        target_account_id=account_id,
+        detail={
+            "join_code_id": code.id,
+            "subject_type": code.subject_type,
+            "subject_id": int(code.subject_id),
+            "remaining_days": str(remaining_days),
+        },
+    )
+    return True, "Join-Code erfolgreich eingelöst."

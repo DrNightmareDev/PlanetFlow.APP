@@ -205,3 +205,19 @@ def redeem_code(
         db.commit()
     from urllib.parse import quote
     return RedirectResponse(url=f"/billing?msg={quote(message)}", status_code=303)
+
+
+@router.post("/join-code/redeem", response_class=HTMLResponse)
+def redeem_join_code(
+    request: Request,
+    code: str = Form(...),
+    account: Account = Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    from app.services.billing import redeem_subscription_join_code
+
+    success, message = redeem_subscription_join_code(db, code_value=code, account_id=account.id)
+    if success:
+        db.commit()
+    from urllib.parse import quote
+    return RedirectResponse(url=f"/billing?msg={quote(message)}", status_code=303)

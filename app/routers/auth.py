@@ -101,12 +101,18 @@ def wallet_receiver_login(
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
-    """Start SSO flow requesting the wallet scope — used to register a billing receiver character."""
+    """Start SSO flow for billing receivers (wallet + mail scope)."""
     from app.dependencies import require_admin
     require_admin(request, db)
     rate_limit_auth(request, "add_character")
     state = _generate_state(db, flow="wallet_receiver", account_id=account.id)
-    redirect_url = generate_auth_url(state, extra_scopes=["esi-wallet.read_character_wallet.v1"])
+    redirect_url = generate_auth_url(
+        state,
+        extra_scopes=[
+            "esi-wallet.read_character_wallet.v1",
+            "esi-mail.send_mail.v1",
+        ],
+    )
     return RedirectResponse(url=redirect_url)
 
 
@@ -202,6 +208,26 @@ def callback(
 
         # Zugangspolitik auch fÃƒÂ¼r bestehende Charaktere prÃƒÂ¼fen (corp/allianz kann sich geÃƒÂ¤ndert haben)
         # Ausnahmen: Owner immer erlaubt, add_character-Flow (bereits eingeloggt)
+        if flow == "wallet_receiver" and existing_account_id:
+            from app.models import BillingWalletReceiver
+            receiver = db.query(BillingWalletReceiver).filter(
+                BillingWalletReceiver.eve_character_id == eve_character_id
+            ).first()
+            if receiver:
+                receiver.character_name = character_name
+                receiver.character_fk = existing_char.id
+                receiver.is_active = True
+            else:
+                db.add(BillingWalletReceiver(
+                    eve_character_id=eve_character_id,
+                    character_name=character_name,
+                    character_fk=existing_char.id,
+                    is_active=True,
+                ))
+            db.commit()
+            create_session(response, existing_account_id)
+            return RedirectResponse(url="/admin/billing?msg=receiver_added", status_code=302)
+
         if flow == "login":
             from sqlalchemy.orm import joinedload as _jl
             acc = db.query(Account).options(_jl(Account.characters)).filter(Account.id == existing_char.account_id).first()

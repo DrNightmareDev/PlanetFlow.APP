@@ -622,8 +622,8 @@ def sync_billing_wallets() -> dict:
 
             # Refresh access token if needed
             try:
-                from app.services.esi_auth import ensure_valid_token
-                token = ensure_valid_token(db, char)
+                from app.esi import ensure_valid_token
+                token = ensure_valid_token(char, db)
             except Exception as exc:
                 logger.warning("billing: token refresh failed for char %s: %s", char.eve_character_id, exc)
                 errors += 1
@@ -688,11 +688,21 @@ def match_billing_transactions() -> dict:
     Runs every 3 minutes after wallet sync.
     """
     from app.database import SessionLocal
-    from app.models import BillingWalletTransaction, BillingTransactionMatch
-    from app.services.billing import match_wallet_transaction
+    from app.esi import ensure_valid_token, send_character_mail
+    from app.models import (
+        BillingSubscriptionJoinCode,
+        BillingSubscriptionPeriod,
+        BillingTransactionMatch,
+        BillingWalletReceiver,
+        BillingWalletTransaction,
+        Character,
+    )
+    from app.services.billing import create_subscription_join_code, match_wallet_transaction
 
     matched = 0
     unmatched = 0
+    join_codes_created = 0
+    join_code_mails_sent = 0
 
     with SessionLocal() as db:
         # Find transactions with no match record yet
@@ -707,12 +717,80 @@ def match_billing_transactions() -> dict:
             success, msg = match_wallet_transaction(db, transaction_id=tx.id)
             if success:
                 matched += 1
+                match_row = db.query(BillingTransactionMatch).filter(
+                    BillingTransactionMatch.transaction_id == tx.id,
+                    BillingTransactionMatch.match_status == "matched",
+                ).first()
+                if match_row and match_row.subject_type in ("corporation", "alliance"):
+                    existing_join_code = db.query(BillingSubscriptionJoinCode).filter(
+                        BillingSubscriptionJoinCode.source_transaction_id == tx.id
+                    ).first()
+                    if not existing_join_code:
+                        period = db.query(BillingSubscriptionPeriod).filter(
+                            BillingSubscriptionPeriod.subject_type == match_row.subject_type,
+                            BillingSubscriptionPeriod.subject_id == match_row.subject_id,
+                            BillingSubscriptionPeriod.source_type == "payment",
+                            BillingSubscriptionPeriod.note == f"Wallet tx {tx.id}",
+                        ).order_by(BillingSubscriptionPeriod.id.desc()).first()
+                        if period:
+                            join_code = create_subscription_join_code(
+                                db,
+                                subject_type=match_row.subject_type,
+                                subject_id=int(match_row.subject_id),
+                                source_period_id=period.id,
+                                source_transaction_id=tx.id,
+                                issued_by_receiver_id=tx.receiver_id,
+                                target_character_id=tx.sender_character_id,
+                                expires_at=period.ends_at,
+                                max_redemptions=None,
+                                note=f"Auto-issued from wallet transaction {tx.id}",
+                            )
+                            join_codes_created += 1
+
+                            receiver = db.get(BillingWalletReceiver, tx.receiver_id)
+                            sender_char = None
+                            if receiver:
+                                if receiver.character_fk:
+                                    sender_char = db.get(Character, receiver.character_fk)
+                                if not sender_char:
+                                    sender_char = db.query(Character).filter(
+                                        Character.eve_character_id == receiver.eve_character_id
+                                    ).first()
+                            if sender_char and tx.sender_character_id:
+                                has_mail_scope = "esi-mail.send_mail.v1" in (sender_char.scopes or "")
+                                if has_mail_scope:
+                                    token = ensure_valid_token(sender_char, db)
+                                    if token:
+                                        try:
+                                            send_character_mail(
+                                                sender_char.eve_character_id,
+                                                token,
+                                                recipient_character_id=int(tx.sender_character_id),
+                                                subject=f"PlanetFlow Join Code ({match_row.subject_type})",
+                                                body=(
+                                                    f"Your payment was matched to {match_row.subject_type} {match_row.subject_id}.\n\n"
+                                                    f"Join code: {join_code.code}\n"
+                                                    f"Valid until: {period.ends_at.strftime('%Y-%m-%d %H:%M UTC')}\n\n"
+                                                    "Only characters from the same corporation/alliance can redeem this code in PlanetFlow billing."
+                                                ),
+                                            )
+                                            join_code_mails_sent += 1
+                                        except Exception as exc:
+                                            logger.warning("billing: failed to send join-code mail for tx %s: %s", tx.id, exc)
             else:
                 unmatched += 1
         db.commit()
 
-    logger.info("billing: match_billing_transactions matched=%d unmatched=%d", matched, unmatched)
-    return {"matched": matched, "unmatched": unmatched}
+    logger.info(
+        "billing: match_billing_transactions matched=%d unmatched=%d join_codes_created=%d mails_sent=%d",
+        matched, unmatched, join_codes_created, join_code_mails_sent,
+    )
+    return {
+        "matched": matched,
+        "unmatched": unmatched,
+        "join_codes_created": join_codes_created,
+        "join_code_mails_sent": join_code_mails_sent,
+    }
 
 
 @celery_app.task(name="app.tasks.recompute_entitlements")

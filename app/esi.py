@@ -235,6 +235,38 @@ def get_character_location(character_id: int, token: str) -> dict:
     return response.json()
 
 
+def send_character_mail(
+    sender_character_id: int,
+    access_token: str,
+    *,
+    recipient_character_id: int,
+    subject: str,
+    body: str,
+) -> int | None:
+    """Send an in-game mail from one character to another."""
+    payload = {
+        "approved_cost": 0,
+        "subject": subject[:255],
+        "body": body[:8000],
+        "recipients": [{
+            "recipient_id": int(recipient_character_id),
+            "recipient_type": "character",
+        }],
+    }
+    response = requests.post(
+        f"{ESI_BASE}/characters/{sender_character_id}/mail/",
+        params={"datasource": "tranquility"},
+        json=payload,
+        headers={**HEADERS, "Authorization": f"Bearer {access_token}"},
+        timeout=15,
+    )
+    response.raise_for_status()
+    try:
+        return int(response.json())
+    except Exception:
+        return None
+
+
 def search_entities(character_id: int, access_token: str, query: str) -> dict:
     """Sucht Corporations und Allianzen via ESI character search."""
     try:

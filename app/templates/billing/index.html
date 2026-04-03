@@ -184,6 +184,9 @@
           <strong style="color:#cdd6f4;">Send Money</strong> und sende den ISK-Betrag an einen der folgenden Charaktere.
           Gib als Verwendungszweck (Reason) nichts Besonderes an — die Zahlung wird automatisch erkannt.
         </p>
+        <p class="text-muted small mb-2">
+          FÃ¼r Corp-Subscription muss der Reason-Text <strong style="color:#cdd6f4;">CORP</strong> enthalten, fÃ¼r Alliance-Subscription <strong style="color:#cdd6f4;">ALLIANCE</strong>.
+        </p>
         <div class="d-flex flex-wrap gap-3">
           {% for r in receivers %}
             <div class="d-flex align-items-center gap-2 p-2 rounded"
@@ -215,6 +218,28 @@
   {% endif %}
 
   {# ── Bonus code ──────────────────────────────────────────────────────────── #}
+  <div class="eve-card card border-0 mb-4">
+    <div class="card-header eve-card-header d-flex align-items-center gap-2">
+      <i class="bi bi-key" style="color:#7ec8e3;"></i>
+      <span class="fw-semibold">Join-Code einlÃ¶sen</span>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-3">
+        Bei Corp/Alliance-Zahlungen wird ein Join-Code per Ingame-Mail an den zahlenden Charakter geschickt.
+        Der Code funktioniert nur fÃ¼r Accounts in derselben Corporation oder Alliance.
+      </p>
+      <form method="post" action="/billing/join-code/redeem" class="d-flex gap-2 flex-wrap">
+        <input type="text" name="code" class="form-control"
+               placeholder="JOIN-CODE"
+               style="font-family:monospace;text-transform:uppercase;max-width:280px;background:#0a1220;border-color:#1e2d3d;color:#cdd6f4;"
+               required>
+        <button type="submit" class="btn eve-btn-primary">
+          <i class="bi bi-check2-circle me-1"></i>Join
+        </button>
+      </form>
+    </div>
+  </div>
+
   <div class="eve-card card border-0 mb-4">
     <div class="card-header eve-card-header d-flex align-items-center gap-2">
       <i class="bi bi-ticket-perforated" style="color:#7ec8e3;"></i>

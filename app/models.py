@@ -564,6 +564,7 @@ class BillingSubscriptionPeriod(Base):
     subject_type = Column(String(20), nullable=False)                   # "account" | "corporation" | "alliance"
     subject_id = Column(Integer, nullable=False, index=True)            # account.id OR eve corporation_id OR eve alliance_id
     plan_id = Column(Integer, ForeignKey("billing_subscription_plans.id", ondelete="SET NULL"), nullable=True, index=True)
+    source_code_id = Column(Integer, ForeignKey("billing_bonus_codes.id", ondelete="SET NULL"), nullable=True, index=True)
     source_type = Column(String(30), nullable=False)                    # "payment" | "bonus_code" | "manual_grant"
     starts_at = Column(DateTime(timezone=True), nullable=False)
     ends_at = Column(DateTime(timezone=True), nullable=False, index=True)
@@ -583,6 +584,7 @@ class BillingGrant(Base):
     starts_at = Column(DateTime(timezone=True), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=True)         # NULL = permanent
     revoked_at = Column(DateTime(timezone=True), nullable=True)
+    source_code_id = Column(Integer, ForeignKey("billing_bonus_codes.id", ondelete="SET NULL"), nullable=True, index=True)
     granted_by_account_id = Column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)
     note = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -615,6 +617,42 @@ class BillingBonusCodeRedemption(Base):
     account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
     redeemed_at = Column(DateTime(timezone=True), server_default=func.now())
     reward_snapshot = Column(Text, nullable=True)                       # JSON snapshot of reward at redemption time
+
+
+class BillingSubscriptionJoinCode(Base):
+    """Join code for account onboarding into active corp/alliance subscription time."""
+    __tablename__ = "billing_subscription_join_codes"
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_billing_subscription_join_code"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(64), nullable=False, unique=True, index=True)
+    subject_type = Column(String(20), nullable=False, index=True)       # "corporation" | "alliance"
+    subject_id = Column(BigInteger, nullable=False, index=True)
+    source_period_id = Column(Integer, ForeignKey("billing_subscription_periods.id", ondelete="SET NULL"), nullable=True, index=True)
+    source_transaction_id = Column(BigInteger, ForeignKey("billing_wallet_transactions.id", ondelete="SET NULL"), nullable=True, index=True)
+    issued_by_receiver_id = Column(Integer, ForeignKey("billing_wallet_receivers.id", ondelete="SET NULL"), nullable=True)
+    target_character_id = Column(BigInteger, nullable=True, index=True)  # payer char, for audit only
+    max_redemptions = Column(Integer, nullable=True)                    # NULL = unlimited for eligible members
+    redemption_count = Column(Integer, nullable=False, default=0, server_default="0")
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    note = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class BillingSubscriptionJoinRedemption(Base):
+    """Audit trail for join-code redemptions."""
+    __tablename__ = "billing_subscription_join_redemptions"
+    __table_args__ = (
+        UniqueConstraint("code_id", "account_id", name="uq_billing_join_code_account_once"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    code_id = Column(Integer, ForeignKey("billing_subscription_join_codes.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    redeemed_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class BillingEntitlementCache(Base):

@@ -129,7 +129,17 @@ def can_account_access_page(
     if access_level == "admin":
         return False
     if access_level == "director":
-        return bool(getattr(account, "is_director", False))
+        if getattr(account, "is_director", False):
+            return True
+        # Also grant access to CEOs — check via dashboard corp access cache
+        try:
+            from app.routers.dashboard import _corp_access_cache
+            cached = _corp_access_cache.get(account.id)
+            if cached and cached[1].get("is_ceo"):
+                return True
+        except Exception:
+            pass
+        return False
     # Owner bypass applies to all non-director, non-admin pages
     if bool(getattr(account, "is_owner", False)):
         return True

@@ -55,8 +55,22 @@ def require_owner(request: Request, db: Session = Depends(get_db)) -> Account:
 
 
 def require_director(request: Request, db: Session = Depends(get_db)) -> Account:
-    """Requires is_director (set via admin panel). Owner/admin must explicitly elevate themselves."""
+    """Requires is_director DB flag OR CEO of their corp (detected via ESI)."""
     account = require_account(request, db)
-    if not account.is_director:
-        raise HTTPException(status_code=403, detail="Zugriff verweigert - Director-Rechte erforderlich")
-    return account
+    if account.is_director:
+        return account
+    # Also allow CEOs — check via the cached corp access flags
+    from app.models import Character
+    from app.esi import get_corporation_info
+    main_char = db.query(Character).filter(Character.id == account.main_character_id).first() if account.main_character_id else None
+    all_chars = db.query(Character).filter(Character.account_id == account.id).all()
+    corp_id = main_char.corporation_id if main_char else None
+    if corp_id:
+        try:
+            corp_info = get_corporation_info(corp_id)
+            ceo_id = corp_info.get("ceo_id")
+            if ceo_id and any(c.eve_character_id == ceo_id for c in all_chars):
+                return account
+        except Exception:
+            pass
+    raise HTTPException(status_code=403, detail="Zugriff verweigert - Director-Rechte erforderlich")

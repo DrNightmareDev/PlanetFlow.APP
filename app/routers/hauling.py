@@ -290,6 +290,17 @@ def _manageable_corporations(account, db: Session) -> list[dict]:
     return entries
 
 
+def _account_corporation_ids(account, db: Session) -> set[int]:
+    chars = db.query(Character).filter(Character.account_id == account.id).all()
+    return {int(char.corporation_id) for char in chars if int(char.corporation_id or 0)}
+
+
+def _selected_corporation_ids(account, db: Session, selected_character=None) -> set[int]:
+    if selected_character is not None and int(getattr(selected_character, "corporation_id", 0) or 0):
+        return {int(selected_character.corporation_id)}
+    return _account_corporation_ids(account, db)
+
+
 def _exportable_corporations(account, db: Session) -> list[dict]:
     if account.is_owner:
         return _all_known_corporations(db)
@@ -301,7 +312,7 @@ def _manageable_corporation_ids(account, db: Session) -> set[int]:
 
 
 def _is_corp_member(account, db: Session) -> bool:
-    return bool(_manageable_corporation_ids(account, db))
+    return bool(_account_corporation_ids(account, db))
 
 
 def _can_manage_bridge(account, corporation_id: int, db: Session) -> bool:
@@ -413,19 +424,25 @@ def _serialize_manual_bridge(entry: CorpBridgeConnection, account, db: Session) 
     }
 
 
-def _manual_bridge_entries(db: Session) -> list[CorpBridgeConnection]:
-    return (
-        db.query(CorpBridgeConnection)
-        .order_by(
-            CorpBridgeConnection.corporation_name.asc(),
-            CorpBridgeConnection.from_system_name.asc(),
-            CorpBridgeConnection.to_system_name.asc(),
-        )
-        .all()
-    )
+def _manual_bridge_entries(db: Session, allowed_corporation_ids: set[int] | None = None) -> list[CorpBridgeConnection]:
+    query = db.query(CorpBridgeConnection)
+    if allowed_corporation_ids is not None:
+        scoped_ids = {int(corp_id) for corp_id in allowed_corporation_ids if int(corp_id or 0)}
+        if not scoped_ids:
+            return []
+        query = query.filter(CorpBridgeConnection.corporation_id.in_(sorted(scoped_ids)))
+    return query.order_by(
+        CorpBridgeConnection.corporation_name.asc(),
+        CorpBridgeConnection.from_system_name.asc(),
+        CorpBridgeConnection.to_system_name.asc(),
+    ).all()
 
 
-def _bridge_adjacency(db: Session, use_ansiblex: bool) -> dict[int, list[dict]]:
+def _bridge_adjacency(
+    db: Session,
+    use_ansiblex: bool,
+    allowed_corporation_ids: set[int] | None = None,
+) -> dict[int, list[dict]]:
     adjacency: dict[int, list[dict]] = {}
 
     def add_edge(from_id: int, to_id: int, payload: dict) -> None:
@@ -450,7 +467,7 @@ def _bridge_adjacency(db: Session, use_ansiblex: bool) -> dict[int, list[dict]]:
             add_edge(to_id, from_id, payload)
 
     if use_ansiblex:
-        for entry in _manual_bridge_entries(db):
+        for entry in _manual_bridge_entries(db, allowed_corporation_ids=allowed_corporation_ids):
             from_id = int(entry.from_system_id)
             to_id = int(entry.to_system_id)
             payload = {
@@ -490,13 +507,19 @@ def _fallback_esi_leg(origin_system_id: int, destination_system_id: int) -> tupl
     return items, total_jumps
 
 
-def _graph_steps(origin_system_id: int, destination_system_id: int, db: Session, use_ansiblex: bool) -> list[dict]:
+def _graph_steps(
+    origin_system_id: int,
+    destination_system_id: int,
+    db: Session,
+    use_ansiblex: bool,
+    allowed_corporation_ids: set[int] | None = None,
+) -> list[dict]:
     if origin_system_id == destination_system_id:
         return []
     if not sde.has_jump_graph():
         return []
 
-    bridge_adjacency = _bridge_adjacency(db, use_ansiblex=use_ansiblex)
+    bridge_adjacency = _bridge_adjacency(db, use_ansiblex=use_ansiblex, allowed_corporation_ids=allowed_corporation_ids)
     start_id = int(origin_system_id)
     target_id = int(destination_system_id)
     queue: deque[int] = deque([start_id])
@@ -549,13 +572,19 @@ def _graph_steps(origin_system_id: int, destination_system_id: int, db: Session,
     return steps
 
 
-def _warp_weighted_steps(origin_system_id: int, destination_system_id: int, db: Session, use_ansiblex: bool) -> tuple[list[dict], int, float]:
+def _warp_weighted_steps(
+    origin_system_id: int,
+    destination_system_id: int,
+    db: Session,
+    use_ansiblex: bool,
+    allowed_corporation_ids: set[int] | None = None,
+) -> tuple[list[dict], int, float]:
     if origin_system_id == destination_system_id:
         return [], 0, 0.0
     if not sde.has_jump_graph():
         return [], 0, 0.0
 
-    bridge_adjacency = _bridge_adjacency(db, use_ansiblex=use_ansiblex)
+    bridge_adjacency = _bridge_adjacency(db, use_ansiblex=use_ansiblex, allowed_corporation_ids=allowed_corporation_ids)
     gate_distance_map = _load_gate_distance_map(db)
     start_state = (int(origin_system_id), 0, "start")
     target_id = int(destination_system_id)
@@ -679,11 +708,13 @@ def _best_leg(
     db: Session,
     use_ansiblex: bool = True,
     route_mode: str = "jumps",
+    allowed_corporation_ids: set[int] | None = None,
 ) -> tuple[list[dict], int, float]:
     if origin_system_id == destination_system_id:
         return [], 0, 0.0
     resolved_route_mode = _route_mode_value(route_mode)
-    cache_key = (int(origin_system_id), int(destination_system_id), bool(use_ansiblex), resolved_route_mode)
+    corp_scope_key = tuple(sorted(int(corp_id) for corp_id in (allowed_corporation_ids or set())))
+    cache_key = (int(origin_system_id), int(destination_system_id), bool(use_ansiblex), resolved_route_mode, corp_scope_key)
     cached = _best_route_cache.get(cache_key)
     if cached and time.time() - cached[1] < _ROUTE_CACHE_TTL:
         data = cached[0]
@@ -691,13 +722,25 @@ def _best_leg(
 
     total_gate_warp_m = 0.0
     if resolved_route_mode == "warp":
-        steps, total_jumps, total_gate_warp_m = _warp_weighted_steps(origin_system_id, destination_system_id, db, use_ansiblex=use_ansiblex)
+        steps, total_jumps, total_gate_warp_m = _warp_weighted_steps(
+            origin_system_id,
+            destination_system_id,
+            db,
+            use_ansiblex=use_ansiblex,
+            allowed_corporation_ids=allowed_corporation_ids,
+        )
         if steps:
             items, total_jumps, total_gate_warp_m = _steps_to_items(steps, destination_system_id)
         else:
             items = []
     else:
-        steps = _graph_steps(origin_system_id, destination_system_id, db, use_ansiblex=use_ansiblex)
+        steps = _graph_steps(
+            origin_system_id,
+            destination_system_id,
+            db,
+            use_ansiblex=use_ansiblex,
+            allowed_corporation_ids=allowed_corporation_ids,
+        )
         if steps:
             items, total_jumps, total_gate_warp_m = _steps_to_items(steps, destination_system_id)
         else:
@@ -717,6 +760,7 @@ def _route_score(
     db: Session,
     use_ansiblex: bool = True,
     route_mode: str = "jumps",
+    allowed_corporation_ids: set[int] | None = None,
 ) -> tuple[int, float]:
     if origin_system_id == destination_system_id:
         return (0, 0.0)
@@ -726,6 +770,7 @@ def _route_score(
         db,
         use_ansiblex=use_ansiblex,
         route_mode=route_mode,
+        allowed_corporation_ids=allowed_corporation_ids,
     )
     if not items:
         return (10**9, float("inf"))
@@ -907,6 +952,7 @@ def _build_route(
     use_ansiblex: bool = True,
     return_to_origin: bool = False,
     route_mode: str = "jumps",
+    allowed_corporation_ids: set[int] | None = None,
 ) -> tuple[list[dict], int, float]:
     remaining = list(dict.fromkeys(int(system_id) for system_id in system_ids if system_id and int(system_id) != int(origin_system_id)))[:20]
     ordered: list[dict] = [{
@@ -932,9 +978,23 @@ def _build_route(
     while remaining:
         next_id = min(
             remaining,
-            key=lambda candidate: _route_score(current, candidate, db, use_ansiblex=use_ansiblex, route_mode=route_mode),
+            key=lambda candidate: _route_score(
+                current,
+                candidate,
+                db,
+                use_ansiblex=use_ansiblex,
+                route_mode=route_mode,
+                allowed_corporation_ids=allowed_corporation_ids,
+            ),
         )
-        leg_items, jumps, gate_warp_m = _best_leg(current, next_id, db, use_ansiblex=use_ansiblex, route_mode=route_mode)
+        leg_items, jumps, gate_warp_m = _best_leg(
+            current,
+            next_id,
+            db,
+            use_ansiblex=use_ansiblex,
+            route_mode=route_mode,
+            allowed_corporation_ids=allowed_corporation_ids,
+        )
         if not leg_items:
             break
         if leg_items[0].get("bridge_incoming"):
@@ -952,6 +1012,7 @@ def _build_route(
             db,
             use_ansiblex=use_ansiblex,
             route_mode=route_mode,
+            allowed_corporation_ids=allowed_corporation_ids,
         )
         if leg_items and leg_items[0].get("bridge_incoming"):
             ordered[-1]["bridge_outgoing"] = True
@@ -1026,6 +1087,7 @@ def hauling_page(
 
     location = _get_cached_location(selected_character, db) if selected_character else None
     can_view_bridges = _is_corp_member(account, db)
+    visible_corporation_ids = _selected_corporation_ids(account, db, selected_character)
     route_ordered: list[dict] = []
     route_total_jumps = 0
     route_total_gate_warp_m = 0.0
@@ -1039,6 +1101,7 @@ def hauling_page(
                 use_ansiblex=True,
                 return_to_origin=return_to_origin,
                 route_mode=route_mode,
+                allowed_corporation_ids=visible_corporation_ids,
             )
             route_ordered = _apply_system_stop_map(route_ordered, system_stop_map)
             ansiblex_status = _ansiblex.status()
@@ -1132,7 +1195,11 @@ def get_bridge_connections(
 ):
     if not _is_corp_member(account, db):
         raise HTTPException(status_code=403, detail=translate("hauling.error_bridge_permission", default="Only corporation members can view bridge connections"))
-    manual = [_serialize_manual_bridge(entry, account, db) for entry in _manual_bridge_entries(db)]
+    visible_corporation_ids = _account_corporation_ids(account, db)
+    manual = [
+        _serialize_manual_bridge(entry, account, db)
+        for entry in _manual_bridge_entries(db, allowed_corporation_ids=visible_corporation_ids)
+    ]
     return JSONResponse({
         "manual": manual,
         "manageable_corporations": _manageable_corporations(account, db),
@@ -1358,6 +1425,7 @@ def get_route(
             use_ansiblex=use_ansiblex,
             return_to_origin=return_to_origin,
             route_mode=route_mode,
+            allowed_corporation_ids=_selected_corporation_ids(account, db, selected_character),
         )
         ordered = _apply_system_stop_map(ordered, system_stop_map)
     except Exception:

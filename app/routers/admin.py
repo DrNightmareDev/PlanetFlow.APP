@@ -534,7 +534,7 @@ async def update_page_access(
     if page.admin_only:
         raise HTTPException(status_code=400, detail="Admin-only pages cannot be changed")
 
-    _valid_levels = {"none", "member", "manager", "director", "paid"}
+    _valid_levels = {"none", "member", "manager", "fc", "director", "paid"}
     selected = form.getlist("access_levels")
     # Filter to only valid values
     selected = [v for v in selected if v in _valid_levels]

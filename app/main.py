@@ -200,7 +200,7 @@ async def impersonate_middleware(request: Request, call_next):
 
         # Load entitlement cache once per request (only for paid pages, avoids extra query otherwise)
         entitlement_map: dict[str, bool] | None = None
-        if account is not None and "paid" in settings_map.values():
+        if account is not None and any("paid" in str(v).split(",") for v in settings_map.values()):
             from app.services.entitlements import get_cached_page_entitlements
             entitlement_map = get_cached_page_entitlements(db, account_id=account.id)
         request.state.entitlement_map = entitlement_map or {}

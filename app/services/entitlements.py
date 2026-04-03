@@ -34,10 +34,6 @@ from app.page_access import PAGE_DEFINITIONS
 
 logger = logging.getLogger(__name__)
 
-# The access_level value that triggers entitlement check
-PAID_ACCESS_LEVEL = "paid"
-
-
 # ── Low-level active-record checks ───────────────────────────────────────────
 
 def _has_active_period(
@@ -99,8 +95,8 @@ def _resolve_page_entitlement(
     access_level: str,
 ) -> bool:
     """
-    Return True if account has access to this page given its access_level.
-    Only called when access_level == "paid" — other levels are handled by page_access.py.
+    Return True if account has paid-entitlement for this page.
+    Caller decides whether paid is required for the page.
     """
     if account.is_owner or account.is_admin:
         return True
@@ -160,16 +156,17 @@ def compute_entitlements_for_account(db: Session, *, account: Account) -> dict:
     pages: dict[str, bool] = {}
     for page in PAGE_DEFINITIONS:
         level = settings_map.get(page.key, page.default_access)
-        if level == "none":
+        level_tokens = {v.strip() for v in (level or "").split(",") if v.strip()}
+        if "none" in level_tokens:
             pages[page.key] = False
         elif account.is_owner or account.is_admin:
             pages[page.key] = True
-        elif level == PAID_ACCESS_LEVEL:
+        elif "paid" in level_tokens:
             pages[page.key] = _resolve_page_entitlement(
                 db, account=account, page_key=page.key, access_level=level
             )
         else:
-            # member / manager / admin handled by existing page_access logic — not our concern
+            # Role-gating is handled in page_access.
             pages[page.key] = True  # page_access middleware handles role gating
 
     # Features: currently no dynamic feature settings, placeholder for future paid features

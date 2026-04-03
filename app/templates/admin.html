@@ -104,6 +104,7 @@
                             <div class="d-flex flex-wrap gap-1">
                               {% if 'member' in cur_levels %}<span class="badge" style="background:#2dc65322;color:#2dc653;border:1px solid #2dc65340;font-size:.7rem;">Member</span>{% endif %}
                               {% if 'manager' in cur_levels %}<span class="badge" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;font-size:.7rem;">Manager</span>{% endif %}
+                              {% if 'fc' in cur_levels %}<span class="badge" style="background:#38bdf822;color:#38bdf8;border:1px solid #38bdf840;font-size:.7rem;">FC</span>{% endif %}
                               {% if 'director' in cur_levels %}<span class="badge" style="background:#7ec8e322;color:#7ec8e3;border:1px solid #7ec8e340;font-size:.7rem;">Director</span>{% endif %}
                               {% if 'paid' in cur_levels %}<span class="badge" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.7rem;">Paid</span>{% endif %}
                             </div>
@@ -132,12 +133,17 @@
                                                {% if 'member' in cur_levels %}checked{% endif %}>
                                         <span style="color:#2dc653;">Member</span>
                                     </label>
-                                    <label class="d-flex align-items-center gap-1" title="Admins / managers only">
+                                    <label class="d-flex align-items-center gap-1" title="Manager role required">
                                         <input type="checkbox" name="access_levels" value="manager"
                                                {% if 'manager' in cur_levels %}checked{% endif %}>
                                         <span style="color:#f4a300;">Manager</span>
                                     </label>
-                                    <label class="d-flex align-items-center gap-1" title="Directors, FC, Corp Managers, CEOs">
+                                    <label class="d-flex align-items-center gap-1" title="FC role required">
+                                        <input type="checkbox" name="access_levels" value="fc"
+                                               {% if 'fc' in cur_levels %}checked{% endif %}>
+                                        <span style="color:#38bdf8;">FC</span>
+                                    </label>
+                                    <label class="d-flex align-items-center gap-1" title="Director or CEO role required">
                                         <input type="checkbox" name="access_levels" value="director"
                                                {% if 'director' in cur_levels %}checked{% endif %}>
                                         <span style="color:#7ec8e3;">Director</span>

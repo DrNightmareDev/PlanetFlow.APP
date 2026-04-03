@@ -13,7 +13,7 @@ def get_current_account(request: Request, db: Session = Depends(get_db)) -> Acco
     account_id = session.get("account_id")
     if not account_id:
         return None
-    # Eager-load characters so that Account.is_owner (property) can check them
+    # Eager-load characters so that Account.is_owner can check linked chars.
     account = (
         db.query(Account)
         .options(joinedload(Account.characters))
@@ -55,22 +55,27 @@ def require_owner(request: Request, db: Session = Depends(get_db)) -> Account:
 
 
 def require_director(request: Request, db: Session = Depends(get_db)) -> Account:
-    """Requires is_director, is_corp_manager, is_fc DB flag OR CEO of their corp (detected via ESI)."""
+    """Requires director role or CEO status (owner/admin always allowed)."""
     account = require_account(request, db)
-    if account.is_director or account.is_corp_manager or account.is_fc:
+    if account.is_owner or account.is_admin or account.is_director:
         return account
-    # Also allow CEOs — check via the cached corp access flags
-    from app.models import Character
+
     from app.esi import get_corporation_info
+    from app.models import Character
+
     main_char = db.query(Character).filter(Character.id == account.main_character_id).first() if account.main_character_id else None
+    if not main_char:
+        main_char = db.query(Character).filter(Character.account_id == account.id).first()
+    if not main_char or not main_char.corporation_id:
+        raise HTTPException(status_code=403, detail="Zugriff verweigert - Director-Rechte erforderlich")
+
     all_chars = db.query(Character).filter(Character.account_id == account.id).all()
-    corp_id = main_char.corporation_id if main_char else None
-    if corp_id:
-        try:
-            corp_info = get_corporation_info(corp_id)
-            ceo_id = corp_info.get("ceo_id")
-            if ceo_id and any(c.eve_character_id == ceo_id for c in all_chars):
-                return account
-        except Exception:
-            pass
+    try:
+        corp_info = get_corporation_info(main_char.corporation_id)
+        ceo_id = corp_info.get("ceo_id")
+        if ceo_id and any(c.eve_character_id == ceo_id for c in all_chars):
+            return account
+    except Exception:
+        pass
+
     raise HTTPException(status_code=403, detail="Zugriff verweigert - Director-Rechte erforderlich")

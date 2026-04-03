@@ -108,58 +108,62 @@ def can_account_access_page(
     """
     Return True if the account may access this page.
 
-    access_level values (may be comma-separated for multi-level):
-      none      → blocked for everyone (dominant)
-      member    → all authenticated accounts
-      manager   → admin/owner only
-      director  → director, manager role, FC role, or CEO
-      paid      → requires active subscription, grant, or bonus code
-      admin     → admin-only page (page.admin_only)
+    access_level values (comma-separated):
+      none      -> blocked for everyone (dominant)
+      member    -> role gate: authenticated account
+      manager   -> role gate: manager-level account
+      fc        -> role gate: FC-level account
+      director  -> role gate: director (or CEO) account
+      paid      -> additional individual entitlement requirement
+      admin     -> role gate: admin/owner
+
+    Important:
+      "paid" is additive. Example "director,paid" requires both
+      director role and paid entitlement.
     """
     page = get_page_definition(page_key)
     if not page:
         return True
     access_level = get_effective_access_level(page_key, db=db, settings_map=settings_map)
+    levels = {v.strip() for v in (access_level or "").split(",") if v.strip()}
 
-    # Parse multi-value access levels
-    levels = {v.strip() for v in access_level.split(",") if v.strip()}
-
-    # "none" is dominant
     if "none" in levels:
         return False
     if account is None:
         return False
     if page.admin_only:
         return False
-    if "admin" in levels and len(levels) == 1:
+
+    def _is_ceo() -> bool:
+        if db is None:
+            return False
+        try:
+            from app.models import Character
+            from app.esi import get_corporation_info
+
+            chars = db.query(Character).filter(Character.account_id == account.id).all()
+            corp_ids = {c.corporation_id for c in chars if c.corporation_id}
+            char_eve_ids = {c.eve_character_id for c in chars}
+            for corp_id in corp_ids:
+                info = get_corporation_info(corp_id)
+                if info.get("ceo_id") in char_eve_ids:
+                    return True
+        except Exception:
+            return False
         return False
 
-    # Owner bypass applies to all non-admin pages
-    if bool(getattr(account, "is_owner", False)):
-        return True
-
-    # Helper to check director-level access
-    def _has_director_access() -> bool:
-        if getattr(account, "is_director", False):
-            return True
-        if getattr(account, "is_corp_manager", False):
-            return True
-        if getattr(account, "is_fc", False):
-            return True
-        if db is not None:
-            try:
-                from app.models import Character
-                from app.esi import get_corporation_info
-                chars = db.query(Character).filter(Character.account_id == account.id).all()
-                corp_ids = {c.corporation_id for c in chars if c.corporation_id}
-                char_eve_ids = {c.eve_character_id for c in chars}
-                for corp_id in corp_ids:
-                    info = get_corporation_info(corp_id)
-                    if info.get("ceo_id") in char_eve_ids:
-                        return True
-            except Exception:
-                pass
-        return False
+    def _effective_roles() -> set[str]:
+        roles = {"member"}
+        if bool(getattr(account, "is_owner", False)) or bool(getattr(account, "is_admin", False)):
+            roles.update({"admin", "manager", "fc", "director"})
+            return roles
+        if bool(getattr(account, "is_corp_manager", False)):
+            roles.add("manager")
+        if bool(getattr(account, "is_fc", False)):
+            roles.add("fc")
+        if bool(getattr(account, "is_director", False)) or _is_ceo():
+            roles.add("director")
+        return roles
 
     def _has_paid_access() -> bool:
         if bool(getattr(account, "is_admin", False)):
@@ -168,25 +172,26 @@ def can_account_access_page(
             return entitlement_map.get(page_key, False)
         if db is not None:
             from app.services.entitlements import get_cached_page_entitlements, _resolve_page_entitlement
+
             cached = get_cached_page_entitlements(db, account_id=account.id)
             if cached is not None:
                 return cached.get(page_key, False)
             return _resolve_page_entitlement(db, account=account, page_key=page_key, access_level="paid")
         return False
 
-    # Check each level — access granted if ANY level matches
-    if "member" in levels:
-        return True
-    if "manager" in levels and bool(getattr(account, "is_admin", False)):
-        return True
-    if "director" in levels and _has_director_access():
-        return True
-    if "paid" in levels and _has_paid_access():
-        return True
-    if "admin" in levels and bool(getattr(account, "is_admin", False)):
-        return True
+    role_tokens = {"member", "manager", "fc", "director", "admin"}
+    required_roles = levels & role_tokens
+    requires_paid = "paid" in levels
 
-    return False
+    # Backward-compatible default: no role token means member.
+    if not required_roles:
+        required_roles = {"member"}
+
+    if not (_effective_roles() & required_roles):
+        return False
+    if requires_paid and not _has_paid_access():
+        return False
+    return True
 
 
 def get_page_visibility(

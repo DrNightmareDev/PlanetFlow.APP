@@ -2,7 +2,18 @@
 {% block title %}Access denied - {{ t('app.name') }}{% endblock %}
 
 {% block content %}
-{% set role_label = 'No access' if required_role == 'none' else 'Admin only' if required_role == 'admin' else 'Manager only' if required_role == 'manager' else 'Member + Manager' if required_role == 'member' else required_role %}
+{% set labels = [] %}
+{% for lvl in (required_role or '').split(',') %}
+  {% set v = lvl.strip() %}
+  {% if v == 'none' %}{% set _ = labels.append('No access') %}{% endif %}
+  {% if v == 'admin' %}{% set _ = labels.append('Admin') %}{% endif %}
+  {% if v == 'member' %}{% set _ = labels.append('Member') %}{% endif %}
+  {% if v == 'manager' %}{% set _ = labels.append('Manager') %}{% endif %}
+  {% if v == 'fc' %}{% set _ = labels.append('FC') %}{% endif %}
+  {% if v == 'director' %}{% set _ = labels.append('Director/CEO') %}{% endif %}
+  {% if v == 'paid' %}{% set _ = labels.append('Paid entitlement') %}{% endif %}
+{% endfor %}
+{% set role_label = labels | join(' + ') if labels else required_role %}
 <div class="eve-card card border-0 mx-auto" style="max-width:720px;">
     <div class="card-body p-4 p-md-5 text-center">
         <div class="mb-3" style="font-size:3rem;color:#ff7b7b;">

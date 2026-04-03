@@ -187,11 +187,16 @@ def match_wallet_transaction(
     if not tx:
         return False, "Transaction not found."
 
-    # Dedup: already matched?
-    if db.query(BillingTransactionMatch).filter(
+    existing_match = db.query(BillingTransactionMatch).filter(
         BillingTransactionMatch.transaction_id == transaction_id
-    ).first():
-        return False, "Transaction already matched."
+    ).first()
+    # Allow retry for previously unmatched transactions.
+    if existing_match:
+        if existing_match.match_status == "unmatched":
+            db.delete(existing_match)
+            db.flush()
+        else:
+            return False, "Transaction already matched."
 
     receiver = db.get(BillingWalletReceiver, tx.receiver_id)
     if not receiver or not receiver.is_active:

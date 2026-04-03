@@ -665,13 +665,45 @@ def sync_billing_wallets() -> dict:
                 amount_isk = int(Decimal(str(amount_raw)).to_integral_value())
                 if amount_isk <= 0:
                     continue
+                first_id = entry.get("first_party_id")
+                second_id = entry.get("second_party_id")
+                first_name = entry.get("first_party_name")
+                second_name = entry.get("second_party_name")
+                first_type = str(entry.get("first_party_type") or "").lower()
+                second_type = str(entry.get("second_party_type") or "").lower()
+
+                def _pick_counterparty(expected_type: str | None = None):
+                    candidates = [
+                        (first_id, first_name, first_type),
+                        (second_id, second_name, second_type),
+                    ]
+                    # Prefer explicit type match when ESI provides it.
+                    if expected_type:
+                        for pid, pname, ptype in candidates:
+                            if pid and ptype == expected_type and int(pid) != int(receiver.eve_character_id):
+                                return pid, pname
+                    # Fallback: whichever party is not the receiver itself.
+                    for pid, pname, _ptype in candidates:
+                        if pid and int(pid) != int(receiver.eve_character_id):
+                            return pid, pname
+                    # Last fallback.
+                    return first_id, first_name
+
+                sender_char_id = None
+                sender_char_name = None
+                sender_corp_id = None
+                if ref_type == "player_donation":
+                    sender_char_id, sender_char_name = _pick_counterparty("character")
+                elif ref_type == "corporation_account_withdrawal":
+                    sender_corp_id, _ = _pick_counterparty("corporation")
+
                 tx = BillingWalletTransaction(
                     id=journal_id,
                     receiver_id=receiver.id,
                     ref_type=ref_type,
-                    sender_character_id=entry.get("first_party_id"),
-                    sender_character_name=entry.get("first_party_name"),
-                    sender_corporation_id=entry.get("second_party_id") if ref_type == "corporation_account_withdrawal" else None,
+                    sender_character_id=sender_char_id,
+                    sender_character_name=sender_char_name,
+                    sender_corporation_id=sender_corp_id,
                     amount_isk=amount_isk,
                     description=entry.get("description", "")[:1024],
                     occurred_at=datetime.fromisoformat(
@@ -711,11 +743,19 @@ def match_billing_transactions() -> dict:
     join_code_mails_sent = 0
 
     with SessionLocal() as db:
-        # Find transactions with no match record yet
+        # Find transactions with no match record yet OR previously unmatched (retryable)
         matched_ids = db.query(BillingTransactionMatch.transaction_id).subquery()
+        unmatched_ids = (
+            db.query(BillingTransactionMatch.transaction_id)
+            .filter(BillingTransactionMatch.match_status == "unmatched")
+            .subquery()
+        )
         pending = (
             db.query(BillingWalletTransaction)
-            .filter(BillingWalletTransaction.id.notin_(matched_ids))
+            .filter(
+                (BillingWalletTransaction.id.notin_(matched_ids))
+                | (BillingWalletTransaction.id.in_(unmatched_ids))
+            )
             .order_by(BillingWalletTransaction.occurred_at.asc())
             .all()
         )

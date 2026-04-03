@@ -99,6 +99,7 @@ services:
       - sde_data:/app/data
     networks:
       - internal
+      - proxy
 
   celery_wallet:
     build: .
@@ -121,6 +122,7 @@ services:
       - sde_data:/app/data
     networks:
       - internal
+      - proxy
 
   celery_beat:
     build: .
@@ -143,6 +145,7 @@ services:
       - sde_data:/app/data
     networks:
       - internal
+      - proxy
 
   # ── nginx reverse proxy + TLS ─────────────────────────────────────────────
   nginx:

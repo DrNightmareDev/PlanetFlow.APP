@@ -2,6 +2,7 @@ import json
 import time
 from fastapi.templating import Jinja2Templates
 from app.i18n import t, current_lang, client_i18n, SUPPORTED_LANGUAGES
+from app.session import get_csrf_token
 
 # Bumped on every server start → busts browser cache for static JS/CSS
 _STATIC_VERSION = str(int(time.time()))
@@ -48,3 +49,4 @@ templates.env.globals["t"] = t
 templates.env.globals["current_lang"] = current_lang
 templates.env.globals["client_i18n"] = client_i18n
 templates.env.globals["supported_languages"] = SUPPORTED_LANGUAGES
+templates.env.globals["csrf_token"] = get_csrf_token

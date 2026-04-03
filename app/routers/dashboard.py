@@ -346,8 +346,8 @@ def _start_bg_refresh(account_id: int, char_ids: list[int], price_mode: str) -> 
 
 def _kick_bg_refresh(account, characters: list) -> None:
     """Dispatch a background refresh via Celery (preferred) or in-process thread."""
-    import os
-    if os.getenv("CELERY_BROKER_URL"):
+    from app.config import get_settings as _get_settings
+    if _get_settings().celery_broker_url:
         try:
             from app.tasks import refresh_account_task
             refresh_account_task.delay(account.id)
@@ -1782,8 +1782,8 @@ def corp_view_page(
                 uncached_count += 1
                 # Kick Celery background refresh so the corp page gets data soon
                 try:
-                    import os as _os
-                    if _os.getenv("CELERY_BROKER_URL"):
+                    from app.config import get_settings as _get_settings
+                    if _get_settings().celery_broker_url:
                         from app.tasks import refresh_account_task
                         refresh_account_task.delay(acc_id)
                 except Exception as _exc:

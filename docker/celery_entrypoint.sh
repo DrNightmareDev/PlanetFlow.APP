@@ -4,7 +4,11 @@ set -e
 echo "Warte auf RabbitMQ..."
 until python -c "
 import os, sys, time
-url = os.environ.get('CELERY_BROKER_URL', 'amqp://guest:guest@rabbitmq:5672//')
+user = os.environ.get('RABBITMQ_USER', 'guest')
+password = os.environ.get('RABBITMQ_PASS', '')
+host = os.environ.get('RABBITMQ_HOST', 'rabbitmq')
+port = os.environ.get('RABBITMQ_PORT', '5672')
+url = f'amqp://{user}:{password}@{host}:{port}//' if password else ''
 ok = False
 for i in range(30):
     try:

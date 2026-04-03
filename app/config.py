@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     # Markt API
     janice_api_key: str = Field(default="", alias="JANICE_API_KEY")
 
+    # RabbitMQ / Celery
+    rabbitmq_user: str = Field(default="planetflow", alias="RABBITMQ_USER")
+    rabbitmq_pass: str = Field(default="", alias="RABBITMQ_PASS")
+    rabbitmq_host: str = Field(default="rabbitmq", alias="RABBITMQ_HOST")
+    rabbitmq_port: int = Field(default=5672, alias="RABBITMQ_PORT")
+
     # Owner-Identifikation via EVE Character ID (kein DB-Flag)
     # Der Account dessen Main-Charakter diese EVE-ID hat ist automatisch Owner+Admin.
     # Transfer: .env-Wert ändern und Container neu starten.
@@ -26,6 +32,8 @@ class Settings(BaseSettings):
 
     # Sicherheit
     secret_key: str = Field(default="change-me-to-a-secure-random-key-32chars", alias="SECRET_KEY")
+    auth_rate_limit_window_seconds: int = Field(default=300, alias="AUTH_RATE_LIMIT_WINDOW_SECONDS")
+    auth_rate_limit_max_attempts: int = Field(default=30, alias="AUTH_RATE_LIMIT_MAX_ATTEMPTS")
 
     # Server
     app_port: int = Field(default=8000, alias="APP_PORT")
@@ -37,6 +45,12 @@ class Settings(BaseSettings):
     cookie_secure: bool = Field(default=False, alias="COOKIE_SECURE")
 
     model_config = {"env_file": ".env", "extra": "ignore"}
+
+    @property
+    def celery_broker_url(self) -> str:
+        if not self.rabbitmq_pass:
+            return ""
+        return f"amqp://{self.rabbitmq_user}:{self.rabbitmq_pass}@{self.rabbitmq_host}:{self.rabbitmq_port}//"
 
 
 @lru_cache()

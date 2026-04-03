@@ -1,11 +1,13 @@
 """Celery application - broker: RabbitMQ, results: rpc (fire-and-forget)."""
-import os
 
 from celery import Celery
+from app.config import get_settings
+
+settings = get_settings()
 
 celery_app = Celery(
     "planetflow",
-    broker=os.getenv("CELERY_BROKER_URL", "amqp://guest:guest@rabbitmq:5672//"),
+    broker=settings.celery_broker_url or "amqp://guest:guest@rabbitmq:5672//",
     backend="rpc://",
     include=["app.tasks"],
 )

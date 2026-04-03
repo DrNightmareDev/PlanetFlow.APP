@@ -2,10 +2,11 @@ import logging
 import secrets
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.dependencies import get_current_account, require_account
 from app.esi import (
@@ -13,10 +14,12 @@ from app.esi import (
     verify_token, get_character_info, get_corporation_info, get_alliance_info
 )
 from app.models import Account, Character, SSOState, AccessPolicy
-from app.session import create_session, clear_session
+from app.security import encrypt_text, rate_limit_auth
+from app.session import clear_session, create_session, validate_csrf
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 
 def _check_access_policy(db: Session, corporation_id, alliance_id) -> bool:
@@ -61,7 +64,8 @@ def _generate_state(db: Session, flow: str, account_id: int | None = None) -> st
 
 
 @router.get("/login")
-def login(db: Session = Depends(get_db)):
+def login(request: Request, db: Session = Depends(get_db)):
+    rate_limit_auth(request, "login")
     state = _generate_state(db, flow="login")
     redirect_url = generate_auth_url(state)
     return RedirectResponse(url=redirect_url)
@@ -69,9 +73,11 @@ def login(db: Session = Depends(get_db)):
 
 @router.get("/add-character")
 def add_character(
+    request: Request,
     account=Depends(require_account),
     db: Session = Depends(get_db)
 ):
+    rate_limit_auth(request, "add_character")
     state = _generate_state(db, flow="add_character", account_id=account.id)
     redirect_url = generate_auth_url(state)
     return RedirectResponse(url=redirect_url)
@@ -79,9 +85,11 @@ def add_character(
 
 @router.get("/refresh-scopes")
 def refresh_scopes(
+    request: Request,
     account=Depends(require_account),
     db: Session = Depends(get_db)
 ):
+    rate_limit_auth(request, "refresh_scopes")
     state = _generate_state(db, flow="add_character", account_id=account.id)
     redirect_url = generate_auth_url(state)
     return RedirectResponse(url=redirect_url)
@@ -94,6 +102,7 @@ def callback(
     state: str | None = None,
     db: Session = Depends(get_db)
 ):
+    rate_limit_auth(request, "callback")
     if not code or not state:
         raise HTTPException(status_code=400, detail="Fehlende Parameter")
 
@@ -164,8 +173,8 @@ def callback(
     if existing_char:
         old_account_id = existing_char.account_id
         # Tokens aktualisieren
-        existing_char.access_token = access_token
-        existing_char.refresh_token = refresh_token
+        existing_char.access_token = encrypt_text(access_token)
+        existing_char.refresh_token = encrypt_text(refresh_token)
         existing_char.token_expires_at = token_expires_at
         existing_char.scopes = scopes
         existing_char.last_login = datetime.now(timezone.utc)
@@ -185,6 +194,8 @@ def callback(
                 return RedirectResponse(url="/?error=access_denied", status_code=302)
 
         if flow == "add_character" and existing_account_id:
+            if not _check_access_policy(db, corporation_id, alliance_id):
+                return RedirectResponse(url="/dashboard/characters?error=access_denied", status_code=302)
             existing_char.account_id = existing_account_id
             target_account = db.get(Account, existing_account_id)
             if target_account and not target_account.main_character_id:
@@ -205,6 +216,8 @@ def callback(
         # Neuen Account erstellen
         total_accounts = db.query(Account).count()
         is_first = total_accounts == 0
+        if is_first and eve_character_id != settings.eve_owner_character_id:
+            return RedirectResponse(url="/?error=owner_login_required", status_code=302)
 
         # Zugangspolitik prÃƒÂ¼fen (nicht fÃƒÂ¼r den ersten Account / Besitzer)
         if not is_first and not _check_access_policy(db, corporation_id, alliance_id):
@@ -221,8 +234,8 @@ def callback(
             corporation_name=corporation_name,
             alliance_id=alliance_id,
             alliance_name=alliance_name,
-            access_token=access_token,
-            refresh_token=refresh_token,
+            access_token=encrypt_text(access_token),
+            refresh_token=encrypt_text(refresh_token),
             token_expires_at=token_expires_at,
             scopes=scopes,
             portrait_64=portrait_64,
@@ -240,6 +253,8 @@ def callback(
         create_session(response, new_account.id)
 
     elif flow == "add_character" and existing_account_id:
+        if not _check_access_policy(db, corporation_id, alliance_id):
+            return RedirectResponse(url="/dashboard/characters?error=access_denied", status_code=302)
         # Alt hinzufÃƒÂ¼gen
         new_char = Character(
             eve_character_id=eve_character_id,
@@ -248,8 +263,8 @@ def callback(
             corporation_name=corporation_name,
             alliance_id=alliance_id,
             alliance_name=alliance_name,
-            access_token=access_token,
-            refresh_token=refresh_token,
+            access_token=encrypt_text(access_token),
+            refresh_token=encrypt_text(refresh_token),
             token_expires_at=token_expires_at,
             scopes=scopes,
             portrait_64=portrait_64,
@@ -281,19 +296,23 @@ def callback(
 
 
 
-@router.get("/logout")
-def logout():
+@router.post("/logout")
+def logout(request: Request, csrf_token: str = Form(...)):
+    validate_csrf(request, csrf_token)
     response = RedirectResponse(url="/", status_code=302)
     clear_session(response)
     return response
 
 
-@router.get("/set-main/{character_id}")
+@router.post("/set-main/{character_id}")
 def set_main(
     character_id: int,
+    request: Request,
+    csrf_token: str = Form(...),
     account=Depends(require_account),
     db: Session = Depends(get_db)
 ):
+    validate_csrf(request, csrf_token)
     char = db.query(Character).filter(
         Character.id == character_id,
         Character.account_id == account.id
@@ -306,12 +325,15 @@ def set_main(
     return RedirectResponse(url="/dashboard/characters", status_code=302)
 
 
-@router.get("/remove-character/{character_id}")
+@router.post("/remove-character/{character_id}")
 def remove_character(
     character_id: int,
+    request: Request,
+    csrf_token: str = Form(...),
     account=Depends(require_account),
     db: Session = Depends(get_db)
 ):
+    validate_csrf(request, csrf_token)
     char = db.query(Character).filter(
         Character.id == character_id,
         Character.account_id == account.id

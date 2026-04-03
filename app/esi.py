@@ -8,6 +8,7 @@ from urllib.parse import urlencode
 import requests
 
 from app.config import get_settings
+from app.security import decrypt_text, encrypt_text
 
 settings = get_settings()
 
@@ -508,8 +509,10 @@ def get_schematic(schematic_id: int) -> dict:
 
 def ensure_valid_token(character, db) -> str | None:
     """Prüft ob Token gültig ist und aktualisiert ihn ggf."""
-    if not character.token_expires_at or not character.refresh_token:
-        return character.access_token
+    access_token = decrypt_text(character.access_token)
+    refresh_token = decrypt_text(character.refresh_token)
+    if not character.token_expires_at or not refresh_token:
+        return access_token
 
     now = datetime.now(timezone.utc)
     expires_at = character.token_expires_at
@@ -518,13 +521,14 @@ def ensure_valid_token(character, db) -> str | None:
 
     if now >= expires_at:
         try:
-            token_data = refresh_access_token(character.refresh_token)
-            character.access_token = token_data["access_token"]
-            character.refresh_token = token_data.get("refresh_token", character.refresh_token)
+            token_data = refresh_access_token(refresh_token)
+            character.access_token = encrypt_text(token_data["access_token"])
+            character.refresh_token = encrypt_text(token_data.get("refresh_token", refresh_token))
             expires_in = token_data.get("expires_in", 1200)
             from datetime import timedelta
             character.token_expires_at = now + timedelta(seconds=expires_in)
             db.commit()
+            access_token = decrypt_text(character.access_token)
         except Exception as exc:
             import logging as _logging
             _logging.getLogger(__name__).warning(
@@ -542,4 +546,4 @@ def ensure_valid_token(character, db) -> str | None:
                     pass
             return None
 
-    return character.access_token
+    return access_token

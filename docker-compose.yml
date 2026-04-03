@@ -14,6 +14,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - internal
 
   rabbitmq:
     image: rabbitmq:3-alpine
@@ -28,6 +30,8 @@ services:
       interval: 10s
       timeout: 10s
       retries: 10
+    networks:
+      - internal
 
   # ── Fix sde_data volume ownership so appuser (uid 1000) can write SDE cache ─
   sde_init:
@@ -37,6 +41,8 @@ services:
       - sde_data:/app/data
     command: ["chown", "-R", "1000:1000", "/app/data"]
     restart: "no"
+    networks:
+      - internal
 
   app:
     build: .
@@ -57,12 +63,18 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://planetflow:${DB_PASSWORD:-planetflow_secret}@db/planetflow
-      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-planetflow}:${RABBITMQ_PASS:-planetflow_rabbit}@rabbitmq:5672//
+      RABBITMQ_USER: ${RABBITMQ_USER:-planetflow}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-planetflow_rabbit}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
     volumes:
       - ./app/static:/app/app/static:ro
       - sde_data:/app/data
     expose:
       - "8000"
+    networks:
+      - internal
+      - proxy
 
   celery_worker:
     build: .
@@ -79,9 +91,14 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://planetflow:${DB_PASSWORD:-planetflow_secret}@db/planetflow
-      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-planetflow}:${RABBITMQ_PASS:-planetflow_rabbit}@rabbitmq:5672//
+      RABBITMQ_USER: ${RABBITMQ_USER:-planetflow}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-planetflow_rabbit}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
     volumes:
       - sde_data:/app/data
+    networks:
+      - internal
 
   celery_wallet:
     build: .
@@ -96,9 +113,14 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://planetflow:${DB_PASSWORD:-planetflow_secret}@db/planetflow
-      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-planetflow}:${RABBITMQ_PASS:-planetflow_rabbit}@rabbitmq:5672//
+      RABBITMQ_USER: ${RABBITMQ_USER:-planetflow}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-planetflow_rabbit}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
     volumes:
       - sde_data:/app/data
+    networks:
+      - internal
 
   celery_beat:
     build: .
@@ -113,9 +135,14 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://planetflow:${DB_PASSWORD:-planetflow_secret}@db/planetflow
-      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-planetflow}:${RABBITMQ_PASS:-planetflow_rabbit}@rabbitmq:5672//
+      RABBITMQ_USER: ${RABBITMQ_USER:-planetflow}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-planetflow_rabbit}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
     volumes:
       - sde_data:/app/data
+    networks:
+      - internal
 
   # ── nginx reverse proxy + TLS ─────────────────────────────────────────────
   nginx:
@@ -131,6 +158,8 @@ services:
       - ./app/static:/app/static:ro
       - certbot_www:/var/www/certbot:ro
       - certbot_conf:/etc/letsencrypt:ro
+    networks:
+      - proxy
 
   # ── Let's Encrypt certificate renewal ────────────────────────────────────
   certbot:
@@ -141,6 +170,8 @@ services:
       - certbot_conf:/etc/letsencrypt
     # Renew twice daily; certbot only acts when cert is due for renewal (< 30d remaining)
     entrypoint: ["/bin/sh", "-c", "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 43200 & wait $${!}; done"]
+    networks:
+      - proxy
 
   # ── Optional: PgBouncer connection pooler ─────────────────────────────────
   # Start with: docker compose --profile pgbouncer up
@@ -165,6 +196,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - internal
 
   # ── Optional: Flower — Celery task monitor ─────────────────────────────────
   # Start with: docker compose --profile monitoring up
@@ -180,6 +213,8 @@ services:
       FLOWER_BASIC_AUTH: ${FLOWER_USER:-admin}:${FLOWER_PASS:-flower_secret}
     ports:
       - "127.0.0.1:5555:5555"
+    networks:
+      - internal
 
 volumes:
   postgres_data:
@@ -187,3 +222,8 @@ volumes:
   sde_data:
   certbot_www:
   certbot_conf:
+
+networks:
+  internal:
+    internal: true
+  proxy:

@@ -113,6 +113,7 @@
                             </span>
                             {% else %}
                             <form method="post" action="/admin/page-access" class="d-inline-flex align-items-center gap-2">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                                 <input type="hidden" name="page_key" value="{{ row.page.key }}">
                                 <select class="form-select form-select-sm eve-input" name="access_level" style="min-width: 210px;">
                                     <option value="none" {% if row.access_level == 'none' %}selected{% endif %}>No Access</option>
@@ -275,21 +276,27 @@
                     {% else %}
                     {# Toggle-Admin: nur Owner darf vergeben/entziehen; Owner selbst kann nicht revoked werden #}
                     {% if account.is_owner and not acc.is_owner %}
-                    <a href="/admin/toggle-admin/{{ acc.id }}"
-                       class="btn btn-sm eve-btn-gold"
-                       onclick="return confirm('Admin-Status von {{ main.character_name if main else 'Account #' ~ acc.id }} ändern?')">
-                        <i class="bi bi-shield me-1"></i>
-                        {{ 'Admin entfernen' if acc.is_admin else 'Admin machen' }}
-                    </a>
+                    <form method="post" action="/admin/toggle-admin/{{ acc.id }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                        <button type="submit"
+                                class="btn btn-sm eve-btn-gold"
+                                onclick="return confirm('Admin-Status von {{ main.character_name if main else 'Account #' ~ acc.id }} ändern?')">
+                            <i class="bi bi-shield me-1"></i>
+                            {{ 'Admin entfernen' if acc.is_admin else 'Admin machen' }}
+                        </button>
+                    </form>
                     {% endif %}
                     {# Director-Verwaltung: für alle Admins #}
                     {% if acc.is_director %}
-                    <a href="/admin/remove-director/{{ acc.id }}"
-                       class="btn btn-sm"
-                       style="background:#2d1a0a;color:#f4a300;border:1px solid #f4a30060;"
-                       onclick="return confirm('Director-Zugang für {{ main.character_name if main else 'Account #' ~ acc.id }} entfernen?')">
-                        <i class="bi bi-building-x me-1"></i>Director entfernen
-                    </a>
+                    <form method="post" action="/admin/remove-director/{{ acc.id }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                        <button type="submit"
+                                class="btn btn-sm"
+                                style="background:#2d1a0a;color:#f4a300;border:1px solid #f4a30060;"
+                                onclick="return confirm('Director-Zugang für {{ main.character_name if main else 'Account #' ~ acc.id }} entfernen?')">
+                            <i class="bi bi-building-x me-1"></i>Director entfernen
+                        </button>
+                    </form>
                     {% else %}
                     <button type="button" class="btn btn-sm"
                             style="background:#1a1a0a;color:#f4a300;border:1px solid #f4a30040;"
@@ -299,21 +306,27 @@
                     {% endif %}
                     {# Impersonate: nur Owner #}
                     {% if account.is_owner %}
-                    <a href="/admin/impersonate/{{ acc.id }}"
-                       class="btn btn-sm"
-                       style="background:#7c2d1220;color:#f97316;border:1px solid #f9731640;"
-                       onclick="return confirm('Dashboard als {{ main.character_name if main else 'Account #' ~ acc.id }} anzeigen?')"
-                       title="Als dieser User einloggen (Impersonate)">
-                        <i class="bi bi-person-fill-exclamation me-1"></i>Ansehen
-                    </a>
+                    <form method="post" action="/admin/impersonate/{{ acc.id }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                        <button type="submit"
+                                class="btn btn-sm"
+                                style="background:#7c2d1220;color:#f97316;border:1px solid #f9731640;"
+                                onclick="return confirm('Dashboard als {{ main.character_name if main else 'Account #' ~ acc.id }} anzeigen?')"
+                                title="Als dieser User einloggen (Impersonate)">
+                            <i class="bi bi-person-fill-exclamation me-1"></i>Ansehen
+                        </button>
+                    </form>
                     {% endif %}
                     {# Löschen: nur für nicht-Owner, nur Owner darf löschen #}
                     {% if account.is_owner and not acc.is_owner %}
-                    <a href="/admin/delete-account/{{ acc.id }}"
-                       class="btn btn-sm eve-btn-danger"
-                       onclick="return confirm('Account #{{ acc.id }} und alle zugehörigen Charaktere wirklich löschen?')">
-                        <i class="bi bi-trash3"></i>
-                    </a>
+                    <form method="post" action="/admin/delete-account/{{ acc.id }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                        <button type="submit"
+                                class="btn btn-sm eve-btn-danger"
+                                onclick="return confirm('Account #{{ acc.id }} und alle zugehörigen Charaktere wirklich löschen?')">
+                            <i class="bi bi-trash3"></i>
+                        </button>
+                    </form>
                     {% endif %}
                     {% endif %}
                 </div>
@@ -414,17 +427,23 @@
                                     <td>
                                         <div class="d-flex gap-1">
                                         {% if char.id != acc.main_character_id %}
-                                        <a href="/admin/set-main/{{ acc.id }}/{{ char.id }}"
-                                           class="btn btn-sm eve-btn-ghost py-0"
-                                           title="Als Main setzen">
-                                            <i class="bi bi-star"></i>
-                                        </a>
-                                        <a href="/admin/delete-character/{{ char.id }}"
-                                           class="btn btn-sm eve-btn-danger py-0"
-                                           title="Charakter löschen"
-                                           onclick="return confirm('Charakter {{ char.character_name }} wirklich löschen?')">
-                                            <i class="bi bi-trash3"></i>
-                                        </a>
+                                        <form method="post" action="/admin/set-main/{{ acc.id }}/{{ char.id }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                                            <button type="submit"
+                                                    class="btn btn-sm eve-btn-ghost py-0"
+                                                    title="Als Main setzen">
+                                                <i class="bi bi-star"></i>
+                                            </button>
+                                        </form>
+                                        <form method="post" action="/admin/delete-character/{{ char.id }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                                            <button type="submit"
+                                                    class="btn btn-sm eve-btn-danger py-0"
+                                                    title="Charakter löschen"
+                                                    onclick="return confirm('Charakter {{ char.character_name }} wirklich löschen?')">
+                                                <i class="bi bi-trash3"></i>
+                                            </button>
+                                        </form>
                                         {% endif %}
                                         {% if char.esi_consecutive_errors >= 1 %}
                                         <button class="btn btn-sm eve-btn-ghost py-0"
@@ -519,12 +538,14 @@
             <div class="small fw-medium text-muted mb-2">{{ t('admin.access_policy.registration_mode', default='Registration mode') }}</div>
             <div class="d-flex gap-2 flex-wrap mb-2">
                 <form method="post" action="/admin/access-policy/mode" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                     <button type="submit" name="mode" value="open"
                             class="btn btn-sm {% if policy.mode == 'open' %}eve-btn-primary{% else %}eve-btn-ghost{% endif %}">
                         <i class="bi bi-globe2 me-1"></i>{{ t('admin.access_policy.mode_open', default='Open') }}
                     </button>
                 </form>
                 <form method="post" action="/admin/access-policy/mode" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                     <button type="submit" name="mode" value="allowlist"
                             class="btn btn-sm {% if policy.mode == 'allowlist' %}eve-btn-primary{% else %}eve-btn-ghost{% endif %}"
                             style="{% if policy.mode == 'allowlist' %}background:#2dc65322;color:#2dc653;border-color:#2dc65360;{% endif %}">
@@ -532,6 +553,7 @@
                     </button>
                 </form>
                 <form method="post" action="/admin/access-policy/mode" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                     <button type="submit" name="mode" value="blocklist"
                             class="btn btn-sm {% if policy.mode == 'blocklist' %}eve-btn-danger{% else %}eve-btn-ghost{% endif %}">
                         <i class="bi bi-x-circle me-1"></i>{{ t('admin.access_policy.mode_blocklist', default='Blocked corps/alliances') }}
@@ -546,7 +568,7 @@
                 {% else %}
                     <i class="bi bi-info-circle me-1"></i>{{ t('admin.access_policy.info_blocklist', default='Characters from listed corps/alliances are blocked during new registration.') }}
                 {% endif %}
-                {{ t('admin.access_policy.info_existing_accounts', default='Existing accounts are not affected.') }}
+                {{ t('admin.access_policy.info_existing_accounts', default='Existing accounts stay accessible, but newly linked characters must also pass the policy.') }}
             </div>
         </div>
 
@@ -584,13 +606,16 @@
                             <td class="small text-muted">{{ e.entity_id }}</td>
                             <td class="small text-muted">{{ e.created_at.strftime('%d.%m.%Y') if e.created_at else '—' }}</td>
                             <td>
-                                <a href="/admin/access-policy/remove/{{ e.id }}"
-                                   class="btn btn-sm eve-btn-ghost py-0 px-1"
-                                   style="color:#e63946;"
-                                   title="{{ t('admin.access_policy.remove_entry', default='Remove entry') }}"
-                                   onclick="return confirm('{{ t('admin.access_policy.confirm_remove', name=(e.entity_name or e.entity_id), default='Really remove entry {name}?') }}')">
-                                    <i class="bi bi-trash3"></i>
-                                </a>
+                                <form method="post" action="/admin/access-policy/remove/{{ e.id }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                                    <button type="submit"
+                                            class="btn btn-sm eve-btn-ghost py-0 px-1"
+                                            style="color:#e63946;"
+                                            title="{{ t('admin.access_policy.remove_entry', default='Remove entry') }}"
+                                            onclick="return confirm('{{ t('admin.access_policy.confirm_remove', name=(e.entity_name or e.entity_id), default='Really remove entry {name}?') }}')">
+                                        <i class="bi bi-trash3"></i>
+                                    </button>
+                                </form>
                             </td>
                         </tr>
                         {% endfor %}
@@ -624,6 +649,7 @@
             <form method="post" action="/admin/access-policy/add"
                   class="d-flex gap-2 align-items-end flex-wrap mt-3 pt-3"
                   style="border-top:1px solid #1e3448;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                 <div>
                     <label class="form-label small mb-1">{{ t('common.type') }}</label>
                     <select name="entity_type" class="form-select form-select-sm eve-input" style="width:140px;">
@@ -1199,6 +1225,7 @@ async function adminTriggerRefresh(accountId, btn) {
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <form id="directorForm" method="post" action="">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
         <div class="modal-body">
           <p class="text-muted small mb-3">Wähle die Corporation, für die <strong id="directorTargetName"></strong> Director-Zugang erhalten soll.</p>
           <input type="text" id="corpSearch" class="form-control form-control-sm eve-input mb-2"
@@ -1277,4 +1304,3 @@ function filterCorps(q) {
 }
 </script>
 {% endblock %}
-

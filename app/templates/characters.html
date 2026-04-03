@@ -218,15 +218,20 @@
                             <i class="bi bi-star-fill me-1"></i>{{ t('characters.current_main', default='Current main') }}
                         </button>
                         {% else %}
-                        <a href="/auth/set-main/{{ char.id }}"
-                           class="btn btn-sm eve-btn-outline flex-grow-1">
-                            <i class="bi bi-star me-1"></i>{{ t('characters.set_main', default='Set as main') }}
-                        </a>
-                        <a href="/auth/remove-character/{{ char.id }}"
-                           class="btn btn-sm eve-btn-danger"
-                           onclick="return confirm('{{ t('characters.confirm_remove', name=char.character_name, default='Really remove character {name}?') }}')">
-                            <i class="bi bi-trash3"></i>
-                        </a>
+                        <form method="post" action="/auth/set-main/{{ char.id }}" class="flex-grow-1">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                            <button type="submit" class="btn btn-sm eve-btn-outline w-100">
+                                <i class="bi bi-star me-1"></i>{{ t('characters.set_main', default='Set as main') }}
+                            </button>
+                        </form>
+                        <form method="post" action="/auth/remove-character/{{ char.id }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                            <button type="submit"
+                                    class="btn btn-sm eve-btn-danger"
+                                    onclick="return confirm('{{ t('characters.confirm_remove', name=char.character_name, default='Really remove character {name}?') }}')">
+                                <i class="bi bi-trash3"></i>
+                            </button>
+                        </form>
                         {% endif %}
                     </div>
                 </div>
@@ -358,14 +363,20 @@
                                     <i class="bi bi-star-fill me-1"></i>{{ t('common.main', default='Main') }}
                                 </button>
                                 {% else %}
-                                <a href="/auth/set-main/{{ char.id }}" class="btn btn-sm eve-btn-outline">
-                                    <i class="bi bi-star me-1"></i>{{ t('characters.set_main_short', default='Main') }}
-                                </a>
-                                <a href="/auth/remove-character/{{ char.id }}"
-                                   class="btn btn-sm eve-btn-danger"
-                                   onclick="return confirm('{{ t('characters.confirm_remove', name=char.character_name, default='Really remove character {name}?') }}')">
-                                    <i class="bi bi-trash3"></i>
-                                </a>
+                                <form method="post" action="/auth/set-main/{{ char.id }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                                    <button type="submit" class="btn btn-sm eve-btn-outline">
+                                        <i class="bi bi-star me-1"></i>{{ t('characters.set_main_short', default='Main') }}
+                                    </button>
+                                </form>
+                                <form method="post" action="/auth/remove-character/{{ char.id }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                                    <button type="submit"
+                                            class="btn btn-sm eve-btn-danger"
+                                            onclick="return confirm('{{ t('characters.confirm_remove', name=char.character_name, default='Really remove character {name}?') }}')">
+                                        <i class="bi bi-trash3"></i>
+                                    </button>
+                                </form>
                                 {% endif %}
                             </div>
                         </td>

@@ -9,7 +9,7 @@ from app.dependencies import require_admin, require_account, require_manager_or_
 from app.i18n import get_translation_rows, save_translation, reseed_translations, SUPPORTED_LANGUAGES
 from app.models import Account, Character, AccessPolicy, AccessPolicyEntry, PageAccessSetting
 from app.page_access import get_access_settings_map, get_page_definitions
-from app.session import create_session, create_impersonate_session, read_session
+from app.session import create_impersonate_session, create_session, read_session, validate_csrf
 from app.templates_env import templates
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -239,12 +239,15 @@ def reset_char_errors(
     return JSONResponse({"ok": True, "character_name": char.character_name})
 
 
-@router.get("/toggle-admin/{target_account_id}")
+@router.post("/toggle-admin/{target_account_id}")
 def toggle_admin(
     target_account_id: int,
+    request: Request,
+    csrf_token: str = Form(...),
     account=Depends(require_admin),
     db: Session = Depends(get_db)
 ):
+    validate_csrf(request, csrf_token)
     if not account.is_owner:
         raise HTTPException(status_code=403, detail="Nur der Owner kann Admin-Rechte vergeben oder entziehen")
 
@@ -281,11 +284,14 @@ def corps_list(
 @router.post("/set-director/{target_account_id}")
 def set_director(
     target_account_id: int,
+    request: Request,
+    csrf_token: str = Form(...),
     corp_id: int = Form(...),
     corp_name: str = Form(...),
     account=Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    validate_csrf(request, csrf_token)
     target = db.query(Account).filter(Account.id == target_account_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="Account nicht gefunden")
@@ -296,12 +302,15 @@ def set_director(
     return RedirectResponse(url="/admin", status_code=302)
 
 
-@router.get("/remove-director/{target_account_id}")
+@router.post("/remove-director/{target_account_id}")
 def remove_director(
     target_account_id: int,
+    request: Request,
+    csrf_token: str = Form(...),
     account=Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    validate_csrf(request, csrf_token)
     target = db.query(Account).filter(Account.id == target_account_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="Account nicht gefunden")
@@ -312,12 +321,15 @@ def remove_director(
     return RedirectResponse(url="/admin", status_code=302)
 
 
-@router.get("/delete-account/{target_account_id}")
+@router.post("/delete-account/{target_account_id}")
 def delete_account(
     target_account_id: int,
+    request: Request,
+    csrf_token: str = Form(...),
     account=Depends(require_admin),
     db: Session = Depends(get_db)
 ):
+    validate_csrf(request, csrf_token)
     if target_account_id == account.id:
         raise HTTPException(status_code=400, detail="Du kannst deinen eigenen Account nicht löschen")
 
@@ -333,12 +345,15 @@ def delete_account(
     return RedirectResponse(url="/admin", status_code=302)
 
 
-@router.get("/delete-character/{character_id}")
+@router.post("/delete-character/{character_id}")
 def admin_delete_character(
     character_id: int,
+    request: Request,
+    csrf_token: str = Form(...),
     account=Depends(require_admin),
     db: Session = Depends(get_db)
 ):
+    validate_csrf(request, csrf_token)
     char = db.query(Character).filter(Character.id == character_id).first()
     if not char:
         raise HTTPException(status_code=404, detail="Charakter nicht gefunden")
@@ -364,13 +379,15 @@ def admin_delete_character(
     return RedirectResponse(url="/admin", status_code=302)
 
 
-@router.get("/impersonate/{target_account_id}")
+@router.post("/impersonate/{target_account_id}")
 def impersonate(
     target_account_id: int,
     request: Request,
+    csrf_token: str = Form(...),
     account=Depends(require_account),
     db: Session = Depends(get_db)
 ):
+    validate_csrf(request, csrf_token)
     if not account.is_owner:
         raise HTTPException(status_code=403, detail="Nur der Administrator kann Accounts imitieren")
     if target_account_id == account.id:
@@ -383,8 +400,9 @@ def impersonate(
     return response
 
 
-@router.get("/impersonate-exit")
-def impersonate_exit(request: Request, db: Session = Depends(get_db)):
+@router.post("/impersonate-exit")
+def impersonate_exit(request: Request, csrf_token: str = Form(...), db: Session = Depends(get_db)):
+    validate_csrf(request, csrf_token)
     session = read_session(request)
     real_owner_id = session.get("real_owner_id") if session else None
     if not real_owner_id:
@@ -398,13 +416,16 @@ def impersonate_exit(request: Request, db: Session = Depends(get_db)):
     return response
 
 
-@router.get("/set-main/{account_id}/{character_id}")
+@router.post("/set-main/{account_id}/{character_id}")
 def admin_set_main(
     account_id: int,
     character_id: int,
+    request: Request,
+    csrf_token: str = Form(...),
     account=Depends(require_admin),
     db: Session = Depends(get_db)
 ):
+    validate_csrf(request, csrf_token)
     target_account = db.query(Account).filter(Account.id == account_id).first()
     if not target_account:
         raise HTTPException(status_code=404, detail="Account nicht gefunden")
@@ -434,8 +455,9 @@ async def set_access_policy_mode(
     account=Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    _require_owner(account)
     form = await request.form()
+    validate_csrf(request, form.get("csrf_token", ""))
+    _require_owner(account)
     mode = form.get("mode", "open")
     if mode not in ("open", "allowlist", "blocklist"):
         raise HTTPException(status_code=400, detail="Ungültiger Modus")
@@ -451,8 +473,9 @@ async def add_access_policy_entry(
     account=Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    _require_owner(account)
     form = await request.form()
+    validate_csrf(request, form.get("csrf_token", ""))
+    _require_owner(account)
     entity_type = form.get("entity_type", "")
     entity_id_raw = form.get("entity_id", "")
     entity_name = (form.get("entity_name") or "").strip()
@@ -478,12 +501,15 @@ async def add_access_policy_entry(
     return RedirectResponse(url="/admin#access-policy", status_code=302)
 
 
-@router.get("/access-policy/remove/{entry_id}")
+@router.post("/access-policy/remove/{entry_id}")
 def remove_access_policy_entry(
     entry_id: int,
+    request: Request,
+    csrf_token: str = Form(...),
     account=Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    validate_csrf(request, csrf_token)
     _require_owner(account)
     entry = db.query(AccessPolicyEntry).filter_by(id=entry_id, policy_id=1).first()
     if entry:
@@ -498,8 +524,9 @@ async def update_page_access(
     account=Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    _require_owner(account)
     form = await request.form()
+    validate_csrf(request, form.get("csrf_token", ""))
+    _require_owner(account)
     page_key = (form.get("page_key") or "").strip()
     access_level = (form.get("access_level") or "").strip()
     page = next((entry for entry in get_page_definitions() if entry.key == page_key), None)

@@ -1,5 +1,7 @@
-from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-from fastapi import Request, Response
+import secrets
+
+from fastapi import HTTPException, Request, Response
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from app.config import get_settings
 
 settings = get_settings()
@@ -51,4 +53,18 @@ def read_session(request: Request) -> dict | None:
 
 
 def clear_session(response: Response) -> None:
-    response.delete_cookie(key=COOKIE_NAME, samesite="lax", secure=not settings.debug)
+    response.delete_cookie(key=COOKIE_NAME, samesite="lax", secure=settings.cookie_secure)
+
+
+def get_csrf_token(request: Request) -> str:
+    token = request.session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        request.session["csrf_token"] = token
+    return token
+
+
+def validate_csrf(request: Request, token: str) -> None:
+    expected = request.session.get("csrf_token")
+    if not expected or not token or not secrets.compare_digest(expected, token):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")

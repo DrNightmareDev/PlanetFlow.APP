@@ -11,8 +11,9 @@ from sqlalchemy import text
 from app.config import get_settings
 from app.database import engine, SessionLocal
 from app.i18n import bootstrap_pi_type_translations, bootstrap_static_planets, bootstrap_static_stargates, bootstrap_translations, reseed_translations
-from app.models import SSOState
+from app.models import Character, SSOState
 from app.page_access import get_access_settings_map, get_page_visibility, is_public_path, match_page_for_path
+from app.security import decrypt_text, encrypt_text, require_strong_secret_key
 from app.routers import auth, dashboard, admin, director, pi, market, system, planner, skyhook, colony_plan, pi_templates, hauling, killboard, intel, inventory, billing
 from app.templates_env import templates
 
@@ -36,9 +37,9 @@ if _SENTRY_DSN:
 settings = get_settings()
 
 # Celery Beat handles scheduled jobs (market refresh, SSO cleanup, colony refresh).
-# APScheduler is kept as a fallback only when CELERY_BROKER_URL is not set,
+# APScheduler is kept as a fallback only when RabbitMQ/Celery is not configured,
 # so the app still works without RabbitMQ in dev/single-process setups.
-_USE_CELERY = bool(os.getenv("CELERY_BROKER_URL"))
+_USE_CELERY = bool(settings.celery_broker_url)
 
 
 def _fallback_refresh_market_prices():
@@ -71,19 +72,51 @@ def _fallback_cleanup_sso():
         logger.warning("SSO-State-Bereinigung fehlgeschlagen: %s", e)
 
 
+def _encrypt_stored_tokens() -> None:
+    """One-time in-place migration for legacy plaintext OAuth tokens."""
+    db = SessionLocal()
+    try:
+        updated = 0
+        characters = db.query(Character).filter(
+            (Character.access_token.isnot(None)) | (Character.refresh_token.isnot(None))
+        ).all()
+        for character in characters:
+            changed = False
+            if character.access_token and decrypt_text(character.access_token) == character.access_token:
+                character.access_token = encrypt_text(character.access_token)
+                changed = True
+            if character.refresh_token and decrypt_text(character.refresh_token) == character.refresh_token:
+                character.refresh_token = encrypt_text(character.refresh_token)
+                changed = True
+            if changed:
+                updated += 1
+        if updated:
+            db.commit()
+            logger.info("Encrypted legacy OAuth tokens for %d characters.", updated)
+        else:
+            db.rollback()
+    except Exception as exc:
+        db.rollback()
+        logger.warning("OAuth token re-encryption skipped: %s", exc)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup — fail fast on missing/default config
-    if settings.secret_key == "change-me-to-a-secure-random-key-32chars":
-        raise RuntimeError("SECRET_KEY ist nicht konfiguriert. Bitte SECRET_KEY in .env setzen.")
+    require_strong_secret_key()
     if not settings.eve_client_id:
         raise RuntimeError("EVE_CLIENT_ID ist nicht konfiguriert.")
     if not settings.eve_client_secret:
         raise RuntimeError("EVE_CLIENT_SECRET ist nicht konfiguriert.")
+    if settings.eve_owner_character_id <= 0:
+        raise RuntimeError("EVE_OWNER_CHARACTER_ID muss gesetzt sein, bevor die App startet.")
 
     logger.info("PlanetFlow startet...")
     from app import sde
     sde.init()
+    _encrypt_stored_tokens()
     reseed_result = reseed_translations()
     if reseed_result["inserted"] or reseed_result["updated"]:
         logger.info("I18N: %s eingefuegt, %s aktualisiert (reseed).", reseed_result["inserted"], reseed_result["updated"])
@@ -247,7 +280,7 @@ def health_check():
         status["database"] = "error"
 
     # RabbitMQ / Celery broker (optional)
-    broker_url = os.getenv("CELERY_BROKER_URL", "")
+    broker_url = settings.celery_broker_url
     if broker_url:
         try:
             import amqp

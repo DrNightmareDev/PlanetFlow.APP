@@ -1,6 +1,6 @@
 """Add visual subscription badge flag to page access settings
 
-Revision ID: 041_page_access_subscription_badge
+Revision ID: 041
 Revises: 040
 Create Date: 2026-04-03 19:05:00.000000
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "041_page_access_subscription_badge"
+revision = "041"
 down_revision = "040"
 branch_labels = None
 depends_on = None

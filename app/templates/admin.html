@@ -273,6 +273,26 @@
                     <span class="btn btn-sm eve-btn-outline disabled">
                         <i class="bi bi-lock me-1"></i>Eigener Account
                     </span>
+                    {# Owner can elevate their own account to director for any corp #}
+                    {% if account.is_owner %}
+                    {% if acc.is_director %}
+                    <form method="post" action="/admin/remove-director/{{ acc.id }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                        <button type="submit"
+                                class="btn btn-sm"
+                                style="background:#2d1a0a;color:#f4a300;border:1px solid #f4a30060;"
+                                onclick="return confirm('Director-Zugang entfernen?')">
+                            <i class="bi bi-building-x me-1"></i>Director entfernen
+                        </button>
+                    </form>
+                    {% else %}
+                    <button type="button" class="btn btn-sm"
+                            style="background:#1a1a0a;color:#f4a300;border:1px solid #f4a30040;"
+                            onclick="openDirectorModal({{ acc.id }}, '{{ (main.character_name if main else 'Account #' ~ acc.id) | replace("'", "\\'") }}')">
+                        <i class="bi bi-building-add me-1"></i>Als Director einloggen
+                    </button>
+                    {% endif %}
+                    {% endif %}
                     {% else %}
                     {# Toggle-Admin: nur Owner darf vergeben/entziehen; Owner selbst kann nicht revoked werden #}
                     {% if account.is_owner and not acc.is_owner %}

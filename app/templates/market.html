@@ -39,6 +39,27 @@
             <div class="col-md-2 text-end">
                 <span class="text-muted small"><span id="rowCount">{{ rows | length }}</span> {{ t('market.products_count') }}</span>
             </div>
+            <div class="col-md-6">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text eve-input-prefix">P4 Stream</span>
+                    <select id="p4DependencyFilter" class="form-select eve-input">
+                        <option value="">All products</option>
+                        {% for p4_name in all_p4 %}
+                        <option value="{{ p4_name }}">{{ p4_name }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" id="clearP4DependencyFilter" class="btn btn-sm eve-tier-filter-btn">Clear</button>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="d-flex align-items-center gap-2 justify-content-md-end flex-wrap">
+                    <span class="text-muted small">Trend colors</span>
+                    <div id="trendColorMode" class="d-flex gap-1">
+                        <button type="button" class="btn btn-sm eve-tier-filter-btn active" data-mode="direction">Direction</button>
+                        <button type="button" class="btn btn-sm eve-tier-filter-btn" data-mode="tier">Tier</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -92,9 +113,9 @@
                         data-volume1d="{{ row.avg_volume }}"
                         data-trend7d=""
                         data-volume7d="{{ row.avg_volume_7d }}">
-                        <td class="fw-medium">{{ row.display_name }}</td>
+                        {% set tc = tier_colors.get(row.tier, '#586e75') %}
+                        <td class="fw-medium" style="color:{{ tc }};">{{ row.display_name }}</td>
                         <td>
-                            {% set tc = tier_colors.get(row.tier, '#586e75') %}
                             <span class="badge" style="background:{{ tc }}1a;color:{{ tc }};border:1px solid {{ tc }}3a;">{{ row.tier }}</span>
                         </td>
                         <td class="text-end small" style="color:var(--eve-gold);">
@@ -141,10 +162,18 @@
 {% block extra_scripts %}
 <script>
 const TIER_ORDER = {P4: 4, P3: 3, P2: 2, P1: 1};
+const TIER_COLORS = {P4: '#e63946', P3: '#f4a300', P2: '#00b4d8', P1: '#586e75'};
+const P1_TO_P2 = {{ p1_to_p2 | tojson }};
+const P2_TO_P3 = {{ p2_to_p3 | tojson }};
+const P3_TO_P4 = {{ p3_to_p4 | tojson }};
 const MARKET_LAST_UPDATED_ISO = {{ last_updated_iso | tojson }};
 let sortState = {col: 'sell', asc: false};
 let activeTier = '';
+let activeP4Dependency = '';
+let activeP4StreamSet = null;
+let trendColorMode = 'direction';
 let allRows = [...document.querySelectorAll('.market-row')];
+const PRODUCT_TIER_BY_NAME = new Map(allRows.map(row => [row.dataset.rawName, row.dataset.tier]));
 
 // ── Tier-Filter ───────────────────────────────────────────────────────────
 document.getElementById('tierFilter').addEventListener('click', e => {
@@ -160,13 +189,70 @@ document.getElementById('marketSearch').addEventListener('input', function() {
     applyFilters();
 });
 
+document.getElementById('p4DependencyFilter').addEventListener('change', function() {
+    activeP4Dependency = this.value || '';
+    activeP4StreamSet = activeP4Dependency ? buildP4DependencyStream(activeP4Dependency) : null;
+    applyFilters();
+});
+
+document.getElementById('clearP4DependencyFilter').addEventListener('click', function() {
+    const select = document.getElementById('p4DependencyFilter');
+    select.value = '';
+    activeP4Dependency = '';
+    activeP4StreamSet = null;
+    applyFilters();
+});
+
+document.getElementById('trendColorMode').addEventListener('click', function(e) {
+    const btn = e.target.closest('[data-mode]');
+    if (!btn) return;
+    trendColorMode = btn.dataset.mode || 'direction';
+    document.querySelectorAll('#trendColorMode [data-mode]').forEach(b => b.classList.toggle('active', b === btn));
+    refreshTrendCells();
+});
+
+function getProductTierByName(name) {
+    return PRODUCT_TIER_BY_NAME.get(name) || '';
+}
+
+function getRecipeInputs(name, tier) {
+    if (tier === 'P4') return P3_TO_P4[name] || [];
+    if (tier === 'P3') return P2_TO_P3[name] || [];
+    if (tier === 'P2') return P1_TO_P2[name] || [];
+    return [];
+}
+
+function buildP4DependencyStream(p4Name) {
+    const stream = new Set();
+    if (!p4Name) return stream;
+    const stack = [{name: p4Name, tier: 'P4'}];
+    const visited = new Set();
+
+    while (stack.length > 0) {
+        const current = stack.pop();
+        const key = `${current.tier}|${current.name}`;
+        if (visited.has(key)) continue;
+        visited.add(key);
+        stream.add(current.name);
+
+        const inputs = getRecipeInputs(current.name, current.tier);
+        for (const inputName of inputs) {
+            const inputTier = getProductTierByName(inputName);
+            if (!inputTier) continue; // skip non-product inputs outside market rows
+            stack.push({name: inputName, tier: inputTier});
+        }
+    }
+    return stream;
+}
+
 function applyFilters() {
     const q = document.getElementById('marketSearch').value.trim().toLowerCase();
     let visible = 0;
     allRows.forEach(row => {
         const nameMatch = !q || row.dataset.name.includes(q);
         const tierMatch = !activeTier || row.dataset.tier === activeTier;
-        const show = nameMatch && tierMatch;
+        const streamMatch = !activeP4StreamSet || activeP4StreamSet.has(row.dataset.rawName);
+        const show = nameMatch && tierMatch && streamMatch;
         row.classList.toggle('d-none', !show);
         if (show) visible++;
     });
@@ -230,14 +316,14 @@ async function loadTrends() {
             const t = data[name];
             const row = cell.closest('tr');
             if (row) row.dataset.trend1d = t?.trend_1d ?? '';
-            cell.innerHTML = trendHtml(t?.trend_1d);
+            cell.innerHTML = trendHtml(t?.trend_1d, row?.dataset.tier || '');
         });
         document.querySelectorAll('.trend-7d').forEach(cell => {
             const name = cell.dataset.name;
             const t = data[name];
             const row = cell.closest('tr');
             if (row) row.dataset.trend7d = t?.trend_7d ?? '';
-            cell.innerHTML = trendHtml(t?.trend_7d);
+            cell.innerHTML = trendHtml(t?.trend_7d, row?.dataset.tier || '');
         });
         document.querySelectorAll('.volume-day').forEach(cell => {
             const name = cell.dataset.name;
@@ -261,12 +347,33 @@ async function loadTrends() {
     }
 }
 
-function trendHtml(val) {
+function trendHtml(val, tier) {
     if (val == null) return '<span class="text-muted small">&mdash;</span>';
     const abs = Math.abs(val).toFixed(1);
-    if (val > 0.5)  return `<span style="color:#2dc653;">▲ ${abs}%</span>`;
-    if (val < -0.5) return `<span style="color:#e63946;">▼ ${abs}%</span>`;
-    return `<span style="color:#586e75;">→ ${abs}%</span>`;
+    if (trendColorMode === 'tier') {
+        const tierColor = TIER_COLORS[tier] || '#586e75';
+        if (val > 0.5)  return `<span style="color:${tierColor};">+ ${abs}%</span>`;
+        if (val < -0.5) return `<span style="color:${tierColor};">- ${abs}%</span>`;
+        return `<span style="color:#586e75;">~ ${abs}%</span>`;
+    }
+    if (val > 0.5)  return `<span style="color:#2dc653;">+ ${abs}%</span>`;
+    if (val < -0.5) return `<span style="color:#e63946;">- ${abs}%</span>`;
+    return `<span style="color:#586e75;">~ ${abs}%</span>`;
+}
+
+function refreshTrendCells() {
+    document.querySelectorAll('.trend-1d').forEach(cell => {
+        const row = cell.closest('tr');
+        const raw = row?.dataset.trend1d ?? '';
+        const val = raw === '' ? null : Number(raw);
+        cell.innerHTML = trendHtml(Number.isFinite(val) ? val : null, row?.dataset.tier || '');
+    });
+    document.querySelectorAll('.trend-7d').forEach(cell => {
+        const row = cell.closest('tr');
+        const raw = row?.dataset.trend7d ?? '';
+        const val = raw === '' ? null : Number(raw);
+        cell.innerHTML = trendHtml(Number.isFinite(val) ? val : null, row?.dataset.tier || '');
+    });
 }
 
 // ── Admin Force-Refresh ───────────────────────────────────────────────────

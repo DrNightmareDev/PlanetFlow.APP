@@ -15,6 +15,7 @@ from app.market import (
     refresh_all_pi_prices,
 )
 from app.models import MarketCache
+from app.pi_data import P1_TO_P2, P2_TO_P3, P3_TO_P4, ALL_P4
 from app.templates_env import templates
 
 router = APIRouter(prefix="/market", tags=["market"])
@@ -76,6 +77,10 @@ def market_overview(
         "account": account,
         "rows": rows,
         "tier_colors": TIER_COLORS,
+        "p1_to_p2": P1_TO_P2,
+        "p2_to_p3": P2_TO_P3,
+        "p3_to_p4": P3_TO_P4,
+        "all_p4": ALL_P4,
         "last_updated": last_updated_str,
         "last_updated_iso": last_updated_iso,
         "can_refresh": can_refresh,

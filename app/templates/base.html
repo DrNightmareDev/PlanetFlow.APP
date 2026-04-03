@@ -441,6 +441,39 @@ function enableMarketAutoReload(lastUpdatedIso, intervalMs = 60000) {
 
 document.addEventListener('DOMContentLoaded', initMarketUpdateBadge);
 document.addEventListener('DOMContentLoaded', function() {
+    // Preserve scroll position across form-submit redirects on the same page.
+    // This avoids jumping to the top after save/add/remove actions.
+    try {
+        if ('scrollRestoration' in history) {
+            history.scrollRestoration = 'manual';
+        }
+        const restorePath = sessionStorage.getItem('eve-scroll-restore-path');
+        const restoreYRaw = sessionStorage.getItem('eve-scroll-restore-y');
+        if (restorePath && restoreYRaw && restorePath === window.location.pathname) {
+            const restoreY = parseInt(restoreYRaw, 10);
+            if (!Number.isNaN(restoreY) && restoreY > 0) {
+                requestAnimationFrame(() => {
+                    window.scrollTo({ top: restoreY, behavior: 'auto' });
+                    setTimeout(() => window.scrollTo({ top: restoreY, behavior: 'auto' }), 50);
+                });
+            }
+            sessionStorage.removeItem('eve-scroll-restore-path');
+            sessionStorage.removeItem('eve-scroll-restore-y');
+        }
+    } catch (_) {}
+
+    document.querySelectorAll('form[method]').forEach(function(form) {
+        form.addEventListener('submit', function() {
+            try {
+                const method = String(form.getAttribute('method') || 'get').toUpperCase();
+                if (method === 'POST') {
+                    sessionStorage.setItem('eve-scroll-restore-path', window.location.pathname);
+                    sessionStorage.setItem('eve-scroll-restore-y', String(window.scrollY || 0));
+                }
+            } catch (_) {}
+        });
+    });
+
     window.updateThemeIcon(document.documentElement.getAttribute('data-theme') || 'dark');
     document.querySelectorAll('.eve-language-option').forEach(function(option) {
         option.addEventListener('click', function() {

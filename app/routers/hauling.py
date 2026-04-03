@@ -300,6 +300,10 @@ def _manageable_corporation_ids(account, db: Session) -> set[int]:
     return {int(item["corporation_id"]) for item in _manageable_corporations(account, db)}
 
 
+def _is_corp_member(account, db: Session) -> bool:
+    return bool(_manageable_corporation_ids(account, db))
+
+
 def _can_manage_bridge(account, corporation_id: int, db: Session) -> bool:
     if account.is_owner:
         return True
@@ -1021,6 +1025,7 @@ def hauling_page(
     system_stop_map = _build_system_stop_map(hauling_colonies, db)
 
     location = _get_cached_location(selected_character, db) if selected_character else None
+    can_view_bridges = _is_corp_member(account, db)
     route_ordered: list[dict] = []
     route_total_jumps = 0
     route_total_gate_warp_m = 0.0
@@ -1068,6 +1073,7 @@ def hauling_page(
         "ansiblex_status": ansiblex_status,
         "dotlan_route_link": dotlan_route_link,
         "hauling_total_value": sum(float(colony.get("storage_value") or 0.0) for colony in hauling_colonies),
+        "can_view_bridges": can_view_bridges,
         "can_manage_bridges": bool(account.is_admin or account.is_owner),
         "can_manage_all_bridges": bool(account.is_owner),
     })
@@ -1124,6 +1130,8 @@ def get_bridge_connections(
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
+    if not _is_corp_member(account, db):
+        raise HTTPException(status_code=403, detail=translate("hauling.error_bridge_permission", default="Only corporation members can view bridge connections"))
     manual = [_serialize_manual_bridge(entry, account, db) for entry in _manual_bridge_entries(db)]
     return JSONResponse({
         "manual": manual,

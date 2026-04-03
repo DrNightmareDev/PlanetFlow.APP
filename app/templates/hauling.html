@@ -19,9 +19,11 @@
                 </select>
             </div>
             <div class="d-flex align-items-center gap-2 flex-wrap">
+                {% if can_view_bridges %}
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#bridgeConnectionsModal">
                     <i class="bi bi-diagram-3 me-1"></i>{{ t('hauling.bridge_connections') }}
                 </button>
+                {% endif %}
                 <select id="haulingRouteModeSelect" class="form-select form-select-sm eve-input" style="min-width:240px;max-width:320px;">
                     <option value="jumps"{% if route_mode == 'jumps' %} selected{% endif %}>{{ t('hauling.route_mode_jumps', default='Shortest Jumps') }}</option>
                     <option value="warp"{% if route_mode == 'warp' %} selected{% endif %}>{{ t('hauling.route_mode_warp', default='Shortest Jumps + Gate Warp Distance') }}</option>
@@ -255,6 +257,7 @@
     </div>
 </div>
 
+{% if can_view_bridges %}
 <div class="modal fade" id="bridgeConnectionsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content" style="background:var(--eve-bg-2);border:1px solid var(--eve-card-border);">
@@ -348,6 +351,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <script>
 (function () {

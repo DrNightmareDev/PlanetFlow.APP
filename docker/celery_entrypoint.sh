@@ -4,13 +4,13 @@ set -e
 echo "Warte auf RabbitMQ..."
 until python -c "
 import os, sys, time
-import amqp
 url = os.environ.get('CELERY_BROKER_URL', 'amqp://guest:guest@rabbitmq:5672//')
 ok = False
 for i in range(30):
     try:
-        conn = amqp.Connection(url)
-        conn.connect()
+        import kombu
+        conn = kombu.Connection(url)
+        conn.ensure_connection(max_retries=1, timeout=3)
         conn.close()
         ok = True
         break

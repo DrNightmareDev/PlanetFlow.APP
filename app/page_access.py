@@ -124,18 +124,19 @@ def can_account_access_page(
         return False
     if account is None:
         return False
-    if bool(getattr(account, "is_owner", False)):
-        return True
     if page.admin_only:
         return False
     if access_level == "admin":
         return False
+    if access_level == "director":
+        return bool(getattr(account, "is_director", False))
+    # Owner bypass applies to all non-director, non-admin pages
+    if bool(getattr(account, "is_owner", False)):
+        return True
     if access_level == "member":
         return True
     if access_level == "manager":
         return bool(getattr(account, "is_admin", False))
-    if access_level == "director":
-        return bool(getattr(account, "is_director", False))
     if access_level == "paid":
         # Owner/admin bypass already handled above
         if bool(getattr(account, "is_admin", False)):

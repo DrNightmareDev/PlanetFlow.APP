@@ -217,13 +217,25 @@
                 {% endif %}
             </ul>
 
-            <!-- Theme Toggle -->
+            <!-- Help + Support -->
+            <div class="d-flex flex-column align-items-center me-2" style="line-height:1;">
+                <button class="eve-theme-toggle"
+                        type="button"
+                        data-bs-toggle="modal"
+                        data-bs-target="#helpModal"
+                        title="{{ t('common.help') }}">
+                    <i class="bi bi-question-circle" style="font-size:0.95rem;"></i>
+                </button>
+                <span class="text-muted" style="font-size:.58rem; margin-top:2px; white-space:nowrap;">
+                    Subscription system later
+                </span>
+            </div>
             <button class="eve-theme-toggle me-2"
                     type="button"
                     data-bs-toggle="modal"
-                    data-bs-target="#helpModal"
-                    title="{{ t('common.help') }}">
-                <i class="bi bi-question-circle" style="font-size:0.95rem;"></i>
+                    data-bs-target="#supportModal"
+                    title="Why I built this">
+                <i class="bi bi-emoji-smile" style="font-size:0.95rem;"></i>
             </button>
 
             <div class="dropdown me-2">
@@ -346,6 +358,29 @@
                 <div class="eve-help-donate small text-muted">
                     {{ t('help.donate', name='DrNightmare') }}
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="supportModal" tabindex="-1" aria-labelledby="supportModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content eve-help-modal">
+            <div class="modal-header border-0 pb-2">
+                <div>
+                    <h5 class="modal-title fw-semibold" id="supportModalLabel">Why PlanetFlow exists</h5>
+                    <div class="text-muted small">A short note from DrNightmare</div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="{{ t('common.close') }}"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <p class="small text-muted mb-2">
+                    I built PlanetFlow to make PI planning, logistics and decision-making faster and less stressful for everyday gameplay.
+                    It is a passion project and continuously improved based on your feedback.
+                </p>
+                <p class="small text-muted mb-0">
+                    If you want to support further development, donations to <strong style="color:#cdd6f4;">DrNightmare</strong> are always appreciated.
+                </p>
             </div>
         </div>
     </div>

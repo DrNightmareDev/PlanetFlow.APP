@@ -14,6 +14,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -171,6 +172,69 @@ def _contains_reason_keyword(description: str | None, keyword: str) -> bool:
     return keyword.upper() in text
 
 
+def _hours_from_amount(*, amount_isk: Decimal, daily_price_isk: Decimal) -> Decimal:
+    """Convert ISK amount to subscription hours using daily/24 and round to full hour."""
+    if daily_price_isk <= 0:
+        return Decimal(0)
+    hourly_price = daily_price_isk / Decimal(24)
+    if hourly_price <= 0:
+        return Decimal(0)
+    return (amount_isk / hourly_price).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+
+
+def _days_from_hours(hours: Decimal) -> Decimal:
+    return (hours / Decimal(24)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+
+def _compute_incremental_days_from_total_amount(
+    db: Session,
+    *,
+    tx: BillingWalletTransaction,
+    subject_type: str,
+    subject_id: int,
+    plan_id: int,
+    daily_price_isk: Decimal,
+) -> Decimal:
+    """
+    Compute newly grantable days from total paid amount for this subject+plan.
+
+    We compare:
+    - rounded full hours from previous matched payments
+    - rounded full hours from (previous matched + current transaction)
+    and grant only the delta, converted back to days.
+    """
+    previous_amount_raw = (
+        db.query(func.coalesce(func.sum(BillingWalletTransaction.amount_isk), 0))
+        .join(
+            BillingTransactionMatch,
+            BillingTransactionMatch.transaction_id == BillingWalletTransaction.id,
+        )
+        .filter(
+            BillingTransactionMatch.match_status == "matched",
+            BillingTransactionMatch.subject_type == subject_type,
+            BillingTransactionMatch.subject_id == subject_id,
+            BillingTransactionMatch.plan_id == plan_id,
+        )
+        .scalar()
+    )
+    previous_amount = Decimal(previous_amount_raw or 0)
+    current_amount = Decimal(tx.amount_isk or 0)
+    total_amount = previous_amount + current_amount
+
+    previous_hours = _hours_from_amount(
+        amount_isk=previous_amount,
+        daily_price_isk=daily_price_isk,
+    )
+    total_hours = _hours_from_amount(
+        amount_isk=total_amount,
+        daily_price_isk=daily_price_isk,
+    )
+    grant_hours = total_hours - previous_hours
+    if grant_hours <= 0:
+        return Decimal(0)
+    return _days_from_hours(grant_hours)
+
+
 # ── Wallet transaction matching ───────────────────────────────────────────────
 
 def match_wallet_transaction(
@@ -299,18 +363,26 @@ def match_wallet_transaction(
                 BillingSubscriptionPlan.is_active == True,
             ).order_by(BillingSubscriptionPlan.id.asc()).first()
             if plan and Decimal(plan.daily_price_isk) > 0:
-                days = (amount / Decimal(plan.daily_price_isk)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-                extend_subscription(
+                days = _compute_incremental_days_from_total_amount(
                     db,
+                    tx=tx,
                     subject_type="account",
                     subject_id=account.id,
                     plan_id=plan.id,
-                    days=days,
-                    source_type="payment",
-                    note=f"Wallet tx {tx.id}",
-                    actor_account_id=actor_account_id,
-                    effective_at=tx.occurred_at,
+                    daily_price_isk=Decimal(plan.daily_price_isk),
                 )
+                if days > 0:
+                    extend_subscription(
+                        db,
+                        subject_type="account",
+                        subject_id=account.id,
+                        plan_id=plan.id,
+                        days=days,
+                        source_type="payment",
+                        note=f"Wallet tx {tx.id}",
+                        actor_account_id=actor_account_id,
+                        effective_at=tx.occurred_at,
+                    )
                 source_note = (
                     f"Player donation designated username: {designated_name}"
                     if designated_name
@@ -363,18 +435,26 @@ def match_wallet_transaction(
                     if daily_price is None:
                         daily_price = Decimal(plan.daily_price_isk)
                     if daily_price > 0:
-                        days = (amount / daily_price).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-                        extend_subscription(
+                        days = _compute_incremental_days_from_total_amount(
                             db,
+                            tx=tx,
                             subject_type="alliance",
                             subject_id=alliance_id,
                             plan_id=plan.id,
-                            days=days,
-                            source_type="payment",
-                            note=f"Wallet tx {tx.id}",
-                            actor_account_id=actor_account_id,
-                            effective_at=tx.occurred_at,
+                            daily_price_isk=daily_price,
                         )
+                        if days > 0:
+                            extend_subscription(
+                                db,
+                                subject_type="alliance",
+                                subject_id=alliance_id,
+                                plan_id=plan.id,
+                                days=days,
+                                source_type="payment",
+                                note=f"Wallet tx {tx.id}",
+                                actor_account_id=actor_account_id,
+                                effective_at=tx.occurred_at,
+                            )
                         db.add(BillingTransactionMatch(
                             transaction_id=tx.id,
                             subject_type="alliance",
@@ -398,18 +478,26 @@ def match_wallet_transaction(
                 if daily_price is None:
                     daily_price = Decimal(plan.daily_price_isk)
                 if daily_price > 0:
-                    days = (amount / daily_price).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-                    extend_subscription(
+                    days = _compute_incremental_days_from_total_amount(
                         db,
+                        tx=tx,
                         subject_type="corporation",
                         subject_id=corp_id,
                         plan_id=plan.id,
-                        days=days,
-                        source_type="payment",
-                        note=f"Wallet tx {tx.id}",
-                        actor_account_id=actor_account_id,
-                        effective_at=tx.occurred_at,
+                        daily_price_isk=daily_price,
                     )
+                    if days > 0:
+                        extend_subscription(
+                            db,
+                            subject_type="corporation",
+                            subject_id=corp_id,
+                            plan_id=plan.id,
+                            days=days,
+                            source_type="payment",
+                            note=f"Wallet tx {tx.id}",
+                            actor_account_id=actor_account_id,
+                            effective_at=tx.occurred_at,
+                        )
                     db.add(BillingTransactionMatch(
                         transaction_id=tx.id,
                         subject_type="corporation",

@@ -452,7 +452,10 @@ def redeem_bonus_code(
     }
 
     if code.reward_type == "subscription_days":
-        days = Decimal(code.reward_value)
+        try:
+            days = Decimal(str(code.reward_value or "").strip())
+        except Exception:
+            return False, "Ungültiger Code (fehlerhafter reward_value)."
         extend_subscription(
             db,
             subject_type="account",

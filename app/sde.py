@@ -78,6 +78,16 @@ def _is_update_needed() -> bool:
         return True
 
 
+# ─── Helpers ─────────────────────────────────────────────────────────────────
+
+def _atomic_replace(tmp: Path, dest: Path) -> None:
+    """Rename tmp -> dest. Silently ignores FileNotFoundError (another worker won the race)."""
+    try:
+        tmp.replace(dest)
+    except FileNotFoundError:
+        pass  # another gunicorn worker already moved the file — that's fine
+
+
 # ─── Download & Extraktion ────────────────────────────────────────────────────
 
 def _download_and_extract() -> bool:
@@ -96,7 +106,7 @@ def _download_and_extract() -> bool:
                         # Atomisches Schreiben: erst Temp-Datei, dann umbenennen
                         tmp = DATA_DIR / f"{name}.tmp"
                         tmp.write_bytes(f.read())
-                        tmp.replace(DATA_DIR / name)
+                        _atomic_replace(tmp, DATA_DIR / name)
                         logger.info(f"  Extrahiert: {name}")
                 except KeyError:
                     logger.warning(f"  Nicht gefunden im Archiv: {name}")
@@ -204,7 +214,7 @@ def _download_systems() -> bool:
         resp.raise_for_status()
         tmp = DATA_DIR / "mapSolarSystems.sql.bz2.tmp"
         tmp.write_bytes(resp.content)
-        tmp.replace(_systems_path())
+        _atomic_replace(tmp, _systems_path())
         logger.info("mapSolarSystems.sql.bz2 erfolgreich heruntergeladen.")
         return True
     except Exception as e:
@@ -272,7 +282,7 @@ def _download_jumps() -> bool:
         resp.raise_for_status()
         tmp = DATA_DIR / "mapSolarSystemJumps.sql.bz2.tmp"
         tmp.write_bytes(resp.content)
-        tmp.replace(_jumps_path())
+        _atomic_replace(tmp, _jumps_path())
         logger.info("mapSolarSystemJumps.sql.bz2 erfolgreich heruntergeladen.")
         return True
     except Exception as e:
@@ -323,7 +333,7 @@ def _download_regions() -> bool:
         resp.raise_for_status()
         tmp = DATA_DIR / "mapRegions.sql.bz2.tmp"
         tmp.write_bytes(resp.content)
-        tmp.replace(_regions_path())
+        _atomic_replace(tmp, _regions_path())
         logger.info("mapRegions.sql.bz2 heruntergeladen.")
         return True
     except Exception as e:
@@ -369,7 +379,7 @@ def _download_constellations() -> bool:
         resp.raise_for_status()
         tmp = DATA_DIR / "mapConstellations.sql.bz2.tmp"
         tmp.write_bytes(resp.content)
-        tmp.replace(_constellations_path())
+        _atomic_replace(tmp, _constellations_path())
         logger.info("mapConstellations.sql.bz2 heruntergeladen.")
         return True
     except Exception as e:
@@ -422,7 +432,7 @@ def _download_denormalize() -> bool:
         resp.raise_for_status()
         tmp = DATA_DIR / "mapDenormalize.sql.bz2.tmp"
         tmp.write_bytes(resp.content)
-        tmp.replace(_denormalize_path())
+        _atomic_replace(tmp, _denormalize_path())
         logger.info("mapDenormalize.sql.bz2 heruntergeladen.")
         return True
     except Exception as e:

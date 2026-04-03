@@ -179,6 +179,39 @@
 
     <div class="col-12 col-xl-6">
       <div class="card">
+        <div class="card-header fw-semibold">Manual subscriptions (revoke)</div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0" style="font-size:.85em">
+            <thead><tr><th>Scope</th><th>Subject</th><th>Ends</th><th>Note</th><th></th></tr></thead>
+            <tbody>
+            {% for p in manual_periods %}
+              {% set is_active = p.ends_at and p.ends_at > now %}
+              <tr class="{{ '' if is_active else 'text-muted' }}">
+                <td>{{ p.subject_type }}</td>
+                <td>{{ p.subject_id }}</td>
+                <td>{{ p.ends_at.strftime('%Y-%m-%d %H:%M') if p.ends_at else '-' }}</td>
+                <td class="text-muted small">{{ p.note or '' }}</td>
+                <td class="text-nowrap">
+                  {% if is_active %}
+                  <form method="post" action="/admin/billing/subscription/revoke/{{ p.id }}" class="d-inline">
+                    <button class="btn btn-xs btn-outline-danger py-0 px-1">Revoke</button>
+                  </form>
+                  {% else %}
+                    <span class="badge bg-secondary">Ended</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% else %}
+              <tr><td colspan="5" class="text-muted p-3">No manual subscription periods.</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-6">
+      <div class="card">
         <div class="card-header fw-semibold">Free grants (page / feature access)</div>
         <div class="card-body">
           <table class="table table-sm mb-3" style="font-size:.85em">

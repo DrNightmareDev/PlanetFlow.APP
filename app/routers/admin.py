@@ -687,7 +687,8 @@ def admin_billing(
     from app.models import (
         BillingAuditLog, BillingBonusCode, BillingGrant,
         BillingPricingTier, BillingSubscriptionPlan, BillingWalletReceiver,
-        BillingSubscriptionJoinCode, BillingTransactionMatch, BillingWalletTransaction,
+        BillingSubscriptionJoinCode, BillingSubscriptionPeriod,
+        BillingTransactionMatch, BillingWalletTransaction,
     )
     plans = db.query(BillingSubscriptionPlan).order_by(BillingSubscriptionPlan.id).all()
     tiers = db.query(BillingPricingTier).order_by(BillingPricingTier.scope, BillingPricingTier.min_members).all()
@@ -718,6 +719,13 @@ def admin_billing(
         .join(Account, Account.id == BillingGrant.account_id)
         .order_by(BillingGrant.created_at.desc())
         .limit(50)
+        .all()
+    )
+    manual_periods = (
+        db.query(BillingSubscriptionPeriod)
+        .filter(BillingSubscriptionPeriod.source_type == "manual_grant")
+        .order_by(BillingSubscriptionPeriod.ends_at.desc())
+        .limit(100)
         .all()
     )
     unmatched_txs = (
@@ -759,12 +767,14 @@ def admin_billing(
         "codes": codes,
         "join_codes": join_codes,
         "grants": grants,
+        "manual_periods": manual_periods,
         "unmatched_txs": unmatched_txs,
         "audit_rows": audit_rows,
         "all_accounts": all_accounts,
         "all_characters": all_characters,
         "corp_targets": corp_targets,
         "alliance_targets": alliance_targets,
+        "now": datetime.now(timezone.utc),
     })
 
 
@@ -1061,3 +1071,36 @@ def admin_billing_subscription_grant(
     invalidate_subject_entitlements(db, subject_type=final_subject_type, subject_id=final_subject_id)
     db.commit()
     return RedirectResponse(url="/admin/billing", status_code=303)
+
+
+@router.post("/billing/subscription/revoke/{period_id}", response_class=HTMLResponse)
+def admin_billing_subscription_revoke(
+    request: Request,
+    period_id: int,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from datetime import UTC, datetime
+    from app.models import BillingSubscriptionPeriod
+    from app.services.billing import invalidate_subject_entitlements
+
+    period = db.get(BillingSubscriptionPeriod, period_id)
+    if not period:
+        return RedirectResponse(url="/admin/billing?msg=period_not_found", status_code=303)
+    if period.source_type != "manual_grant":
+        return RedirectResponse(url="/admin/billing?msg=only_manual_periods_can_be_revoked", status_code=303)
+
+    now = datetime.now(UTC)
+    if period.starts_at > now:
+        period.starts_at = now
+    if period.ends_at > now:
+        period.ends_at = now
+    period.note = ((period.note or "").strip() + f" | revoked_by_admin:{account.id}").strip(" |")
+
+    invalidate_subject_entitlements(
+        db,
+        subject_type=str(period.subject_type),
+        subject_id=int(period.subject_id),
+    )
+    db.commit()
+    return RedirectResponse(url="/admin/billing?msg=manual_subscription_revoked", status_code=303)

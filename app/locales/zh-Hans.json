@@ -375,6 +375,6 @@
   "killboard.safe": "安全",
   "killboard.caution": "注意",
   "killboard.danger": "危险",
-  "nav.admin": "Admin",
+  "nav.admin": "Administration",
   "nav.become_admin": "成为管理员"
 }

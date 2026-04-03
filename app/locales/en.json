@@ -542,6 +542,6 @@
   "killboard.safe": "Safe",
   "killboard.caution": "Caution",
   "killboard.danger": "Danger",
-  "nav.admin": "Admin",
+  "nav.admin": "Administration",
   "nav.become_admin": "Become Admin"
 }

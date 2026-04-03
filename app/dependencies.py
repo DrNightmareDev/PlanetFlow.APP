@@ -55,8 +55,8 @@ def require_owner(request: Request, db: Session = Depends(get_db)) -> Account:
 
 
 def require_director(request: Request, db: Session = Depends(get_db)) -> Account:
-    """Requires is_director, is_admin, or is_owner."""
+    """Requires is_director (set via admin panel). Owner/admin must explicitly elevate themselves."""
     account = require_account(request, db)
-    if not (account.is_director or account.is_admin or account.is_owner):
+    if not account.is_director:
         raise HTTPException(status_code=403, detail="Zugriff verweigert - Director-Rechte erforderlich")
     return account

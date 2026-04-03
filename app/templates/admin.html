@@ -1297,30 +1297,39 @@ function renderCorps(corps) {
     list.innerHTML = corps.map(c => `
         <div class="corp-option d-flex align-items-center gap-2 p-2 rounded mb-1"
              style="cursor:pointer;border:1px solid transparent;transition:.1s;"
-             data-corp-id="${c.id}" data-corp-name="${c.name.replace(/"/g,'&quot;')}"
-             onclick="selectCorp(this, ${c.id}, ${JSON.stringify(c.name)})">
+             data-corp-id="${c.id}"
+             data-corp-name="${c.name.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
             <img src="https://images.evetech.net/corporations/${c.id}/logo?size=32"
-                 width="24" height="24" class="rounded" style="border:1px solid var(--eve-card-border);"
+                 width="24" height="24" class="rounded" style="border:1px solid var(--eve-card-border);pointer-events:none;"
                  onerror="this.style.display='none'">
-            <span style="font-size:.88rem;">${c.name}</span>
+            <span style="font-size:.88rem;pointer-events:none;">${c.name}</span>
         </div>`).join('');
 }
 
-function selectCorp(el, corpId, corpName) {
+// Event delegation — handles clicks on child elements (img, span) correctly
+document.getElementById('corpList').addEventListener('click', function(e) {
+    const opt = e.target.closest('.corp-option');
+    if (!opt) return;
     document.querySelectorAll('.corp-option').forEach(o => {
         o.style.background = '';
         o.style.borderColor = 'transparent';
     });
-    el.style.background = '#1a1a0a';
-    el.style.borderColor = '#f4a30060';
-    document.getElementById('directorCorpId').value = corpId;
-    document.getElementById('directorCorpName').value = corpName;
+    opt.style.background = '#1a1a0a';
+    opt.style.borderColor = '#f4a30060';
+    document.getElementById('directorCorpId').value = opt.dataset.corpId;
+    document.getElementById('directorCorpName').value = opt.dataset.corpName;
     document.getElementById('directorSubmit').disabled = false;
-}
+});
 
 function filterCorps(q) {
     const filtered = q ? _allCorps.filter(c => c.name.toLowerCase().includes(q.toLowerCase())) : _allCorps;
     renderCorps(filtered);
+    // Re-highlight previously selected corp after re-render
+    const selId = document.getElementById('directorCorpId').value;
+    if (selId) {
+        const opt = document.querySelector(`.corp-option[data-corp-id="${selId}"]`);
+        if (opt) { opt.style.background = '#1a1a0a'; opt.style.borderColor = '#f4a30060'; }
+    }
 }
 </script>
 {% endblock %}

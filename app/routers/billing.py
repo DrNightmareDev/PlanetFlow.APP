@@ -173,7 +173,7 @@ async def billing_admin_page_access(
     # Map billing_mode to access_level
     _mode_map = {
         "free": "member",
-        "paid": "paid",
+        "paid": "member,paid",
         "none": "none",
     }
     if billing_mode not in _mode_map:

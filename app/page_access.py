@@ -152,9 +152,13 @@ def can_account_access_page(
 
     def _effective_roles() -> set[str]:
         roles = {"member"}
-        if bool(getattr(account, "is_owner", False)) or bool(getattr(account, "is_admin", False)):
+        # Admin accounts keep full page-role coverage.
+        # Owner status alone must not auto-grant manager/fc/director page roles.
+        if bool(getattr(account, "is_admin", False)):
             roles.update({"admin", "manager", "fc", "director"})
             return roles
+        if bool(getattr(account, "is_owner", False)):
+            roles.add("admin")
         if bool(getattr(account, "is_corp_manager", False)):
             roles.add("manager")
         if bool(getattr(account, "is_fc", False)):
@@ -180,9 +184,11 @@ def can_account_access_page(
     required_roles = levels & role_tokens
     requires_paid = "paid" in levels
 
-    # Backward-compatible default: no role token means member.
+    # No role token means admin-only by policy.
+    # In this mode, paid is ignored because access is already restricted to admin/owner.
     if not required_roles:
-        required_roles = {"member"}
+        required_roles = {"admin"}
+        requires_paid = False
 
     if not (_effective_roles() & required_roles):
         return False

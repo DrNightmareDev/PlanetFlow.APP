@@ -46,8 +46,12 @@
     <div class="container-fluid px-3">
         <!-- Brand -->
         <a class="navbar-brand eve-brand d-flex align-items-center gap-2" href="/dashboard">
-            <span class="eve-diamond">&diams;</span>
-            <span>{{ t('app.short_name') }}</span>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 0 5px var(--eve-accent));flex-shrink:0;">
+                <circle cx="10" cy="10" r="8.5" stroke="var(--eve-accent)" stroke-width="1.4"/>
+                <ellipse cx="10" cy="10" rx="4" ry="8.5" stroke="var(--eve-accent)" stroke-width="1.4"/>
+                <ellipse cx="10" cy="10" rx="8.5" ry="3" stroke="var(--eve-accent)" stroke-width="1.1" opacity="0.6"/>
+            </svg>
+            <span>PlanetFlow</span>
         </a>
 
         <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">
@@ -352,7 +356,11 @@
     <div class="container-fluid px-3">
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
             <div class="eve-footer-brand d-flex align-items-center gap-2 flex-wrap">
-                <span class="eve-diamond-sm">&diams;</span>
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:var(--eve-accent);opacity:.7;">
+                    <circle cx="10" cy="10" r="8.5" stroke="var(--eve-accent)" stroke-width="1.4"/>
+                    <ellipse cx="10" cy="10" rx="4" ry="8.5" stroke="var(--eve-accent)" stroke-width="1.4"/>
+                    <ellipse cx="10" cy="10" rx="8.5" ry="3" stroke="var(--eve-accent)" stroke-width="1.1" opacity="0.6"/>
+                </svg>
                 <span class="text-muted small">{{ t('app.name') }}</span>
                 <span class="text-muted small">|</span>
                 <span class="text-muted small">{{ t('footer.powered_by') }}</span>

@@ -14,7 +14,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -203,6 +203,10 @@ def _compute_incremental_days_from_total_amount(
     - rounded full hours from (previous matched + current transaction)
     and grant only the delta, converted back to days.
     """
+    tx_time = tx.occurred_at or datetime.now(UTC)
+    if tx_time.tzinfo is None:
+        tx_time = tx_time.replace(tzinfo=UTC)
+
     previous_amount_raw = (
         db.query(func.coalesce(func.sum(BillingWalletTransaction.amount_isk), 0))
         .join(
@@ -214,6 +218,13 @@ def _compute_incremental_days_from_total_amount(
             BillingTransactionMatch.subject_type == subject_type,
             BillingTransactionMatch.subject_id == subject_id,
             BillingTransactionMatch.plan_id == plan_id,
+            or_(
+                BillingWalletTransaction.occurred_at < tx_time,
+                and_(
+                    BillingWalletTransaction.occurred_at == tx_time,
+                    BillingWalletTransaction.id < int(tx.id),
+                ),
+            ),
         )
         .scalar()
     )

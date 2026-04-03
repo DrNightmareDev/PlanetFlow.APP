@@ -264,10 +264,11 @@ def callback(
         _invalidate_account_dashboard_state(existing_account_id, db)
         db.commit()
 
-        # Immediately trigger a background refresh so colonies appear without waiting for beat
+        # Trigger a background refresh so colonies appear without waiting for beat.
+        # Small countdown avoids racing with any task already in-flight for this account.
         try:
             from app.tasks import refresh_account_task
-            refresh_account_task.delay(existing_account_id)
+            refresh_account_task.apply_async((existing_account_id,), countdown=3)
         except Exception:
             pass  # Celery not available — beat will pick it up within 5 min
 

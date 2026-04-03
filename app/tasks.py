@@ -296,18 +296,23 @@ def refresh_account_task(self, account_id: int) -> dict:
             )
             existing.fetched_at = datetime.now(timezone.utc)
         else:
-            # Save to DB cache
-            if existing:
-                existing.colonies_json = payload_colonies
-                existing.meta_json = payload_meta
-                existing.fetched_at = datetime.now(timezone.utc)
-            else:
-                db.add(DashboardCache(
-                    account_id=account_id,
+            # Save to DB cache — use raw upsert to avoid race condition when
+            # multiple workers process the same account_id simultaneously.
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+            stmt = pg_insert(DashboardCache).values(
+                account_id=account_id,
+                colonies_json=payload_colonies,
+                meta_json=payload_meta,
+                fetched_at=datetime.now(timezone.utc),
+            ).on_conflict_do_update(
+                index_elements=["account_id"],
+                set_=dict(
                     colonies_json=payload_colonies,
                     meta_json=payload_meta,
                     fetched_at=datetime.now(timezone.utc),
-                ))
+                ),
+            )
+            db.execute(stmt)
 
         db.commit()
 

@@ -190,12 +190,6 @@
                          class="eve-portrait-md rounded"
                          loading="lazy"
                          onerror="this.src='/static/img/default_char.svg'">
-                    {% if acc.is_admin %}
-                    <span class="eve-admin-indicator position-absolute top-0 start-0"
-                          title="Admin">
-                        <i class="bi bi-shield-fill" style="font-size: 0.65rem;"></i>
-                    </span>
-                    {% endif %}
                 </div>
                 {% else %}
                 <div class="eve-portrait-md rounded eve-no-portrait d-flex align-items-center justify-content-center">
@@ -209,11 +203,6 @@
                         <span class="fw-semibold">
                             {{ main.character_name if main else 'Account #' ~ acc.id }}
                         </span>
-                        {% if acc.is_admin %}
-                        <span class="badge eve-badge-admin">
-                            <i class="bi bi-shield-fill me-1"></i>Admin
-                        </span>
-                        {% endif %}
                         {% if acc.is_director %}
                         <span class="badge" style="background:#1a1a0a;color:#f4a300;border:1px solid #f4a30040;font-size:.72rem;">
                             <i class="bi bi-building-fill me-1"></i>Director{% if acc.director_corp_name %} · {{ acc.director_corp_name }}{% endif %}

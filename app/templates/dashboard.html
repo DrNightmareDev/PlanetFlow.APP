@@ -116,14 +116,13 @@
                         <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
                             <h2 class="eve-char-heading mb-0">{{ main_char.character_name }}</h2>
                             <span class="badge eve-badge-main">Main</span>
-                            {% if account.is_owner %}
-                            <span class="badge" style="background:#f4a30020;color:#f4a300;border:1px solid #f4a30040;">
-                                <i class="bi bi-star-fill me-1"></i>Administrator
+                            {% if is_ceo %}
+                            <span class="badge" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;">
+                                <i class="bi bi-building-fill-gear me-1"></i>CEO
                             </span>
-                            {% endif %}
-                            {% if account.is_admin %}
-                            <span class="badge eve-badge-admin">
-                                <i class="bi bi-shield-fill me-1"></i>Manager
+                            {% elif is_director %}
+                            <span class="badge" style="background:#1a1a0a;color:#f4a300;border:1px solid #f4a30040;">
+                                <i class="bi bi-building-fill me-1"></i>Director
                             </span>
                             {% endif %}
                             <span class="badge eve-badge-id">EVE ID: {{ main_char.eve_character_id }}</span>

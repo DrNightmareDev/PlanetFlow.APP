@@ -28,7 +28,7 @@
                 <td class="text-muted small">{{ r.eve_character_id }}</td>
                 <td><span class="badge {{ 'bg-success' if r.is_active else 'bg-secondary' }}">{{ 'Aktiv' if r.is_active else 'Inaktiv' }}</span></td>
                 <td>
-                  <form method="post" action="/manager/billing/receiver/toggle/{{ r.id }}" class="d-inline">
+                  <form method="post" action="/admin/billing/receiver/toggle/{{ r.id }}" class="d-inline">
                     <button class="btn btn-xs btn-outline-secondary py-0 px-1">Toggle</button>
                   </form>
                 </td>
@@ -38,7 +38,7 @@
             {% endfor %}
             </tbody>
           </table>
-          <form method="post" action="/manager/billing/receiver/save" class="row g-2">
+          <form method="post" action="/admin/billing/receiver/save" class="row g-2">
             <div class="col-auto"><input type="number" name="eve_character_id" class="form-control form-control-sm" placeholder="EVE Char ID" required></div>
             <div class="col-auto"><input type="text" name="character_name" class="form-control form-control-sm" placeholder="Name" required></div>
             <div class="col-auto"><input type="text" name="notes" class="form-control form-control-sm" placeholder="Notiz"></div>
@@ -55,7 +55,7 @@
         <div class="card-body">
           {% for scope in ['individual', 'corporation', 'alliance'] %}
             {% set plan = plans | selectattr('scope', 'equalto', scope) | first | default(none) %}
-            <form method="post" action="/manager/billing/plan/save" class="row g-2 mb-2 align-items-center">
+            <form method="post" action="/admin/billing/plan/save" class="row g-2 mb-2 align-items-center">
               <input type="hidden" name="scope" value="{{ scope }}">
               <div class="col-3"><span class="fw-semibold text-capitalize">{{ scope }}</span></div>
               <div class="col-4">
@@ -88,7 +88,7 @@
                 <td>{{ tier.max_members or '∞' }}</td>
                 <td>{{ "{:,.0f}".format(tier.daily_price_isk) }}</td>
                 <td>
-                  <form method="post" action="/manager/billing/tier/delete/{{ tier.id }}" class="d-inline">
+                  <form method="post" action="/admin/billing/tier/delete/{{ tier.id }}" class="d-inline">
                     <button class="btn btn-xs btn-outline-danger py-0 px-1">✕</button>
                   </form>
                 </td>
@@ -98,7 +98,7 @@
             {% endfor %}
             </tbody>
           </table>
-          <form method="post" action="/manager/billing/tier/save" class="row g-2 align-items-center">
+          <form method="post" action="/admin/billing/tier/save" class="row g-2 align-items-center">
             <div class="col-auto">
               <select name="scope" class="form-select form-select-sm">
                 <option value="corporation">Corporation</option>
@@ -119,7 +119,7 @@
       <div class="card">
         <div class="card-header fw-semibold">Subscription manuell vergeben</div>
         <div class="card-body">
-          <form method="post" action="/manager/billing/subscription/grant" class="row g-2">
+          <form method="post" action="/admin/billing/subscription/grant" class="row g-2">
             <div class="col-12">
               <select name="target_account_id" class="form-select form-select-sm" required>
                 {% for a in all_accounts %}
@@ -156,7 +156,7 @@
                 <td>{{ grant.expires_at.strftime('%Y-%m-%d') if grant.expires_at else '∞' }}</td>
                 <td>
                   {% if not grant.revoked_at %}
-                  <form method="post" action="/manager/billing/grant/revoke/{{ grant.id }}" class="d-inline">
+                  <form method="post" action="/admin/billing/grant/revoke/{{ grant.id }}" class="d-inline">
                     <button class="btn btn-xs btn-outline-danger py-0 px-1">Widerrufen</button>
                   </form>
                   {% else %}
@@ -169,7 +169,7 @@
             {% endfor %}
             </tbody>
           </table>
-          <form method="post" action="/manager/billing/grant/create" class="row g-2 align-items-end">
+          <form method="post" action="/admin/billing/grant/create" class="row g-2 align-items-end">
             <div class="col-12">
               <select name="target_account_id" class="form-select form-select-sm" required>
                 {% for a in all_accounts %}
@@ -210,7 +210,7 @@
                 <td>{{ c.expires_at.strftime('%Y-%m-%d') if c.expires_at else '—' }}</td>
                 <td><span class="badge {{ 'bg-success' if c.is_active else 'bg-secondary' }}">{{ 'Aktiv' if c.is_active else 'Inaktiv' }}</span></td>
                 <td>
-                  <form method="post" action="/manager/billing/code/toggle/{{ c.id }}" class="d-inline">
+                  <form method="post" action="/admin/billing/code/toggle/{{ c.id }}" class="d-inline">
                     <button class="btn btn-xs btn-outline-secondary py-0 px-1">Toggle</button>
                   </form>
                 </td>
@@ -220,7 +220,7 @@
             {% endfor %}
             </tbody>
           </table>
-          <form method="post" action="/manager/billing/code/create" class="row g-2 align-items-end">
+          <form method="post" action="/admin/billing/code/create" class="row g-2 align-items-end">
             <div class="col-auto"><input type="text" name="code" class="form-control form-control-sm font-monospace" placeholder="CODE" required style="text-transform:uppercase;width:180px"></div>
             <div class="col-auto">
               <select name="reward_type" class="form-select form-select-sm">

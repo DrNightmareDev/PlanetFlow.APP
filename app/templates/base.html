@@ -35,7 +35,7 @@
         <i class="bi bi-person-fill-exclamation me-2" style="color:#f97316;"></i>
         {{ t('impersonation.viewing_as', name=(account.characters[0].character_name if account.characters else 'Account #' ~ account.id)) }}
     </span>
-    <a href="/manager/impersonate-exit" class="btn btn-sm" style="background:#f97316;color:#fff;border:none;padding:2px 12px;">
+    <a href="/admin/impersonate-exit" class="btn btn-sm" style="background:#f97316;color:#fff;border:none;padding:2px 12px;">
         <i class="bi bi-box-arrow-left me-1"></i>{{ t('common.back_to_account') }}
     </a>
 </div>
@@ -181,17 +181,25 @@
                     </a>
                 </li>
                 {% endif %}
-                {% if request.state.page_permissions.get('manager', False) %}
+                {% if request.state.page_permissions.get('director', False) %}
                 <li class="nav-item">
-                    <a class="nav-link eve-admin-link {% if request.url.path.startswith('/manager') %}active{% endif %}"
-                       href="/manager">
-                        <i class="bi bi-shield-fill me-1"></i>{{ t('nav.manager') }}
+                    <a class="nav-link {% if request.url.path.startswith('/director') %}active{% endif %}"
+                       href="/director" style="color:#f4a300;">
+                        <i class="bi bi-building-fill me-1"></i>Director
+                    </a>
+                </li>
+                {% endif %}
+                {% if request.state.page_permissions.get('admin', False) %}
+                <li class="nav-item">
+                    <a class="nav-link eve-admin-link {% if request.url.path.startswith('/admin') %}active{% endif %}"
+                       href="/admin">
+                        <i class="bi bi-shield-fill me-1"></i>{{ t('nav.admin') }}
                     </a>
                 </li>
                 {% elif account and account.is_owner %}
                 <li class="nav-item">
-                    <a class="nav-link" href="/auth/become-manager" style="color:#f4a300;">
-                        <i class="bi bi-star-fill me-1"></i>{{ t('nav.become_manager') }}
+                    <a class="nav-link" href="/auth/become-admin" style="color:#f4a300;">
+                        <i class="bi bi-star-fill me-1"></i>{{ t('nav.become_admin') }}
                     </a>
                 </li>
                 {% endif %}
@@ -276,8 +284,8 @@
                     </li>
                     {% if account.is_owner and not account.is_admin %}
                     <li>
-                        <a class="dropdown-item" href="/auth/become-manager" style="color:#f4a300;">
-                            <i class="bi bi-star-fill me-2"></i>{{ t('nav.become_manager') }}
+                        <a class="dropdown-item" href="/auth/become-admin" style="color:#f4a300;">
+                            <i class="bi bi-star-fill me-2"></i>{{ t('nav.become_admin') }}
                         </a>
                     </li>
                     {% endif %}

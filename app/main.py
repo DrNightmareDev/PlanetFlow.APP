@@ -13,7 +13,7 @@ from app.database import engine, SessionLocal
 from app.i18n import bootstrap_pi_type_translations, bootstrap_static_planets, bootstrap_static_stargates, bootstrap_translations
 from app.models import SSOState
 from app.page_access import get_access_settings_map, get_page_visibility, is_public_path, match_page_for_path
-from app.routers import auth, dashboard, admin, pi, market, system, planner, skyhook, colony_plan, pi_templates, hauling, killboard, intel, inventory, billing
+from app.routers import auth, dashboard, admin, director, pi, market, system, planner, skyhook, colony_plan, pi_templates, hauling, killboard, intel, inventory, billing
 from app.templates_env import templates
 
 logging.basicConfig(level=logging.INFO)
@@ -147,7 +147,7 @@ async def impersonate_middleware(request: Request, call_next):
     if is_public_path(path):
         return await call_next(request)
 
-    if path == "/manager/impersonate-exit" and request.state.is_impersonating:
+    if path == "/admin/impersonate-exit" and request.state.is_impersonating:
         return await call_next(request)
 
     db = SessionLocal()
@@ -206,6 +206,7 @@ app.include_router(colony_plan.router)
 app.include_router(pi_templates.router)
 app.include_router(intel.router)
 app.include_router(billing.router)
+app.include_router(director.router)
 
 
 @app.get("/", response_class=HTMLResponse)

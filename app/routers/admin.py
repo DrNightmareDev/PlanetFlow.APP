@@ -11,7 +11,7 @@ from app.page_access import get_access_settings_map, get_page_definitions
 from app.session import create_session, create_impersonate_session, read_session
 from app.templates_env import templates
 
-router = APIRouter(prefix="/manager", tags=["manager"])
+router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 def _colony_count_per_account(db: Session) -> dict[int, int]:
@@ -167,7 +167,21 @@ def toggle_admin(
 
     target.is_admin = not target.is_admin
     db.commit()
-    return RedirectResponse(url="/manager", status_code=302)
+    return RedirectResponse(url="/admin", status_code=302)
+
+
+@router.get("/toggle-director/{target_account_id}")
+def toggle_director(
+    target_account_id: int,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    target = db.query(Account).filter(Account.id == target_account_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Account nicht gefunden")
+    target.is_director = not target.is_director
+    db.commit()
+    return RedirectResponse(url="/admin", status_code=302)
 
 
 @router.get("/delete-account/{target_account_id}")
@@ -188,7 +202,7 @@ def delete_account(
 
     db.delete(target)
     db.commit()
-    return RedirectResponse(url="/manager", status_code=302)
+    return RedirectResponse(url="/admin", status_code=302)
 
 
 @router.get("/delete-character/{character_id}")
@@ -219,7 +233,7 @@ def admin_delete_character(
     if char.id == target_account.main_character_id:
         target_account.main_character_id = None
     db.commit()
-    return RedirectResponse(url="/manager", status_code=302)
+    return RedirectResponse(url="/admin", status_code=302)
 
 
 @router.get("/impersonate/{target_account_id}")
@@ -250,7 +264,7 @@ def impersonate_exit(request: Request, db: Session = Depends(get_db)):
     owner = db.query(Account).filter(Account.id == real_owner_id).first()
     if not owner or not owner.is_owner:
         return RedirectResponse(url="/dashboard", status_code=302)
-    response = RedirectResponse(url="/manager", status_code=302)
+    response = RedirectResponse(url="/admin", status_code=302)
     create_session(response, account_id=real_owner_id)
     return response
 
@@ -275,7 +289,7 @@ def admin_set_main(
 
     target_account.main_character_id = char.id
     db.commit()
-    return RedirectResponse(url="/manager", status_code=302)
+    return RedirectResponse(url="/admin", status_code=302)
 
 
 # Zugangspolitik (nur Administrator)
@@ -299,7 +313,7 @@ async def set_access_policy_mode(
     policy = db.get(AccessPolicy, 1)
     policy.mode = mode
     db.commit()
-    return RedirectResponse(url="/manager#access-policy", status_code=302)
+    return RedirectResponse(url="/admin#access-policy", status_code=302)
 
 
 @router.post("/access-policy/add")
@@ -332,7 +346,7 @@ async def add_access_policy_entry(
             entity_name=entity_name or None,
         ))
         db.commit()
-    return RedirectResponse(url="/manager#access-policy", status_code=302)
+    return RedirectResponse(url="/admin#access-policy", status_code=302)
 
 
 @router.get("/access-policy/remove/{entry_id}")
@@ -346,7 +360,7 @@ def remove_access_policy_entry(
     if entry:
         db.delete(entry)
         db.commit()
-    return RedirectResponse(url="/manager#access-policy", status_code=302)
+    return RedirectResponse(url="/admin#access-policy", status_code=302)
 
 
 @router.post("/page-access")
@@ -374,7 +388,7 @@ async def update_page_access(
     else:
         row.access_level = access_level
     db.commit()
-    return RedirectResponse(url="/manager#page-access", status_code=302)
+    return RedirectResponse(url="/admin#page-access", status_code=302)
 
 
 @router.get("/access-policy/search")
@@ -547,7 +561,7 @@ def admin_billing_plan_save(
             daily_price_isk=daily_price_isk,
         ))
     db.commit()
-    return RedirectResponse(url="/manager/billing", status_code=303)
+    return RedirectResponse(url="/admin/billing", status_code=303)
 
 
 @router.post("/billing/tier/save", response_class=HTMLResponse)
@@ -576,7 +590,7 @@ def admin_billing_tier_save(
             daily_price_isk=daily_price_isk,
         ))
     db.commit()
-    return RedirectResponse(url="/manager/billing", status_code=303)
+    return RedirectResponse(url="/admin/billing", status_code=303)
 
 
 @router.post("/billing/tier/delete/{tier_id}", response_class=HTMLResponse)
@@ -591,7 +605,7 @@ def admin_billing_tier_delete(
     if tier:
         db.delete(tier)
         db.commit()
-    return RedirectResponse(url="/manager/billing", status_code=303)
+    return RedirectResponse(url="/admin/billing", status_code=303)
 
 
 @router.post("/billing/receiver/save", response_class=HTMLResponse)
@@ -618,7 +632,7 @@ def admin_billing_receiver_save(
             notes=notes or None,
         ))
     db.commit()
-    return RedirectResponse(url="/manager/billing", status_code=303)
+    return RedirectResponse(url="/admin/billing", status_code=303)
 
 
 @router.post("/billing/receiver/toggle/{receiver_id}", response_class=HTMLResponse)
@@ -633,7 +647,7 @@ def admin_billing_receiver_toggle(
     if rec:
         rec.is_active = not rec.is_active
         db.commit()
-    return RedirectResponse(url="/manager/billing", status_code=303)
+    return RedirectResponse(url="/admin/billing", status_code=303)
 
 
 @router.post("/billing/grant/create", response_class=HTMLResponse)
@@ -663,7 +677,7 @@ def admin_billing_grant_create(
         note=note,
     )
     db.commit()
-    return RedirectResponse(url="/manager/billing", status_code=303)
+    return RedirectResponse(url="/admin/billing", status_code=303)
 
 
 @router.post("/billing/grant/revoke/{grant_id}", response_class=HTMLResponse)
@@ -679,7 +693,7 @@ def admin_billing_grant_revoke(
     if grant:
         revoke_grant(db, grant=grant, actor_account_id=account.id)
         db.commit()
-    return RedirectResponse(url="/manager/billing", status_code=303)
+    return RedirectResponse(url="/admin/billing", status_code=303)
 
 
 @router.post("/billing/code/create", response_class=HTMLResponse)
@@ -700,7 +714,7 @@ def admin_billing_code_create(
         BillingBonusCode.code == code.upper().strip()
     ).first()
     if existing:
-        return RedirectResponse(url="/manager/billing", status_code=303)
+        return RedirectResponse(url="/admin/billing", status_code=303)
     expires_at = None
     if expires_days and expires_days > 0:
         expires_at = datetime.now(UTC) + timedelta(days=expires_days)
@@ -714,7 +728,7 @@ def admin_billing_code_create(
         note=note or None,
     ))
     db.commit()
-    return RedirectResponse(url="/manager/billing", status_code=303)
+    return RedirectResponse(url="/admin/billing", status_code=303)
 
 
 @router.post("/billing/code/toggle/{code_id}", response_class=HTMLResponse)
@@ -729,7 +743,7 @@ def admin_billing_code_toggle(
     if code:
         code.is_active = not code.is_active
         db.commit()
-    return RedirectResponse(url="/manager/billing", status_code=303)
+    return RedirectResponse(url="/admin/billing", status_code=303)
 
 
 @router.post("/billing/subscription/grant", response_class=HTMLResponse)
@@ -755,4 +769,4 @@ def admin_billing_subscription_grant(
         actor_account_id=account.id,
     )
     db.commit()
-    return RedirectResponse(url="/manager/billing", status_code=303)
+    return RedirectResponse(url="/admin/billing", status_code=303)

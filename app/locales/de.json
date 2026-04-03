@@ -1,6 +1,6 @@
 {
   "app.name": "PlanetFlow",
-  "app.short_name": "PI Manager",
+  "app.short_name": "PlanetFlow",
   "common.none": "—",
   "common.unknown": "Unbekannt",
   "common.save": "Speichern",
@@ -69,8 +69,6 @@
   "nav.compare": "Vergleich",
   "nav.market": "Jita Markt",
   "nav.corporation": "Corporation",
-  "nav.manager": "Manager",
-  "nav.become_manager": "Manager werden",
   "help.title": "Hilfe",
   "help.subtitle": "Kurze Orientierung zu den wichtigsten Seiten",
   "help.esi_notice_title": "Wichtiger Hinweis zur EVE ESI",
@@ -183,7 +181,7 @@
   "colony_plan.role_self_sufficient": "Selbstversorgend P2",
   "colony_plan.role_self_sufficient_hint": "Ein Planet extrahiert zwei Rohstoffe und produziert das P2-Produkt",
   "colony_plan.status_relocate": "Umzug",
-  "colony_plan.status_existing":"Bestehend, neu zuweisbar",
+  "colony_plan.status_existing": "Bestehend, neu zuweisbar",
   "colony_plan.status_new": "Neue Platzierung",
   "colony_plan.no_assignments": "Fuer die aktuelle Auswahl gibt es keine Zuweisungen.",
   "colony_plan.flow_summary": "Materialfluss",
@@ -452,7 +450,7 @@
   "index.access_denied_title": "Zugang verweigert.",
   "index.access_denied_text": "Deine Korporation oder Allianz ist fuer dieses Tool nicht zugelassen. Wende dich an den Administrator.",
   "index.footer_note": "MIT Licensed. EVE Online und alle zugehoerigen Marken sind Eigentum von CCP Games. Diese App nutzt die offizielle ESI API. Wenn dir das Tool gefaellt, freue ich mich ueber ISK-Spenden an DrNightmare.",
-  "admin.title": "Manager",
+  "admin.title": "Admin",
   "admin.reload_all_title": "Alle Accounts neu laden",
   "admin.reload_all": "Alle neu laden",
   "admin.search_character_placeholder": "Char-Name suchen...",
@@ -543,5 +541,7 @@
   "killboard.kills_last_hour": "Kills letzte Stunde",
   "killboard.safe": "Sicher",
   "killboard.caution": "Vorsicht",
-  "killboard.danger": "Gefahr"
+  "killboard.danger": "Gefahr",
+  "nav.admin": "Admin",
+  "nav.become_admin": "Admin werden"
 }

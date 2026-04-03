@@ -967,11 +967,11 @@ main {
 
 /* ============ Light Mode ============ */
 html[data-theme="light"] {
-    --eve-bg:           #f0f4f8;
-    --eve-bg-2:         #e6edf4;
-    --eve-bg-3:         #dae3ed;
-    --eve-card:         #ffffff;
-    --eve-card-border:  #c5d5e4;
+    --eve-bg:           #e8ecf0;
+    --eve-bg-2:         #dde3ea;
+    --eve-bg-3:         #d1d9e2;
+    --eve-card:         #edf0f4;
+    --eve-card-border:  #b8c8d8;
     --eve-accent:       #0077b6;
     --eve-text:         #1a2332;
     --eve-text-muted:   #4a6a7c;
@@ -983,7 +983,7 @@ html[data-theme="light"] body.eve-body {
 }
 
 html[data-theme="light"] .eve-navbar {
-    background-color: rgba(240, 244, 248, 0.97);
+    background-color: rgba(232, 236, 240, 0.97);
 }
 
 html[data-theme="light"] .eve-footer {
@@ -1019,18 +1019,18 @@ html[data-theme="light"] .eve-table-sm td {
 }
 
 html[data-theme="light"] .eve-input {
-    background: #fff;
+    background: var(--eve-card);
     color: var(--eve-text);
     border-color: var(--eve-card-border);
 }
 
 html[data-theme="light"] .eve-input:focus {
-    background: #fff;
+    background: var(--eve-card);
     color: var(--eve-text);
 }
 
 html[data-theme="light"] .eve-search-dropdown {
-    background: #fff;
+    background: var(--eve-card);
     box-shadow: 0 8px 24px rgba(0,0,0,0.12);
 }
 
@@ -1039,7 +1039,7 @@ html[data-theme="light"] .eve-search-item {
 }
 
 html[data-theme="light"] .eve-dropdown {
-    background: #fff;
+    background: var(--eve-card);
     box-shadow: 0 8px 32px rgba(0,0,0,0.12);
 }
 
@@ -1070,24 +1070,24 @@ html[data-theme="light"] .eve-login-body {
 }
 
 html[data-theme="light"] .eve-login-card {
-    background: rgba(255, 255, 255, 0.95) !important;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.12), 0 0 0 1px rgba(0, 119, 182, 0.15);
+    background: rgba(237, 240, 244, 0.97) !important;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.10), 0 0 0 1px rgba(0, 119, 182, 0.12);
 }
 
 html[data-theme="light"] .eve-grid-lines {
     background-image:
-        linear-gradient(rgba(0, 119, 182, 0.05) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 119, 182, 0.05) 1px, transparent 1px);
+        linear-gradient(rgba(0, 119, 182, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 119, 182, 0.04) 1px, transparent 1px);
 }
 
 html[data-theme="light"] .eve-sso-btn {
-    background: linear-gradient(135deg, #dae3ed 0%, #f0f4f8 100%);
+    background: linear-gradient(135deg, #d1d9e2 0%, #e8ecf0 100%);
     color: var(--eve-text);
 }
 
 html[data-theme="light"] .eve-sso-btn:hover {
-    background: linear-gradient(135deg, #cdd8e5 0%, #e6edf4 100%);
-    box-shadow: 0 0 20px rgba(0, 119, 182, 0.2);
+    background: linear-gradient(135deg, #c4cfd9 0%, #dde3ea 100%);
+    box-shadow: 0 0 20px rgba(0, 119, 182, 0.18);
     color: var(--eve-text);
 }
 

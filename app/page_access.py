@@ -30,7 +30,8 @@ PAGE_DEFINITIONS: tuple[PageDefinition, ...] = (
     PageDefinition("system", "System Analysis", "/system", "member"),
     PageDefinition("market", "Market", "/market", "member"),
     PageDefinition("intel_map", "Combat Intel Map", "/intel/map", "manager"),
-    PageDefinition("manager", "Manager Panel", "/manager", "manager"),
+    PageDefinition("admin", "Admin Panel", "/admin", "manager"),
+    PageDefinition("director", "Director Panel", "/director", "director"),
     PageDefinition("billing", "Subscription", "/billing", "member", nav_group="account"),
 )
 
@@ -134,6 +135,8 @@ def can_account_access_page(
         return True
     if access_level == "manager":
         return bool(getattr(account, "is_admin", False))
+    if access_level == "director":
+        return bool(getattr(account, "is_director", False) or getattr(account, "is_admin", False))
     if access_level == "paid":
         # Owner/admin bypass already handled above
         if bool(getattr(account, "is_admin", False)):

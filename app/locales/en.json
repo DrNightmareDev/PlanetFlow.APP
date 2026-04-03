@@ -1,6 +1,6 @@
 {
   "app.name": "PlanetFlow",
-  "app.short_name": "PI Manager",
+  "app.short_name": "PlanetFlow",
   "common.none": "—",
   "common.unknown": "Unknown",
   "common.save": "Save",
@@ -69,8 +69,6 @@
   "nav.compare": "Compare",
   "nav.market": "Jita Market",
   "nav.corporation": "Corporation",
-  "nav.manager": "Manager",
-  "nav.become_manager": "Become manager",
   "help.title": "Help",
   "help.subtitle": "Quick guidance for the main pages",
   "help.esi_notice_title": "Important note about EVE ESI",
@@ -452,7 +450,7 @@
   "index.access_denied_title": "Access denied.",
   "index.access_denied_text": "Your corporation or alliance is not allowed to use this tool. Please contact the administrator.",
   "index.footer_note": "MIT Licensed. EVE Online and all related marks are property of CCP Games. This app uses the official ESI API. If you enjoy the tool, ISK donations to DrNightmare are appreciated.",
-  "admin.title": "Manager",
+  "admin.title": "Admin",
   "admin.reload_all_title": "Reload all accounts",
   "admin.reload_all": "Reload all",
   "admin.search_character_placeholder": "Search character name...",
@@ -543,5 +541,7 @@
   "killboard.kills_last_hour": "kills last hour",
   "killboard.safe": "Safe",
   "killboard.caution": "Caution",
-  "killboard.danger": "Danger"
+  "killboard.danger": "Danger",
+  "nav.admin": "Admin",
+  "nav.become_admin": "Become Admin"
 }

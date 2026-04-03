@@ -14,6 +14,7 @@ class Account(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     is_admin = Column(Boolean, default=False, nullable=False)
     is_owner = Column(Boolean, default=False, nullable=False)
+    is_director = Column(Boolean, default=False, nullable=False, server_default="false")
     main_character_id = Column(Integer, ForeignKey("characters.id", use_alter=True, name="fk_account_main_char"), nullable=True)
     price_mode = Column(String(10), nullable=False, default="sell")
 

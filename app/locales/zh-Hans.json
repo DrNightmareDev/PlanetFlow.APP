@@ -56,8 +56,6 @@
   "nav.compare": "æ¯”è¾ƒ",
   "nav.market": "å‰ä»–å¸‚åœº",
   "nav.corporation": "å†›å›¢",
-  "nav.manager": "ç»ç†",
-  "nav.become_manager": "æˆä¸ºç»ç†",
   "help.title": "å¸®åŠ©",
   "help.subtitle": "ä¸»è¦é¡µé¢çš„å¿«é€Ÿè¯´æ˜Ž",
   "help.esi_notice_title": "å…³äºŽ EVE ESI çš„é‡è¦è¯´æ˜Ž",
@@ -376,5 +374,7 @@
   "killboard.kills_last_hour": "过去一小时击杀数",
   "killboard.safe": "安全",
   "killboard.caution": "注意",
-  "killboard.danger": "危险"
+  "killboard.danger": "危险",
+  "nav.admin": "Admin",
+  "nav.become_admin": "成为管理员"
 }

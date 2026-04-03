@@ -29,21 +29,27 @@ def require_account(request: Request, db: Session = Depends(get_db)) -> Account:
 
 
 def require_admin(request: Request, db: Session = Depends(get_db)) -> Account:
-    account = require_account(request, db)
-    if not account.is_admin:
-        raise HTTPException(status_code=403, detail="Zugriff verweigert - Manager-Rechte erforderlich")
-    return account
-
-
-def require_manager_or_admin(request: Request, db: Session = Depends(get_db)) -> Account:
+    """Requires is_admin or is_owner."""
     account = require_account(request, db)
     if not (account.is_admin or account.is_owner):
-        raise HTTPException(status_code=403, detail="Zugriff verweigert - Manager- oder Administrator-Rechte erforderlich")
+        raise HTTPException(status_code=403, detail="Zugriff verweigert - Admin-Rechte erforderlich")
     return account
+
+
+# Legacy alias used in hauling and other routers
+require_manager_or_admin = require_admin
 
 
 def require_owner(request: Request, db: Session = Depends(get_db)) -> Account:
     account = require_account(request, db)
     if not account.is_owner:
-        raise HTTPException(status_code=403, detail="Zugriff verweigert - Administrator-Rechte erforderlich")
+        raise HTTPException(status_code=403, detail="Zugriff verweigert - Owner-Rechte erforderlich")
+    return account
+
+
+def require_director(request: Request, db: Session = Depends(get_db)) -> Account:
+    """Requires is_director, is_admin, or is_owner."""
+    account = require_account(request, db)
+    if not (account.is_director or account.is_admin or account.is_owner):
+        raise HTTPException(status_code=403, detail="Zugriff verweigert - Director-Rechte erforderlich")
     return account

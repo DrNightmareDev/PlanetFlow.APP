@@ -2,17 +2,17 @@
 {% block title %}{{ t('admin.title', default='Manager') }} - {{ t('app.name') }}{% endblock %}
 
 {% block content %}
-<!-- Manager Header -->
+<!-- Admin Header -->
 <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
     <h2 class="eve-page-title mb-0">
-        <i class="bi bi-shield-fill eve-gold me-2"></i>Manager Panel
+        <i class="bi bi-shield-fill eve-gold me-2"></i>Admin Panel
     </h2>
     {% if account.is_owner %}
     <span class="badge" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;">
-        <i class="bi bi-star-fill me-1"></i>Administrator
+        <i class="bi bi-star-fill me-1"></i>Owner
     </span>
     {% else %}
-    <span class="badge eve-badge-admin-lg">Manager</span>
+    <span class="badge eve-badge-admin-lg">Admin</span>
     {% endif %}
 </div>
 
@@ -65,7 +65,7 @@
             <button type="button" class="btn btn-sm eve-btn-ghost manager-subnav-btn" data-target="manager-section-policy">Access Policy</button>
             {% endif %}
             <button type="button" class="btn btn-sm eve-btn-ghost manager-subnav-btn" data-target="translation-editor">Translations</button>
-            <a href="/manager/billing" class="btn btn-sm eve-btn-ghost"><i class="bi bi-currency-exchange me-1"></i>Billing</a>
+            <a href="/admin/billing" class="btn btn-sm eve-btn-ghost"><i class="bi bi-currency-exchange me-1"></i>Billing</a>
         </div>
     </div>
 </div>
@@ -118,7 +118,7 @@
                                 <i class="bi bi-lock me-1"></i>Fixed
                             </span>
                             {% else %}
-                            <form method="post" action="/manager/page-access" class="d-inline-flex align-items-center gap-2">
+                            <form method="post" action="/admin/page-access" class="d-inline-flex align-items-center gap-2">
                                 <input type="hidden" name="page_key" value="{{ row.page.key }}">
                                 <select class="form-select form-select-sm eve-input" name="access_level" style="min-width: 210px;">
                                     <option value="none" {% if row.access_level == 'none' %}selected{% endif %}>No Access</option>
@@ -226,7 +226,12 @@
                         {% endif %}
                         {% if acc.is_admin %}
                         <span class="badge eve-badge-admin">
-                            <i class="bi bi-shield-fill me-1"></i>Manager
+                            <i class="bi bi-shield-fill me-1"></i>Admin
+                        </span>
+                        {% endif %}
+                        {% if acc.is_director %}
+                        <span class="badge" style="background:#1a1a0a;color:#f4a300;border:1px solid #f4a30040;font-size:.72rem;">
+                            <i class="bi bi-building-fill me-1"></i>Director
                         </span>
                         {% endif %}
                         <span class="badge eve-badge-count">{{ entry.char_count }} Chars</span>
@@ -262,15 +267,22 @@
                 <div class="d-flex gap-2 flex-wrap">
                     {% if acc.id != account.id or account.is_owner %}
                     {% if not acc.is_owner or account.is_owner %}
-                    <a href="/manager/toggle-admin/{{ acc.id }}"
+                    <a href="/admin/toggle-admin/{{ acc.id }}"
                        class="btn btn-sm eve-btn-gold"
-                       onclick="return confirm('Manager-Status von {{ main.character_name if main else 'Account #' ~ acc.id }} ändern?')">
+                       onclick="return confirm('Admin-Status von {{ main.character_name if main else 'Account #' ~ acc.id }} ändern?')">
                         <i class="bi bi-shield me-1"></i>
-                        {{ 'Manager entfernen' if acc.is_admin else 'Manager machen' }}
+                        {{ 'Admin entfernen' if acc.is_admin else 'Admin machen' }}
+                    </a>
+                    <a href="/admin/toggle-director/{{ acc.id }}"
+                       class="btn btn-sm"
+                       style="background:#1a1a0a;color:#f4a300;border:1px solid #f4a30040;"
+                       onclick="return confirm('Director-Status von {{ main.character_name if main else 'Account #' ~ acc.id }} ändern?')">
+                        <i class="bi bi-building me-1"></i>
+                        {{ 'Director entfernen' if acc.is_director else 'Director machen' }}
                     </a>
                     {% endif %}
                     {% if acc.id != account.id and account.is_owner %}
-                    <a href="/manager/impersonate/{{ acc.id }}"
+                    <a href="/admin/impersonate/{{ acc.id }}"
                        class="btn btn-sm"
                        style="background:#7c2d1220;color:#f97316;border:1px solid #f9731640;"
                        onclick="return confirm('Dashboard als {{ main.character_name if main else 'Account #' ~ acc.id }} anzeigen?')"
@@ -279,7 +291,7 @@
                     </a>
                     {% endif %}
                     {% if acc.id != account.id and not acc.is_owner %}
-                    <a href="/manager/delete-account/{{ acc.id }}"
+                    <a href="/admin/delete-account/{{ acc.id }}"
                        class="btn btn-sm eve-btn-danger"
                        onclick="return confirm('Account #{{ acc.id }} und alle zugehörigen Charaktere wirklich löschen?')">
                         <i class="bi bi-trash3"></i>
@@ -343,12 +355,12 @@
                                     <td>
                                         <div class="d-flex gap-1">
                                         {% if char.id != acc.main_character_id %}
-                                        <a href="/manager/set-main/{{ acc.id }}/{{ char.id }}"
+                                        <a href="/admin/set-main/{{ acc.id }}/{{ char.id }}"
                                            class="btn btn-sm eve-btn-ghost py-0"
                                            title="Als Main setzen">
                                             <i class="bi bi-star"></i>
                                         </a>
-                                        <a href="/manager/delete-character/{{ char.id }}"
+                                        <a href="/admin/delete-character/{{ char.id }}"
                                            class="btn btn-sm eve-btn-danger py-0"
                                            title="Charakter löschen"
                                            onclick="return confirm('Charakter {{ char.character_name }} wirklich löschen?')">
@@ -450,20 +462,20 @@
         <div class="mb-4">
             <div class="small fw-medium text-muted mb-2">{{ t('admin.access_policy.registration_mode', default='Registration mode') }}</div>
             <div class="d-flex gap-2 flex-wrap mb-2">
-                <form method="post" action="/manager/access-policy/mode" class="d-inline">
+                <form method="post" action="/admin/access-policy/mode" class="d-inline">
                     <button type="submit" name="mode" value="open"
                             class="btn btn-sm {% if policy.mode == 'open' %}eve-btn-primary{% else %}eve-btn-ghost{% endif %}">
                         <i class="bi bi-globe2 me-1"></i>{{ t('admin.access_policy.mode_open', default='Open') }}
                     </button>
                 </form>
-                <form method="post" action="/manager/access-policy/mode" class="d-inline">
+                <form method="post" action="/admin/access-policy/mode" class="d-inline">
                     <button type="submit" name="mode" value="allowlist"
                             class="btn btn-sm {% if policy.mode == 'allowlist' %}eve-btn-primary{% else %}eve-btn-ghost{% endif %}"
                             style="{% if policy.mode == 'allowlist' %}background:#2dc65322;color:#2dc653;border-color:#2dc65360;{% endif %}">
                         <i class="bi bi-check-circle me-1"></i>{{ t('admin.access_policy.mode_allowlist', default='Allowed corps/alliances only') }}
                     </button>
                 </form>
-                <form method="post" action="/manager/access-policy/mode" class="d-inline">
+                <form method="post" action="/admin/access-policy/mode" class="d-inline">
                     <button type="submit" name="mode" value="blocklist"
                             class="btn btn-sm {% if policy.mode == 'blocklist' %}eve-btn-danger{% else %}eve-btn-ghost{% endif %}">
                         <i class="bi bi-x-circle me-1"></i>{{ t('admin.access_policy.mode_blocklist', default='Blocked corps/alliances') }}
@@ -516,7 +528,7 @@
                             <td class="small text-muted">{{ e.entity_id }}</td>
                             <td class="small text-muted">{{ e.created_at.strftime('%d.%m.%Y') if e.created_at else '—' }}</td>
                             <td>
-                                <a href="/manager/access-policy/remove/{{ e.id }}"
+                                <a href="/admin/access-policy/remove/{{ e.id }}"
                                    class="btn btn-sm eve-btn-ghost py-0 px-1"
                                    style="color:#e63946;"
                                    title="{{ t('admin.access_policy.remove_entry', default='Remove entry') }}"
@@ -553,7 +565,7 @@
             <div id="apSearchResults" class="mb-3"></div>
 
             <!-- Manuelles Hinzufügen (Fallback / direktes ID-Eingabe) -->
-            <form method="post" action="/manager/access-policy/add"
+            <form method="post" action="/admin/access-policy/add"
                   class="d-flex gap-2 align-items-end flex-wrap mt-3 pt-3"
                   style="border-top:1px solid #1e3448;">
                 <div>
@@ -816,7 +828,7 @@ async function apSearch() {
     if (!q) { el.innerHTML = ''; return; }
     el.innerHTML = `<span class="text-muted small"><i class="bi bi-hourglass-split me-1"></i>${window.eveTranslateKey ? window.eveTranslateKey('admin.access_policy.searching', { default: 'Searching...' }) : 'Searching...'}</span>`;
     try {
-        const res = await fetch(`/manager/access-policy/search?q=${encodeURIComponent(q)}`);
+        const res = await fetch(`/admin/access-policy/search?q=${encodeURIComponent(q)}`);
         const data = await res.json();
         const rows = [];
         for (const c of (data.corporations || [])) {
@@ -847,7 +859,7 @@ function apResultRow(type, id, name) {
 }
 
 function apFill(type, id, name) {
-    const form = document.querySelector('form[action="/manager/access-policy/add"]');
+    const form = document.querySelector('form[action="/admin/access-policy/add"]');
     if (!form) return;
     form.querySelector('[name="entity_type"]').value = type;
     document.getElementById('apManualId').value = id;
@@ -928,7 +940,7 @@ async function saveTranslationRow(idx) {
         updates[input.dataset.locale] = input.value;
     });
     try {
-        const res = await fetch('/manager/i18n/update', {
+        const res = await fetch('/admin/i18n/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ key: row.key, updates })
@@ -1014,7 +1026,7 @@ document.getElementById('adminReloadStartBtn')?.addEventListener('click', async 
             '<span class="spinner-border spinner-border-sm" style="width:.75rem;height:.75rem;border-width:2px;color:var(--eve-accent);"></span>';
         document.getElementById(`adminStatus_${acc.account_id}`).textContent = 'lädt…';
         try {
-            const res = await fetch(`/manager/reload-account/${acc.account_id}`, { method: 'POST' });
+            const res = await fetch(`/admin/reload-account/${acc.account_id}`, { method: 'POST' });
             const data = await res.json();
             const count = data.colony_count || 0;
             totalColonies += count;
@@ -1043,7 +1055,7 @@ async function adminResetCharErrors(charId, charName, btn) {
     if (!confirm(`ESI-Fehler für ${charName} zurücksetzen?`)) return;
     btn.disabled = true;
     try {
-        const resp = await fetch(`/manager/reset-char-errors/${charId}`, { method: 'POST' });
+        const resp = await fetch(`/admin/reset-char-errors/${charId}`, { method: 'POST' });
         if (resp.ok) {
             showToast(`ESI-Fehler für ${charName} zurückgesetzt`, 'success');
             btn.closest('tr').querySelector('.badge.bg-danger')?.remove();

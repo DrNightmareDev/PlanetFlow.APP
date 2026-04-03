@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Director — {{ t('app.name') }}{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width:1100px">
+
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <div style="width:42px;height:42px;background:linear-gradient(135deg,#0a1628,#1a2d3d);border:1px solid #1e3a5f;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+      <i class="bi bi-building-fill" style="font-size:1.2rem;color:#f4a300;"></i>
+    </div>
+    <div>
+      <h4 class="mb-0 fw-semibold">Director Panel</h4>
+      <div class="text-muted small">
+        {{ corp_name }}{% if alliance_name %} &mdash; {{ alliance_name }}{% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if not corp_id %}
+  <div class="eve-card card border-0 p-4 text-center text-muted">
+    <i class="bi bi-exclamation-circle mb-2 d-block" style="font-size:1.8rem;opacity:.4;"></i>
+    No main character or corporation found. Set a main character on your account.
+  </div>
+  {% else %}
+
+  {# ── Stats row ──────────────────────────────────────────────────────────── #}
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+      <div class="eve-stat-card card border-0 p-3 text-center">
+        <div class="eve-stat-value">{{ member_rows | length }}</div>
+        <div class="eve-stat-label text-muted small">Members in App</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="eve-stat-card card border-0 p-3 text-center">
+        <div class="eve-stat-value">{{ total_colonies }}</div>
+        <div class="eve-stat-label text-muted small">Total Colonies</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="eve-stat-card card border-0 p-3 text-center">
+        <div class="eve-stat-value" style="color:#e63946;">
+          {{ member_rows | selectattr('has_issue') | list | length }}
+        </div>
+        <div class="eve-stat-label text-muted small">Sync Issues</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="eve-stat-card card border-0 p-3 text-center">
+        <div class="eve-stat-value">{{ (total_colonies / member_rows | length) | round(1) if member_rows else 0 }}</div>
+        <div class="eve-stat-label text-muted small">Avg Colonies</div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Member table ────────────────────────────────────────────────────────── #}
+  <div class="eve-card card border-0">
+    <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <i class="bi bi-people" style="color:#7ec8e3;"></i>
+        <span class="fw-semibold">Corp Members</span>
+        <span class="badge" style="background:#1a2d3d;color:#7ec8e3;border:1px solid #2a4a6b;font-size:.7rem;">{{ member_rows | length }}</span>
+      </div>
+      <input type="text" id="dirFilterInput" class="form-control form-control-sm eve-input"
+             placeholder="Filter by name…" style="max-width:220px;"
+             oninput="filterDirRows(this.value)">
+    </div>
+    <div class="card-body p-0">
+      {% if member_rows %}
+      <table class="table table-sm mb-0" id="dirTable" style="font-size:.87rem;">
+        <thead style="background:#0a1220;">
+          <tr>
+            <th class="px-3 py-2 text-muted fw-normal">Member</th>
+            <th class="py-2 text-muted fw-normal">Characters</th>
+            <th class="py-2 text-muted fw-normal">Colonies</th>
+            <th class="py-2 text-muted fw-normal">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for row in member_rows %}
+          <tr class="dir-row" data-name="{{ (row.main.character_name if row.main else '') | lower }}">
+            <td class="px-3 py-2">
+              <div class="d-flex align-items-center gap-2">
+                {% if row.main %}
+                <img src="{{ row.main.portrait_url }}"
+                     class="rounded-circle" width="32" height="32"
+                     style="border:1px solid #1e2d3d;"
+                     onerror="this.src='/static/img/default_char.svg'">
+                <div>
+                  <div class="fw-semibold" style="font-size:.88rem;">{{ row.main.character_name }}</div>
+                  <div class="text-muted" style="font-size:.75rem;">{{ row.main.corporation_name or '' }}</div>
+                </div>
+                {% else %}
+                <i class="bi bi-person-circle text-muted" style="font-size:1.5rem;"></i>
+                <span class="text-muted">Account #{{ row.account.id }}</span>
+                {% endif %}
+              </div>
+            </td>
+            <td class="py-2">
+              <span class="badge" style="background:#1a2d3d;color:#7ec8e3;border:1px solid #2a4a6b;">
+                {{ row.char_count }}
+              </span>
+            </td>
+            <td class="py-2">
+              <span class="fw-semibold" style="color:{% if row.colony_count > 0 %}#2dc653{% else %}#586e75{% endif %};">
+                {{ row.colony_count }}
+              </span>
+            </td>
+            <td class="py-2">
+              {% if row.has_issue %}
+                <span class="badge" style="background:#2d1010;color:#e63946;border:1px solid #4a1a1a;font-size:.72rem;">
+                  <i class="bi bi-exclamation-triangle-fill me-1"></i>Sync Issue
+                </span>
+              {% else %}
+                <span class="badge" style="background:#0a1e14;color:#2dc653;border:1px solid #1a3a24;font-size:.72rem;">
+                  <i class="bi bi-check-circle-fill me-1"></i>OK
+                </span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="p-4 text-center text-muted">
+        <i class="bi bi-people mb-2 d-block" style="font-size:1.5rem;opacity:.4;"></i>
+        No corp members found in this app.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% endif %}
+</div>
+
+<script>
+function filterDirRows(q) {
+    q = q.toLowerCase();
+    document.querySelectorAll('#dirTable .dir-row').forEach(row => {
+        row.style.display = row.dataset.name.includes(q) ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}

@@ -405,7 +405,8 @@
 <script>
 const FITTINGS_REQUIRED_SCOPE = {{ required_scope | tojson }};
 const FITTING_GROUP_ORDER = ['high', 'mid', 'low', 'rig', 'subsystem', 'service', 'drone', 'cargo', 'fighter', 'implant', 'booster', 'other'];
-const IMPORT_GROUP_FALLBACKS = ['high', 'mid', 'low', 'rig', 'subsystem', 'service', 'drone', 'cargo', 'fighter', 'implant', 'booster', 'other'];
+// EFT paste order: low → mid → high → rig → subsystem → drones → cargo/charges
+const IMPORT_GROUP_FALLBACKS = ['low', 'mid', 'high', 'rig', 'subsystem', 'service', 'drone', 'cargo', 'fighter', 'implant', 'booster', 'other'];
 const IMPORT_SECTION_MAP = {
     'high power': 'high',
     'high slots': 'high',
@@ -605,7 +606,7 @@ function inferImportedSlotGroup(itemName, fallbackGroup) {
         return 'rig';
     }
 
-    const isLow = /(damage control|armor repairer|reactive armor|energized|multispectrum energized|membrane|plate|plating|co-processor|coprocessor|power diagnostic|capacitor power relay|drone damage amplifier|magnetic field stabilizer|gyrostabilizer|heat sink|ballistic control|tracking enhancer|tracking diagnostic|overdrive|nanofiber|inertial stabilizer|warp core stabilizer|signal amplifier|expanded cargohold|hull repairer|shield power relay)/.test(name);
+    const isLow = /(damage control|armor repairer|armor hardener|reactive armor|energized|multispectrum energized|multispectrum coating|membrane|plate|plating|co-processor|coprocessor|power diagnostic|capacitor power relay|drone damage amplifier|magnetic field stabilizer|gyrostabilizer|heat sink|ballistic control|tracking enhancer|tracking diagnostic|overdrive|nanofiber|inertial stabilizer|warp core stabilizer|signal amplifier|expanded cargohold|hull repairer|shield power relay|assault damage control|internal force field)/.test(name);
     if (isLow) {
         return 'low';
     }

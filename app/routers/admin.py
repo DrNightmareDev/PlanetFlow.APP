@@ -528,14 +528,23 @@ async def update_page_access(
     validate_csrf(request, form.get("csrf_token", ""))
     _require_owner(account)
     page_key = (form.get("page_key") or "").strip()
-    access_level = (form.get("access_level") or "").strip()
     page = next((entry for entry in get_page_definitions() if entry.key == page_key), None)
     if not page:
         raise HTTPException(status_code=404, detail="Page not found")
     if page.admin_only:
         raise HTTPException(status_code=400, detail="Admin-only pages cannot be changed")
-    if access_level not in ("none", "admin", "manager", "member"):
-        raise HTTPException(status_code=400, detail="Invalid access level")
+
+    _valid_levels = {"none", "member", "manager", "director", "paid"}
+    selected = form.getlist("access_levels")
+    # Filter to only valid values
+    selected = [v for v in selected if v in _valid_levels]
+    if not selected:
+        selected = ["none"]
+    # "none" is dominant
+    if "none" in selected:
+        access_level = "none"
+    else:
+        access_level = ",".join(sorted(set(selected)))
 
     row = db.get(PageAccessSetting, page_key)
     if row is None:
@@ -682,7 +691,18 @@ def admin_billing(
     )
     plans = db.query(BillingSubscriptionPlan).order_by(BillingSubscriptionPlan.id).all()
     tiers = db.query(BillingPricingTier).order_by(BillingPricingTier.scope, BillingPricingTier.min_members).all()
-    receivers = db.query(BillingWalletReceiver).order_by(BillingWalletReceiver.id).all()
+    _WALLET_SCOPE = "esi-wallet.read_character_wallet.v1"
+    _raw_receivers = db.query(BillingWalletReceiver).order_by(BillingWalletReceiver.id).all()
+    receivers = []
+    for r in _raw_receivers:
+        char = None
+        if r.character_fk:
+            char = db.get(Character, r.character_fk)
+        if not char:
+            char = db.query(Character).filter(Character.eve_character_id == r.eve_character_id).first()
+        has_scope = bool(char and char.scopes and _WALLET_SCOPE in char.scopes)
+        has_token = bool(char and char.refresh_token)
+        receivers.append({"receiver": r, "has_scope": has_scope, "has_token": has_token, "char": char})
     codes = db.query(BillingBonusCode).order_by(BillingBonusCode.created_at.desc()).limit(50).all()
     grants = (
         db.query(BillingGrant, Account)

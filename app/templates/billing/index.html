@@ -14,6 +14,26 @@
     </div>
   </div>
 
+  {# ── Tab nav (admin sees second tab) ─────────────────────────────────────── #}
+  {% if account.is_admin or account.is_owner %}
+  <ul class="nav nav-tabs mb-4" id="billingTabs" role="tablist" style="border-color:#1e2d3d;">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="tab-user-btn" data-bs-toggle="tab" data-bs-target="#tab-user"
+              type="button" role="tab" style="color:#cdd6f4;border-color:#1e2d3d #1e2d3d transparent;">
+        <i class="bi bi-person me-1"></i>My Subscription
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-admin-btn" data-bs-toggle="tab" data-bs-target="#tab-admin"
+              type="button" role="tab" style="color:#cdd6f4;border-color:transparent;">
+        <i class="bi bi-shield-lock me-1"></i>Billing Admin
+      </button>
+    </li>
+  </ul>
+  <div class="tab-content">
+  <div class="tab-pane fade show active" id="tab-user" role="tabpanel">
+  {% endif %}
+
   {% if msg %}
     <div class="alert alert-dismissible fade show mb-4" role="alert"
          style="background:#0a1e14;border:1px solid #2dc65360;color:#2dc653;">
@@ -243,6 +263,76 @@
       </table>
     </div>
   </div>
+  {% endif %}
+
+  {# ── Close user tab pane + open admin tab pane ───────────────────────────── #}
+  {% if account.is_admin or account.is_owner %}
+  </div>{# end #tab-user #}
+
+  <div class="tab-pane fade" id="tab-admin" role="tabpanel">
+
+    <div class="eve-card card border-0 mb-4">
+      <div class="card-header eve-card-header d-flex align-items-center gap-2">
+        <i class="bi bi-shield-lock" style="color:#f4a300;"></i>
+        <span class="fw-semibold">Page Access — Billing Model</span>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0" style="font-size:.87rem;">
+          <thead style="background:#0a1220;">
+            <tr>
+              <th class="px-3 py-2 text-muted fw-normal">Page</th>
+              <th class="py-2 text-muted fw-normal">Route</th>
+              <th class="py-2 text-muted fw-normal">Current</th>
+              <th class="py-2 text-muted fw-normal text-end">Set Access</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for row in page_access_rows %}
+            <tr>
+              <td class="px-3 py-2">
+                <div class="fw-medium">{{ row.page.label }}</div>
+                <div class="small text-muted">{{ row.page.key }}</div>
+              </td>
+              <td class="py-2"><code>{{ row.page.path_prefix }}</code></td>
+              <td class="py-2">
+                {% set lvls = row.access_level.split(',') %}
+                {% if 'none' in lvls %}
+                  <span class="badge" style="background:#e6394620;color:#ff7b7b;border:1px solid #e6394640;font-size:.72rem;">No Access</span>
+                {% elif 'paid' in lvls %}
+                  <span class="badge" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.72rem;">Subscription</span>
+                {% else %}
+                  <span class="badge" style="background:#2dc65322;color:#2dc653;border:1px solid #2dc65340;font-size:.72rem;">Free</span>
+                {% endif %}
+              </td>
+              <td class="py-2 text-end">
+                <form method="post" action="/billing/admin/page-access" class="d-inline-flex align-items-center gap-1">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                  <input type="hidden" name="page_key" value="{{ row.page.key }}">
+                  <select name="billing_mode" class="form-select form-select-sm eve-input" style="min-width:150px;">
+                    <option value="free" {% if row.access_level not in ('none','paid') and 'paid' not in row.access_level.split(',') %}selected{% endif %}>Free (Members)</option>
+                    <option value="paid" {% if 'paid' in row.access_level.split(',') %}selected{% endif %}>Subscription</option>
+                    <option value="none" {% if 'none' in row.access_level.split(',') %}selected{% endif %}>No Access</option>
+                  </select>
+                  <button type="submit" class="btn btn-sm eve-btn-gold">
+                    <i class="bi bi-save"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        <div class="px-3 py-2 text-muted small" style="border-top:1px solid #1e2d3d;">
+          <i class="bi bi-info-circle me-1"></i>
+          <strong>Free</strong> — all logged-in members.
+          <strong>Subscription</strong> — requires active ISK subscription, grant, or bonus code.
+          <strong>No Access</strong> — hidden from everyone.
+        </div>
+      </div>
+    </div>
+
+  </div>{# end #tab-admin #}
+  </div>{# end .tab-content #}
   {% endif %}
 
 </div>

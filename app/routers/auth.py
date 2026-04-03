@@ -95,6 +95,21 @@ def refresh_scopes(
     return RedirectResponse(url=redirect_url)
 
 
+@router.get("/wallet-receiver")
+def wallet_receiver_login(
+    request: Request,
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """Start SSO flow requesting the wallet scope — used to register a billing receiver character."""
+    from app.dependencies import require_admin
+    require_admin(request, db)
+    rate_limit_auth(request, "add_character")
+    state = _generate_state(db, flow="wallet_receiver", account_id=account.id)
+    redirect_url = generate_auth_url(state, extra_scopes=["esi-wallet.read_character_wallet.v1"])
+    return RedirectResponse(url=redirect_url)
+
+
 @router.get("/callback")
 def callback(
     request: Request,
@@ -252,10 +267,62 @@ def callback(
 
         create_session(response, new_account.id)
 
+    elif flow == "wallet_receiver" and existing_account_id:
+        # Register/update this character as a billing wallet receiver
+        from app.models import BillingWalletReceiver
+
+        # Upsert the character record so token is stored
+        if existing_char:
+            existing_char.scopes = scopes
+            existing_char.access_token = encrypt_text(access_token)
+            existing_char.refresh_token = encrypt_text(refresh_token)
+            existing_char.token_expires_at = token_expires_at
+            char_db_id = existing_char.id
+        else:
+            new_char = Character(
+                eve_character_id=eve_character_id,
+                character_name=character_name,
+                corporation_id=corporation_id,
+                corporation_name=corporation_name,
+                alliance_id=alliance_id,
+                alliance_name=alliance_name,
+                access_token=encrypt_text(access_token),
+                refresh_token=encrypt_text(refresh_token),
+                token_expires_at=token_expires_at,
+                scopes=scopes,
+                portrait_64=portrait_64,
+                portrait_128=portrait_128,
+                portrait_256=portrait_256,
+                account_id=existing_account_id,
+                last_login=datetime.now(timezone.utc),
+            )
+            db.add(new_char)
+            db.flush()
+            char_db_id = new_char.id
+
+        # Upsert BillingWalletReceiver
+        receiver = db.query(BillingWalletReceiver).filter(
+            BillingWalletReceiver.eve_character_id == eve_character_id
+        ).first()
+        if receiver:
+            receiver.character_name = character_name
+            receiver.character_fk = char_db_id
+            receiver.is_active = True
+        else:
+            db.add(BillingWalletReceiver(
+                eve_character_id=eve_character_id,
+                character_name=character_name,
+                character_fk=char_db_id,
+                is_active=True,
+            ))
+        db.commit()
+        create_session(response, existing_account_id)
+        return RedirectResponse(url="/admin/billing?msg=receiver_added", status_code=302)
+
     elif flow == "add_character" and existing_account_id:
         if not _check_access_policy(db, corporation_id, alliance_id):
             return RedirectResponse(url="/dashboard/characters?error=access_denied", status_code=302)
-        # Alt hinzufÃƒÂ¼gen
+        # Alt hinzufügen
         new_char = Character(
             eve_character_id=eve_character_id,
             character_name=character_name,

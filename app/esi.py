@@ -25,12 +25,17 @@ SSO_AUTHORIZE_URL = "https://login.eveonline.com/v2/oauth/authorize"
 HEADERS = {"Accept": "application/json", "User-Agent": "PlanetFlow / contact: admin"}
 
 
-def generate_auth_url(state: str) -> str:
+def generate_auth_url(state: str, extra_scopes: list[str] | None = None) -> str:
+    base_scopes = settings.eve_scopes.replace(",", " ")
+    if extra_scopes:
+        scope_str = base_scopes + " " + " ".join(extra_scopes)
+    else:
+        scope_str = base_scopes
     params = {
         "response_type": "code",
         "redirect_uri": settings.eve_callback_url,
         "client_id": settings.eve_client_id,
-        "scope": settings.eve_scopes.replace(",", " "),  # EVE SSO erwartet Leerzeichen
+        "scope": scope_str,
         "state": state,
     }
     return f"{SSO_AUTHORIZE_URL}?{urlencode(params)}"

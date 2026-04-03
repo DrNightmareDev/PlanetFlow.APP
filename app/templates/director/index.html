@@ -74,6 +74,7 @@
             <th class="py-2 text-muted fw-normal">Characters</th>
             <th class="py-2 text-muted fw-normal">Colonies</th>
             <th class="py-2 text-muted fw-normal">Status</th>
+            <th class="py-2 text-muted fw-normal">Roles</th>
           </tr>
         </thead>
         <tbody>
@@ -116,6 +117,44 @@
                   <i class="bi bi-check-circle-fill me-1"></i>OK
                 </span>
               {% endif %}
+            </td>
+            <td class="py-2">
+              <div class="d-flex align-items-center gap-1">
+                {# Role badges #}
+                {% if row.is_corp_manager %}
+                  <span class="badge" style="background:#1a2d1a;color:#2dc653;border:1px solid #2dc65340;font-size:.7rem;" title="Manager">MGR</span>
+                {% endif %}
+                {% if row.is_fc %}
+                  <span class="badge" style="background:#1a1a2d;color:#7ec8e3;border:1px solid #7ec8e340;font-size:.7rem;" title="Fleet Commander">FC</span>
+                {% endif %}
+                {# Promote/demote buttons — only visible to director/CEO #}
+                {% if can_promote %}
+                <form method="post" action="/director/role/toggle" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                  <input type="hidden" name="account_id" value="{{ row.account.id }}">
+                  <input type="hidden" name="role" value="is_corp_manager">
+                  <button type="submit" class="btn btn-sm p-0 border-0"
+                          style="background:none;opacity:.7;line-height:1;"
+                          title="{% if row.is_corp_manager %}Revoke Manager{% else %}Grant Manager{% endif %}">
+                    <i class="bi {% if row.is_corp_manager %}bi-person-dash{% else %}bi-person-plus{% endif %}"
+                       style="font-size:.9rem;color:{% if row.is_corp_manager %}#e63946{% else %}#2dc653{% endif %};"></i>
+                    <span style="font-size:.65rem;color:#7ec8e3;">MGR</span>
+                  </button>
+                </form>
+                <form method="post" action="/director/role/toggle" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                  <input type="hidden" name="account_id" value="{{ row.account.id }}">
+                  <input type="hidden" name="role" value="is_fc">
+                  <button type="submit" class="btn btn-sm p-0 border-0"
+                          style="background:none;opacity:.7;line-height:1;"
+                          title="{% if row.is_fc %}Revoke FC{% else %}Grant FC{% endif %}">
+                    <i class="bi {% if row.is_fc %}bi-person-dash{% else %}bi-person-plus{% endif %}"
+                       style="font-size:.9rem;color:{% if row.is_fc %}#e63946{% else %}#7ec8e3{% endif %};"></i>
+                    <span style="font-size:.65rem;color:#7ec8e3;">FC</span>
+                  </button>
+                </form>
+                {% endif %}
+              </div>
             </td>
           </tr>
         {% endfor %}

@@ -108,30 +108,44 @@ def can_account_access_page(
     """
     Return True if the account may access this page.
 
-    access_level values:
-      none    → blocked for everyone
-      member  → all authenticated accounts
-      manager → owner/admin only
-      admin   → admin-only page (page.admin_only)
-      paid    → requires active subscription, grant, or bonus code
-                (resolved via entitlement_map if provided, otherwise live DB check)
+    access_level values (may be comma-separated for multi-level):
+      none      → blocked for everyone (dominant)
+      member    → all authenticated accounts
+      manager   → admin/owner only
+      director  → director, manager role, FC role, or CEO
+      paid      → requires active subscription, grant, or bonus code
+      admin     → admin-only page (page.admin_only)
     """
     page = get_page_definition(page_key)
     if not page:
         return True
     access_level = get_effective_access_level(page_key, db=db, settings_map=settings_map)
-    if access_level == "none":
+
+    # Parse multi-value access levels
+    levels = {v.strip() for v in access_level.split(",") if v.strip()}
+
+    # "none" is dominant
+    if "none" in levels:
         return False
     if account is None:
         return False
     if page.admin_only:
         return False
-    if access_level == "admin":
+    if "admin" in levels and len(levels) == 1:
         return False
-    if access_level == "director":
+
+    # Owner bypass applies to all non-admin pages
+    if bool(getattr(account, "is_owner", False)):
+        return True
+
+    # Helper to check director-level access
+    def _has_director_access() -> bool:
         if getattr(account, "is_director", False):
             return True
-        # Also grant access to CEOs — check via ESI corp info (cached in esi.py)
+        if getattr(account, "is_corp_manager", False):
+            return True
+        if getattr(account, "is_fc", False):
+            return True
         if db is not None:
             try:
                 from app.models import Character
@@ -146,29 +160,32 @@ def can_account_access_page(
             except Exception:
                 pass
         return False
-    # Owner bypass applies to all non-director, non-admin pages
-    if bool(getattr(account, "is_owner", False)):
-        return True
-    if access_level == "member":
-        return True
-    if access_level == "manager":
-        return bool(getattr(account, "is_admin", False))
-    if access_level == "paid":
-        # Owner/admin bypass already handled above
+
+    def _has_paid_access() -> bool:
         if bool(getattr(account, "is_admin", False)):
             return True
-        # Use pre-computed entitlement map if available (fast path — no DB)
         if entitlement_map is not None:
             return entitlement_map.get(page_key, False)
-        # Live fallback: read from entitlement cache table
         if db is not None:
             from app.services.entitlements import get_cached_page_entitlements, _resolve_page_entitlement
             cached = get_cached_page_entitlements(db, account_id=account.id)
             if cached is not None:
                 return cached.get(page_key, False)
-            # Cache miss: live resolution (only happens before first recompute)
             return _resolve_page_entitlement(db, account=account, page_key=page_key, access_level="paid")
         return False
+
+    # Check each level — access granted if ANY level matches
+    if "member" in levels:
+        return True
+    if "manager" in levels and bool(getattr(account, "is_admin", False)):
+        return True
+    if "director" in levels and _has_director_access():
+        return True
+    if "paid" in levels and _has_paid_access():
+        return True
+    if "admin" in levels and bool(getattr(account, "is_admin", False)):
+        return True
+
     return False
 
 

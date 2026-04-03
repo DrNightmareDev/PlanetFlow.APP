@@ -14,6 +14,8 @@ class Account(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     is_admin = Column(Boolean, default=False, nullable=False)
     is_director = Column(Boolean, default=False, nullable=False, server_default="false")
+    is_corp_manager = Column(Boolean, default=False, nullable=False, server_default="false")
+    is_fc = Column(Boolean, default=False, nullable=False, server_default="false")
 
     @property
     def is_owner(self) -> bool:

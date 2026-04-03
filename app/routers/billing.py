@@ -21,7 +21,10 @@ from app.models import (
     BillingSubscriptionPeriod,
     BillingWalletReceiver,
     Character,
+    PageAccessSetting,
 )
+from app.page_access import get_access_settings_map, get_page_definitions
+from app.session import validate_csrf
 from app.templates_env import templates
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -121,6 +124,17 @@ def billing_page(
         .all()
     )
 
+    page_access_rows = []
+    if account.is_admin or account.is_owner:
+        settings_map = get_access_settings_map(db)
+        for page in get_page_definitions():
+            if page.admin_only:
+                continue
+            page_access_rows.append({
+                "page": page,
+                "access_level": settings_map.get(page.key, page.default_access),
+            })
+
     return templates.TemplateResponse("billing/index.html", {
         "request": request,
         "account": account,
@@ -130,7 +144,51 @@ def billing_page(
         "recent_redemptions": recent_redemptions,
         "now": datetime.now(UTC),
         "msg": msg,
+        "page_access_rows": page_access_rows,
     })
+
+
+@router.post("/admin/page-access")
+async def billing_admin_page_access(
+    request: Request,
+    account: Account = Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """Admin endpoint to set a page's billing access level (free / paid / no access)."""
+    if not (account.is_admin or account.is_owner):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Admin required")
+
+    form = await request.form()
+    validate_csrf(request, form.get("csrf_token", ""))
+
+    page_key = (form.get("page_key") or "").strip()
+    billing_mode = (form.get("billing_mode") or "").strip()
+
+    page = next((p for p in get_page_definitions() if p.key == page_key), None)
+    if not page:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Page not found")
+
+    # Map billing_mode to access_level
+    _mode_map = {
+        "free": "member",
+        "paid": "paid",
+        "none": "none",
+    }
+    if billing_mode not in _mode_map:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Invalid billing mode")
+
+    access_level = _mode_map[billing_mode]
+    row = db.get(PageAccessSetting, page_key)
+    if row is None:
+        row = PageAccessSetting(page_key=page_key, access_level=access_level)
+        db.add(row)
+    else:
+        row.access_level = access_level
+    db.commit()
+    return RedirectResponse(url="/billing?msg=Access+level+updated", status_code=303)
 
 
 @router.post("/redeem", response_class=HTMLResponse)

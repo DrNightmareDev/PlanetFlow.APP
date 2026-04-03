@@ -55,9 +55,9 @@ def require_owner(request: Request, db: Session = Depends(get_db)) -> Account:
 
 
 def require_director(request: Request, db: Session = Depends(get_db)) -> Account:
-    """Requires is_director DB flag OR CEO of their corp (detected via ESI)."""
+    """Requires is_director, is_corp_manager, is_fc DB flag OR CEO of their corp (detected via ESI)."""
     account = require_account(request, db)
-    if account.is_director:
+    if account.is_director or account.is_corp_manager or account.is_fc:
         return account
     # Also allow CEOs — check via the cached corp access flags
     from app.models import Character

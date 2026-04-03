@@ -205,7 +205,7 @@ async def impersonate_middleware(request: Request, call_next):
         request.state.entitlement_map = entitlement_map or {}
 
         request.state.page_permissions = get_page_visibility(
-            account, settings_map=settings_map, entitlement_map=entitlement_map
+            account, db=db, settings_map=settings_map, entitlement_map=entitlement_map
         )
 
         page = match_page_for_path(path)

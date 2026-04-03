@@ -131,14 +131,20 @@ def can_account_access_page(
     if access_level == "director":
         if getattr(account, "is_director", False):
             return True
-        # Also grant access to CEOs — check via dashboard corp access cache
-        try:
-            from app.routers.dashboard import _corp_access_cache
-            cached = _corp_access_cache.get(account.id)
-            if cached and cached[1].get("is_ceo"):
-                return True
-        except Exception:
-            pass
+        # Also grant access to CEOs — check via ESI corp info (cached in esi.py)
+        if db is not None:
+            try:
+                from app.models import Character
+                from app.esi import get_corporation_info
+                chars = db.query(Character).filter(Character.account_id == account.id).all()
+                corp_ids = {c.corporation_id for c in chars if c.corporation_id}
+                char_eve_ids = {c.eve_character_id for c in chars}
+                for corp_id in corp_ids:
+                    info = get_corporation_info(corp_id)
+                    if info.get("ceo_id") in char_eve_ids:
+                        return True
+            except Exception:
+                pass
         return False
     # Owner bypass applies to all non-director, non-admin pages
     if bool(getattr(account, "is_owner", False)):

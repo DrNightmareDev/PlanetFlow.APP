@@ -264,6 +264,13 @@ def callback(
         _invalidate_account_dashboard_state(existing_account_id, db)
         db.commit()
 
+        # Immediately trigger a background refresh so colonies appear without waiting for beat
+        try:
+            from app.tasks import refresh_account_task
+            refresh_account_task.delay(existing_account_id)
+        except Exception:
+            pass  # Celery not available — beat will pick it up within 5 min
+
         create_session(response, existing_account_id)
     else:
         raise HTTPException(status_code=400, detail="Unbekannter Flow")

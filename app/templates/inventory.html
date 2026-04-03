@@ -160,6 +160,8 @@
                         <th>Tier</th>
                         <th>Item</th>
                         <th class="text-end">On Hand</th>
+                        <th class="text-end">Consumption / Production (per hour)</th>
+                        <th class="text-end">Burn down</th>
                         <th class="text-end">Weighted Avg Cost</th>
                         <th class="text-end">Estimated Value</th>
                         <th class="text-end">Actions</th>
@@ -174,8 +176,28 @@
                     >
                         <td><span class="inventory-tier inventory-tier-{{ row.tier | lower }}">{{ row.tier }}</span></td>
                         <td>{{ row.item_name }}</td>
-                        <td class="text-end">{{ "{:,}".format(row.quantity_on_hand) }}</td>
-                        <td class="text-end">{% if row.weighted_average_cost is not none %}{{ "{:,.2f}".format(row.weighted_average_cost) }} ISK{% else %}<span class="text-muted">n/a</span>{% endif %}</td>
+                        <td class="text-end inventory-col-onhand">{{ "{:,}".format(row.quantity_on_hand) }}</td>
+                        <td class="text-end">
+                            <form method="post" action="/inventory/rate" class="inventory-rate-form d-inline-flex align-items-center gap-1">
+                                <input type="hidden" name="type_id" value="{{ row.type_id }}">
+                                <input type="hidden" name="tier" value="{{ selected_tier }}">
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    name="net_rate_per_hour"
+                                    class="form-control form-control-sm eve-input"
+                                    style="max-width:170px;"
+                                    value="{% if row.net_rate_per_hour is not none %}{{ "{:.2f}".format(row.net_rate_per_hour) }}{% endif %}"
+                                    placeholder="-10 consume | +10 produce"
+                                    title="Negative values = consumption/h, positive = production/h"
+                                >
+                                <button type="submit" class="btn btn-sm eve-btn-ghost">Save</button>
+                            </form>
+                        </td>
+                        <td class="text-end inventory-col-burn {% if row.rate_kind == 'consumption' %}text-warning{% elif row.rate_kind == 'production' %}text-success{% else %}text-muted{% endif %}">
+                            {{ row.burn_down_label }}
+                        </td>
+                        <td class="text-end inventory-col-weighted">{% if row.weighted_average_cost is not none %}{{ "{:,.2f}".format(row.weighted_average_cost) }} ISK{% else %}<span class="text-muted">n/a</span>{% endif %}</td>
                         <td
                             class="text-end inventory-estimated-value"
                             data-value-buy="{{ row.estimated_value_buy if row.estimated_value_buy is not none else '' }}"
@@ -191,7 +213,7 @@
                         </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="6" class="text-center text-muted py-4">No PI stock tracked yet.</td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-4">No PI stock tracked yet.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -320,6 +342,14 @@
                             <span>Estimated Value</span>
                             <strong id="inventoryModalEstimated">n/a</strong>
                         </div>
+                        <div class="inventory-modal-stat">
+                            <span>Rate / hour</span>
+                            <strong id="inventoryModalRate">n/a</strong>
+                        </div>
+                        <div class="inventory-modal-stat">
+                            <span>Burn down</span>
+                            <strong id="inventoryModalBurn">n/a</strong>
+                        </div>
                     </div>
                     <div class="inventory-modal-actions">
                         <select id="inventoryModalValueMode" class="form-select eve-input inventory-value-mode">
@@ -413,6 +443,11 @@
         document.getElementById('inventoryModalSell').textContent = formatIsk(currentItemDetail.jita_sell);
         document.getElementById('inventoryModalSplit').textContent = formatIsk(currentItemDetail.jita_split);
         document.getElementById('inventoryModalEstimated').textContent = formatIsk(currentItemDetail[`estimated_value_${mode}`]);
+        const modalRate = Number(currentItemDetail.net_rate_per_hour);
+        document.getElementById('inventoryModalRate').textContent = Number.isFinite(modalRate) && modalRate !== 0
+            ? `${modalRate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} /h`
+            : 'n/a';
+        document.getElementById('inventoryModalBurn').textContent = currentItemDetail.burn_down_label || 'n/a';
 
         const body = document.getElementById('inventoryModalTransactions');
         const rows = currentItemDetail.transactions || [];
@@ -454,10 +489,32 @@
                 window.location.reload();
                 return;
             }
-            row.querySelector('td:nth-child(3)').textContent = formatInteger(summary.quantity_on_hand);
-            row.querySelector('td:nth-child(4)').innerHTML = summary.weighted_average_cost !== null
+            const onHandCell = row.querySelector('.inventory-col-onhand');
+            if (onHandCell) {
+                onHandCell.textContent = formatInteger(summary.quantity_on_hand);
+            }
+            const weightedCell = row.querySelector('.inventory-col-weighted');
+            if (weightedCell) {
+                weightedCell.innerHTML = summary.weighted_average_cost !== null
                 ? formatIsk(summary.weighted_average_cost)
                 : '<span class="text-muted">n/a</span>';
+            }
+            const burnCell = row.querySelector('.inventory-col-burn');
+            if (burnCell) {
+                burnCell.textContent = summary.burn_down_label || 'n/a';
+                burnCell.classList.remove('text-warning', 'text-success', 'text-muted');
+                burnCell.classList.add(
+                    summary.rate_kind === 'consumption'
+                        ? 'text-warning'
+                        : (summary.rate_kind === 'production' ? 'text-success' : 'text-muted')
+                );
+            }
+            const rateInput = row.querySelector('input[name="net_rate_per_hour"]');
+            if (rateInput) {
+                rateInput.value = summary.net_rate_per_hour === null
+                    ? ''
+                    : Number(summary.net_rate_per_hour).toFixed(2);
+            }
             const priceMode = valueModeSelect?.value || 'split';
             const estimatedCell = row.querySelector('.inventory-estimated-value');
             if (estimatedCell) {
@@ -505,7 +562,7 @@
         });
     });
 
-    document.querySelectorAll('.inventory-remove-form').forEach((form) => {
+    document.querySelectorAll('.inventory-remove-form, .inventory-rate-form').forEach((form) => {
         form.addEventListener('click', (event) => {
             event.stopPropagation();
         });

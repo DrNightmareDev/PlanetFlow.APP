@@ -253,6 +253,7 @@ class InventoryItemSummary(Base):
     tier = Column(String(10), nullable=False, index=True)
     quantity_on_hand = Column(BigInteger, nullable=False, default=0, server_default="0")
     weighted_average_cost = Column(String(50), nullable=True)
+    net_rate_per_hour = Column(String(50), nullable=True)  # negative=consumption, positive=production
     deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

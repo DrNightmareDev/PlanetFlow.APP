@@ -83,6 +83,33 @@ def _price_value_map(type_id: int, quantity: int, price_entry: dict | None) -> d
     }
 
 
+def _burn_down_metrics(quantity_on_hand: int, net_rate_per_hour: Decimal | None) -> dict[str, float | str | None]:
+    quantity = int(quantity_on_hand or 0)
+    if net_rate_per_hour is None or net_rate_per_hour == 0:
+        return {
+            "burn_down_hours": None,
+            "burn_down_days": None,
+            "burn_down_label": "n/a",
+            "rate_kind": "idle",
+        }
+    if net_rate_per_hour > 0:
+        return {
+            "burn_down_hours": None,
+            "burn_down_days": None,
+            "burn_down_label": "Growing",
+            "rate_kind": "production",
+        }
+
+    hours = Decimal(quantity) / abs(net_rate_per_hour) if quantity > 0 else Decimal("0")
+    days = hours / Decimal("24")
+    return {
+        "burn_down_hours": float(hours),
+        "burn_down_days": float(days),
+        "burn_down_label": f"{float(days):.1f} d",
+        "rate_kind": "consumption",
+    }
+
+
 def recalculate_inventory_summary(
     db: Session,
     account_id: int,
@@ -327,6 +354,11 @@ def get_inventory_rows(db: Session, account_id: int, tier: str | None = None) ->
             "estimated_value_buy": price_values["value_buy"],
             "estimated_value_sell": price_values["value_sell"],
             "estimated_value_split": price_values["value_split"],
+            "net_rate_per_hour": float(_decimal_or_none(row.net_rate_per_hour)) if _decimal_or_none(row.net_rate_per_hour) is not None else None,
+            **_burn_down_metrics(
+                quantity,
+                _decimal_or_none(row.net_rate_per_hour),
+            ),
         })
     result.sort(key=lambda item: (TIER_SORT.get(item["tier"], 99), item["item_name"].casefold()))
     return result
@@ -344,6 +376,11 @@ def get_inventory_summary_map(db: Session, account_id: int) -> dict[str, dict]:
             "estimated_value_buy": row["estimated_value_buy"],
             "estimated_value_sell": row["estimated_value_sell"],
             "estimated_value_split": row["estimated_value_split"],
+            "net_rate_per_hour": row["net_rate_per_hour"],
+            "burn_down_hours": row["burn_down_hours"],
+            "burn_down_days": row["burn_down_days"],
+            "burn_down_label": row["burn_down_label"],
+            "rate_kind": row["rate_kind"],
         }
         for row in rows
     }
@@ -428,6 +465,8 @@ def get_inventory_item_detail(db: Session, account_id: int, type_id: int) -> dic
         "estimated_value_buy": price_values["value_buy"],
         "estimated_value_sell": price_values["value_sell"],
         "estimated_value_split": price_values["value_split"],
+        "net_rate_per_hour": float(_decimal_or_none(summary.net_rate_per_hour)) if _decimal_or_none(summary.net_rate_per_hour) is not None else None,
+        **_burn_down_metrics(quantity_on_hand, _decimal_or_none(summary.net_rate_per_hour)),
         "deleted_at": format_utc_compact(summary.deleted_at) if summary.deleted_at else None,
         "transactions": transactions,
     }

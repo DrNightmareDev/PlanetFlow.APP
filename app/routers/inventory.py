@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
+
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
@@ -278,6 +280,44 @@ def remove_inventory_transaction_page(
             return _status_redirect("Transaction not found.", "danger", tier=tier or None)
         db.commit()
         return _status_redirect("Transaction hidden.", "success", tier=tier or None)
+    except Exception as exc:
+        db.rollback()
+        return _status_redirect(str(exc), "danger", tier=tier or None)
+
+
+@router.post("/rate")
+def set_inventory_rate(
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+    type_id: int = Form(...),
+    net_rate_per_hour: str = Form(""),
+    tier: str = Form(""),
+):
+    try:
+        summary = (
+            db.query(InventoryItemSummary)
+            .filter(
+                InventoryItemSummary.account_id == int(account.id),
+                InventoryItemSummary.type_id == int(type_id),
+                InventoryItemSummary.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if summary is None:
+            return _status_redirect("Inventory row not found.", "danger", tier=tier or None)
+
+        raw = (net_rate_per_hour or "").strip()
+        if raw == "":
+            summary.net_rate_per_hour = None
+        else:
+            value = Decimal(raw)
+            summary.net_rate_per_hour = format(value.quantize(Decimal("0.01")), "f")
+
+        db.commit()
+        return _status_redirect("Hourly rate updated.", "success", tier=tier or None)
+    except (InvalidOperation, ValueError):
+        db.rollback()
+        return _status_redirect("Invalid hourly rate.", "danger", tier=tier or None)
     except Exception as exc:
         db.rollback()
         return _status_redirect(str(exc), "danger", tier=tier or None)

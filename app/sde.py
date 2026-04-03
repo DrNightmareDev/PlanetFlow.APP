@@ -487,7 +487,7 @@ def _load_static_stargates() -> None:
         pattern = re.compile(
             r"\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(NULL|\d+),"
             r"(-?[\d.eE+\-]+),(-?[\d.eE+\-]+),(-?[\d.eE+\-]+),"
-            r"(-?[\d.eE+\-]+),'([^']+)',(-?[\d.eE+\-]+|NULL),(NULL|\d+),(NULL|\d+)\)"
+            r"(NULL|-?[\d.eE+\-]+),'([^']+)',(-?[\d.eE+\-]+|NULL),(NULL|\d+),(NULL|\d+)\)"
         )
         gates: dict[int, dict] = {}
         gates_by_system: dict[int, list[dict]] = {}

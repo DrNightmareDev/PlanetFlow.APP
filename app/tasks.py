@@ -49,6 +49,7 @@ def _refresh_character_data(char, db) -> dict | None:
     from app.esi import (
         ensure_valid_token, get_character_planets,
         get_planet_detail_cached, get_planet_info, esi_error_budget_ok,
+        get_character_roles,
     )
     from app.routers.dashboard import (
         _compute_colony_productions, _get_colony_expiry,
@@ -67,6 +68,17 @@ def _refresh_character_data(char, db) -> dict | None:
     if not esi_error_budget_ok():
         logger.warning("tasks: ESI error budget low — skipping %s", char.character_name)
         return None
+
+    # Cache corp roles if scope is available
+    import json as _json_roles
+    ROLES_SCOPE = "esi-characters.read_corporation_roles.v1"
+    if ROLES_SCOPE in (char.scopes or ""):
+        try:
+            roles_data = get_character_roles(char.eve_character_id, token)
+            roles = roles_data.get("roles", []) if isinstance(roles_data, dict) else []
+            char.corp_roles = _json_roles.dumps(roles)
+        except Exception:
+            pass
 
     try:
         raw_colonies = get_character_planets(char.eve_character_id, token)

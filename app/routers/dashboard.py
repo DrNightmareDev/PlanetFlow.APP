@@ -2474,10 +2474,24 @@ def characters_page(
     _backfill_character_colony_sync_status_from_cache(account.id, [], db)
     characters = db.query(Character).filter(Character.account_id == account.id).all()
     _attach_pi_skills(characters, db)
+
+    # Determine which characters are CEOs via ESI corp info (cached)
+    ceo_char_ids: set[int] = set()
+    corp_ids = {c.corporation_id for c in characters if c.corporation_id}
+    for corp_id in corp_ids:
+        try:
+            corp_info = get_corporation_info(corp_id)
+            ceo_id = corp_info.get("ceo_id")
+            if ceo_id:
+                ceo_char_ids.add(ceo_id)
+        except Exception:
+            pass
+
     return templates.TemplateResponse("characters.html", {
         "request": request,
         "account": account,
         "characters": characters,
+        "ceo_char_ids": ceo_char_ids,
     })
 
 

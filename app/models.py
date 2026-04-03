@@ -67,6 +67,7 @@ class Character(Base):
     last_esi_refresh_at = Column(DateTime(timezone=True), nullable=True)
     esi_consecutive_errors = Column(Integer, nullable=False, default=0, server_default="0")
     vacation_mode = Column(Boolean, nullable=False, default=False, server_default="false")
+    corp_roles = Column(Text, nullable=True)  # JSON list of ESI corp role strings, cached from last refresh
 
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False, index=True)
     last_login = Column(DateTime(timezone=True), nullable=True)
@@ -74,6 +75,17 @@ class Character(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     account = relationship("Account", back_populates="characters", foreign_keys=[account_id])
+
+    @property
+    def corp_role_list(self) -> list[str]:
+        """Returns cached corp roles as a list. Empty list if none stored."""
+        if not self.corp_roles:
+            return []
+        try:
+            import json
+            return json.loads(self.corp_roles)
+        except Exception:
+            return []
 
     @property
     def portrait_url(self) -> str:

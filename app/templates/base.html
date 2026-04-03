@@ -184,7 +184,7 @@
                     </a>
                 </li>
                 {% endif %}
-{% if request.state.page_permissions.get('director', False) %}
+{% if request.state.page_permissions.get('director', False) and request.state.show_director_nav %}
                 <li class="nav-item">
                     <a class="nav-link {% if request.url.path.startswith('/director') %}active{% endif %}"
                        href="/director" style="color:#f4a300;">

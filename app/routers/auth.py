@@ -20,6 +20,10 @@ from app.session import clear_session, create_session, validate_csrf
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 settings = get_settings()
+_RECEIVER_REQUIRED_SCOPES = {
+    "esi-wallet.read_character_wallet.v1",
+    "esi-mail.send_mail.v1",
+}
 
 
 def _check_access_policy(db: Session, corporation_id, alliance_id) -> bool:
@@ -156,6 +160,18 @@ def callback(
     eve_character_id = verified.get("CharacterID")
     character_name = verified.get("CharacterName", "Unbekannt")
     scopes = verified.get("Scopes", "")
+    granted_scopes = {s.strip() for s in (scopes or "").split() if s.strip()}
+
+    if flow == "wallet_receiver":
+        missing = sorted(_RECEIVER_REQUIRED_SCOPES - granted_scopes)
+        if missing:
+            logger.warning(
+                "auth callback: wallet_receiver missing required scopes for char %s (%s): %s",
+                character_name, eve_character_id, ",".join(missing),
+            )
+            db.delete(sso_state)
+            db.commit()
+            return RedirectResponse(url="/admin/billing?msg=receiver_scope_missing", status_code=302)
 
     # State erst nach erfolgreicher Verifikation verbrauchen.
     db.delete(sso_state)

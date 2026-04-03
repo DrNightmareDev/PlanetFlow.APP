@@ -178,6 +178,7 @@ async def impersonate_middleware(request: Request, call_next):
     request.state.account = None
     request.state.page_permissions = {}
     request.state.page_access_levels = {}
+    request.state.show_director_nav = False
 
     path = request.url.path
     if is_public_path(path):
@@ -207,6 +208,26 @@ async def impersonate_middleware(request: Request, call_next):
         request.state.page_permissions = get_page_visibility(
             account, db=db, settings_map=settings_map, entitlement_map=entitlement_map
         )
+
+        if account is not None:
+            from app.esi import get_corporation_info
+            from app.models import Character
+            is_ceo = False
+            main_char = db.query(Character).filter(Character.id == account.main_character_id).first() if account.main_character_id else None
+            if not main_char:
+                main_char = db.query(Character).filter(Character.account_id == account.id).first()
+            corp_id = main_char.corporation_id if main_char else None
+            if corp_id:
+                try:
+                    ceo_id = (get_corporation_info(corp_id) or {}).get("ceo_id")
+                    if ceo_id:
+                        is_ceo = db.query(Character).filter(
+                            Character.account_id == account.id,
+                            Character.eve_character_id == ceo_id,
+                        ).first() is not None
+                except Exception:
+                    is_ceo = False
+            request.state.show_director_nav = bool(account.is_director or is_ceo)
 
         page = match_page_for_path(path)
         if page is None:

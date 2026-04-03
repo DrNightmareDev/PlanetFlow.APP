@@ -692,6 +692,7 @@ def admin_billing(
     plans = db.query(BillingSubscriptionPlan).order_by(BillingSubscriptionPlan.id).all()
     tiers = db.query(BillingPricingTier).order_by(BillingPricingTier.scope, BillingPricingTier.min_members).all()
     _WALLET_SCOPE = "esi-wallet.read_character_wallet.v1"
+    _MAIL_SCOPE = "esi-mail.send_mail.v1"
     _raw_receivers = db.query(BillingWalletReceiver).order_by(BillingWalletReceiver.id).all()
     receivers = []
     for r in _raw_receivers:
@@ -700,9 +701,16 @@ def admin_billing(
             char = db.get(Character, r.character_fk)
         if not char:
             char = db.query(Character).filter(Character.eve_character_id == r.eve_character_id).first()
-        has_scope = bool(char and char.scopes and _WALLET_SCOPE in char.scopes)
+        has_wallet_scope = bool(char and char.scopes and _WALLET_SCOPE in char.scopes)
+        has_mail_scope = bool(char and char.scopes and _MAIL_SCOPE in char.scopes)
         has_token = bool(char and char.refresh_token)
-        receivers.append({"receiver": r, "has_scope": has_scope, "has_token": has_token, "char": char})
+        receivers.append({
+            "receiver": r,
+            "has_wallet_scope": has_wallet_scope,
+            "has_mail_scope": has_mail_scope,
+            "has_token": has_token,
+            "char": char,
+        })
     codes = db.query(BillingBonusCode).order_by(BillingBonusCode.created_at.desc()).limit(50).all()
     join_codes = db.query(BillingSubscriptionJoinCode).order_by(BillingSubscriptionJoinCode.created_at.desc()).limit(50).all()
     grants = (

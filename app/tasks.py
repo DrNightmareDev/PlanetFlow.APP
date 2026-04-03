@@ -610,12 +610,18 @@ def sync_billing_wallets() -> dict:
                 errors += 1
                 continue
 
-            # Verify wallet scope is present
+            # Verify required receiver scopes are present
             _WALLET_SCOPE = "esi-wallet.read_character_wallet.v1"
+            _MAIL_SCOPE = "esi-mail.send_mail.v1"
+            missing_scopes = []
             if not char.scopes or _WALLET_SCOPE not in char.scopes:
+                missing_scopes.append(_WALLET_SCOPE)
+            if not char.scopes or _MAIL_SCOPE not in char.scopes:
+                missing_scopes.append(_MAIL_SCOPE)
+            if missing_scopes:
                 logger.warning(
-                    "billing: char %s (%s) is missing scope %s — re-login required",
-                    char.eve_character_id, char.character_name, _WALLET_SCOPE,
+                    "billing: char %s (%s) is missing required scopes %s — re-login required",
+                    char.eve_character_id, char.character_name, ",".join(missing_scopes),
                 )
                 errors += 1
                 continue

@@ -18,7 +18,7 @@
         <div class="card-header fw-semibold">ISK Receivers</div>
         <div class="card-body">
           <table class="table table-sm mb-3">
-            <thead><tr><th>Character</th><th>ID</th><th>Status</th><th>Wallet Scope</th><th></th></tr></thead>
+            <thead><tr><th>Character</th><th>ID</th><th>Status</th><th>Wallet Scope</th><th>Mail Scope</th><th></th></tr></thead>
             <tbody>
             {% for entry in receivers %}
               {% set r = entry.receiver %}
@@ -29,8 +29,17 @@
                 <td>
                   {% if not entry.has_token %}
                     <span class="badge bg-danger">No token</span>
-                  {% elif not entry.has_scope %}
+                  {% elif not entry.has_wallet_scope %}
                     <span class="badge bg-warning text-dark">Wallet scope missing</span>
+                  {% else %}
+                    <span class="badge bg-success">OK</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if not entry.has_token %}
+                    <span class="badge bg-danger">No token</span>
+                  {% elif not entry.has_mail_scope %}
+                    <span class="badge bg-warning text-dark">Mail scope missing</span>
                   {% else %}
                     <span class="badge bg-success">OK</span>
                   {% endif %}
@@ -42,7 +51,7 @@
                 </td>
               </tr>
             {% else %}
-              <tr><td colspan="5" class="text-muted">No receiver configured.</td></tr>
+              <tr><td colspan="6" class="text-muted">No receiver configured.</td></tr>
             {% endfor %}
             </tbody>
           </table>

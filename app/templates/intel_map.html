@@ -59,6 +59,13 @@
                     <button type="button" class="btn btn-sm eve-btn-ghost" id="intelFollowCharacter">Follow off</button>
                     {% if account.is_admin or account.is_owner %}
                     <button type="button" class="btn btn-sm eve-btn-gold" id="intelForceRefresh">Force update</button>
+                    {% if can_view_debug and intel_debug %}
+                    <button type="button" class="btn btn-sm eve-btn-ghost" id="intelDebugToggle"
+                            onclick="document.getElementById('intelDebugPanel').classList.toggle('d-none')"
+                            title="Toggle Intel Debug Panel">
+                        <i class="bi bi-bug me-1"></i>Debug
+                    </button>
+                    {% endif %}
                     {% endif %}
                 </div>
             </div>
@@ -102,7 +109,7 @@
     </section>
 
     {% if can_view_debug and intel_debug %}
-    <section class="intel-panel intel-debug-panel">
+    <section class="intel-panel intel-debug-panel d-none" id="intelDebugPanel">
         <div class="intel-debug-header">
             <div class="intel-panel-title">Intel Debug</div>
             <div class="intel-debug-actions">

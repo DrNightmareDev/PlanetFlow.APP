@@ -102,19 +102,6 @@
         </div>
     </div>
 
-    {% if can_view_inventory_summary %}
-    <div class="eve-card card border-0 mb-4">
-        <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-            <div class="d-flex align-items-center gap-2">
-                <i class="bi bi-boxes eve-accent"></i>
-                <span class="fw-medium">Inventory Coverage</span>
-            </div>
-            <a href="/inventory" class="btn btn-sm eve-btn-ghost">Open Inventory</a>
-        </div>
-        <div class="card-body p-3" id="plannerInventoryCoverage"></div>
-    </div>
-    {% endif %}
-
     <!-- Produktions-Graph -->
     <div class="eve-card card border-0 mb-4">
         <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
@@ -140,6 +127,24 @@
             </div>
         </div>
     </div>
+
+    {% if can_view_inventory_summary %}
+    <div class="eve-card card border-0 mb-4">
+        <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2"
+             role="button" data-bs-toggle="collapse" data-bs-target="#inventoryCoverageBody"
+             aria-expanded="false" aria-controls="inventoryCoverageBody" style="cursor:pointer;">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-boxes eve-accent"></i>
+                <span class="fw-medium">Inventory Coverage</span>
+                <i class="bi bi-chevron-down ms-1 small" id="inventoryCoverageChevron" style="transition:transform .2s;"></i>
+            </div>
+            <a href="/inventory" class="btn btn-sm eve-btn-ghost" onclick="event.stopPropagation()">Open Inventory</a>
+        </div>
+        <div class="collapse" id="inventoryCoverageBody">
+            <div class="card-body p-3" id="plannerInventoryCoverage"></div>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Planeten + P0 -->
     <div class="row g-4">
@@ -1154,5 +1159,12 @@ document.getElementById('systemFavoritePills').addEventListener('click', async e
 
 renderSystemFavoritesBlock();
 updateSystemFavBtn();
+
+const _invBody = document.getElementById('inventoryCoverageBody');
+const _invChevron = document.getElementById('inventoryCoverageChevron');
+if (_invBody && _invChevron) {
+    _invBody.addEventListener('show.bs.collapse', () => { _invChevron.style.transform = 'rotate(180deg)'; });
+    _invBody.addEventListener('hide.bs.collapse', () => { _invChevron.style.transform = 'rotate(0deg)'; });
+}
 </script>
 {% endblock %}

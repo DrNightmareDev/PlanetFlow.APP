@@ -18,6 +18,8 @@ from app.models import (
     Account,
     BillingBonusCodeRedemption,
     BillingGrant,
+    BillingPricingTier,
+    BillingSubscriptionPlan,
     BillingSubscriptionPeriod,
     BillingWalletReceiver,
     Character,
@@ -123,6 +125,18 @@ def billing_page(
         .limit(10)
         .all()
     )
+    plans = db.query(BillingSubscriptionPlan).filter(BillingSubscriptionPlan.is_active == True).all()
+    plan_by_scope = {str(p.scope): p for p in plans}
+    tiers = (
+        db.query(BillingPricingTier)
+        .order_by(BillingPricingTier.scope.asc(), BillingPricingTier.min_members.asc())
+        .all()
+    )
+    tier_by_scope: dict[str, list] = {"corporation": [], "alliance": []}
+    for tier in tiers:
+        scope = str(tier.scope or "")
+        if scope in tier_by_scope:
+            tier_by_scope[scope].append(tier)
 
     page_access_rows = []
     if account.is_admin or account.is_owner:
@@ -145,6 +159,8 @@ def billing_page(
         "now": datetime.now(UTC),
         "msg": msg,
         "page_access_rows": page_access_rows,
+        "plan_by_scope": plan_by_scope,
+        "tier_by_scope": tier_by_scope,
     })
 
 

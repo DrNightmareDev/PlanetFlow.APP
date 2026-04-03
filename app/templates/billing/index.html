@@ -42,6 +42,66 @@
     </div>
   {% endif %}
 
+  <div class="eve-card card border-0 mb-4">
+    <div class="card-header eve-card-header d-flex align-items-center gap-2">
+      <i class="bi bi-tags" style="color:#7ec8e3;"></i>
+      <span class="fw-semibold">Subscription Prices</span>
+    </div>
+    <div class="card-body">
+      {% set p_single = plan_by_scope.get('individual') %}
+      {% set p_corp = plan_by_scope.get('corporation') %}
+      {% set p_alliance = plan_by_scope.get('alliance') %}
+
+      <div class="p-3 rounded mb-3" style="background:#060e18;border:1px solid #1e2d3d;">
+        <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+          <div>
+            <div class="fw-semibold">Single (Individual)</div>
+            <div class="text-muted small">Base daily price</div>
+          </div>
+          <div class="fw-bold" style="color:#7ec8e3;">
+            {% if p_single %}{{ "{:,.0f}".format(p_single.daily_price_isk) }} ISK / day{% else %}n/a{% endif %}
+          </div>
+        </div>
+      </div>
+
+      <details class="mb-2">
+        <summary class="fw-semibold" style="cursor:pointer;">Corp price tiers</summary>
+        <div class="pt-2">
+          <div class="text-muted small mb-2">
+            Base: {% if p_corp %}{{ "{:,.0f}".format(p_corp.daily_price_isk) }} ISK / day{% else %}n/a{% endif %}
+          </div>
+          {% if tier_by_scope.get('corporation') %}
+          <ul class="mb-0 small">
+            {% for t in tier_by_scope.get('corporation') %}
+            <li>{{ t.min_members }} - {{ t.max_members if t.max_members is not none else 'inf' }} members: {{ "{:,.0f}".format(t.daily_price_isk) }} ISK / day</li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <div class="text-muted small">No corp tiers configured.</div>
+          {% endif %}
+        </div>
+      </details>
+
+      <details>
+        <summary class="fw-semibold" style="cursor:pointer;">Alliance price tiers</summary>
+        <div class="pt-2">
+          <div class="text-muted small mb-2">
+            Base: {% if p_alliance %}{{ "{:,.0f}".format(p_alliance.daily_price_isk) }} ISK / day{% else %}n/a{% endif %}
+          </div>
+          {% if tier_by_scope.get('alliance') %}
+          <ul class="mb-0 small">
+            {% for t in tier_by_scope.get('alliance') %}
+            <li>{{ t.min_members }} - {{ t.max_members if t.max_members is not none else 'inf' }} members: {{ "{:,.0f}".format(t.daily_price_isk) }} ISK / day</li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <div class="text-muted small">No alliance tiers configured.</div>
+          {% endif %}
+        </div>
+      </details>
+    </div>
+  </div>
+
   {# ── Status overview ─────────────────────────────────────────────────────── #}
   <div class="row g-3 mb-4">
 

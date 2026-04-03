@@ -231,7 +231,7 @@
                         {% endif %}
                         {% if acc.is_director %}
                         <span class="badge" style="background:#1a1a0a;color:#f4a300;border:1px solid #f4a30040;font-size:.72rem;">
-                            <i class="bi bi-building-fill me-1"></i>Director
+                            <i class="bi bi-building-fill me-1"></i>Director{% if acc.director_corp_name %} · {{ acc.director_corp_name }}{% endif %}
                         </span>
                         {% endif %}
                         <span class="badge eve-badge-count">{{ entry.char_count }} Chars</span>
@@ -273,13 +273,20 @@
                         <i class="bi bi-shield me-1"></i>
                         {{ 'Admin entfernen' if acc.is_admin else 'Admin machen' }}
                     </a>
-                    <a href="/admin/toggle-director/{{ acc.id }}"
+                    {% if acc.is_director %}
+                    <a href="/admin/remove-director/{{ acc.id }}"
                        class="btn btn-sm"
-                       style="background:#1a1a0a;color:#f4a300;border:1px solid #f4a30040;"
-                       onclick="return confirm('Director-Status von {{ main.character_name if main else 'Account #' ~ acc.id }} ändern?')">
-                        <i class="bi bi-building me-1"></i>
-                        {{ 'Director entfernen' if acc.is_director else 'Director machen' }}
+                       style="background:#2d1a0a;color:#f4a300;border:1px solid #f4a30060;"
+                       onclick="return confirm('Director-Zugang für {{ main.character_name if main else 'Account #' ~ acc.id }} entfernen?')">
+                        <i class="bi bi-building-x me-1"></i>Director entfernen
                     </a>
+                    {% else %}
+                    <button type="button" class="btn btn-sm"
+                            style="background:#1a1a0a;color:#f4a300;border:1px solid #f4a30040;"
+                            onclick="openDirectorModal({{ acc.id }}, '{{ (main.character_name if main else 'Account #' ~ acc.id) | replace("'", "\\'") }}')">
+                        <i class="bi bi-building-add me-1"></i>Director machen
+                    </button>
+                    {% endif %}
                     {% endif %}
                     {% if acc.id != account.id and account.is_owner %}
                     <a href="/admin/impersonate/{{ acc.id }}"
@@ -1077,5 +1084,95 @@ async function adminResetCharErrors(charId, charName, btn) {
     flex-wrap: wrap;
 }
 </style>
+
+<!-- Director Corp Modal -->
+<div class="modal fade" id="directorModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="background:var(--eve-bg-2);border:1px solid var(--eve-card-border);">
+      <div class="modal-header" style="border-color:var(--eve-card-border);">
+        <h5 class="modal-title" style="font-size:.95rem;">
+          <i class="bi bi-building-add me-2" style="color:#f4a300;"></i>
+          Director-Zugang vergeben
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="directorForm" method="post" action="">
+        <div class="modal-body">
+          <p class="text-muted small mb-3">Wähle die Corporation, für die <strong id="directorTargetName"></strong> Director-Zugang erhalten soll.</p>
+          <input type="text" id="corpSearch" class="form-control form-control-sm eve-input mb-2"
+                 placeholder="Corporation suchen…" oninput="filterCorps(this.value)">
+          <div id="corpList" style="max-height:280px;overflow-y:auto;">
+            <div class="text-muted small text-center py-3">Lade Corporations…</div>
+          </div>
+          <input type="hidden" name="corp_id" id="directorCorpId">
+          <input type="hidden" name="corp_name" id="directorCorpName">
+        </div>
+        <div class="modal-footer" style="border-color:var(--eve-card-border);">
+          <button type="button" class="btn btn-sm eve-btn-outline" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="submit" id="directorSubmit" class="btn btn-sm eve-btn-gold" disabled>
+            <i class="bi bi-check-lg me-1"></i>Zugang vergeben
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+let _allCorps = [];
+
+async function openDirectorModal(accountId, accountName) {
+    document.getElementById('directorTargetName').textContent = accountName;
+    document.getElementById('directorForm').action = `/admin/set-director/${accountId}`;
+    document.getElementById('directorCorpId').value = '';
+    document.getElementById('directorCorpName').value = '';
+    document.getElementById('directorSubmit').disabled = true;
+    document.getElementById('corpSearch').value = '';
+
+    const modal = new bootstrap.Modal(document.getElementById('directorModal'));
+    modal.show();
+
+    if (_allCorps.length === 0) {
+        const res = await fetch('/admin/corps-list');
+        _allCorps = await res.json();
+    }
+    renderCorps(_allCorps);
+}
+
+function renderCorps(corps) {
+    const list = document.getElementById('corpList');
+    if (!corps.length) {
+        list.innerHTML = '<div class="text-muted small text-center py-3">Keine Corporations gefunden.</div>';
+        return;
+    }
+    list.innerHTML = corps.map(c => `
+        <div class="corp-option d-flex align-items-center gap-2 p-2 rounded mb-1"
+             style="cursor:pointer;border:1px solid transparent;transition:.1s;"
+             data-corp-id="${c.id}" data-corp-name="${c.name.replace(/"/g,'&quot;')}"
+             onclick="selectCorp(this, ${c.id}, ${JSON.stringify(c.name)})">
+            <img src="https://images.evetech.net/corporations/${c.id}/logo?size=32"
+                 width="24" height="24" class="rounded" style="border:1px solid var(--eve-card-border);"
+                 onerror="this.style.display='none'">
+            <span style="font-size:.88rem;">${c.name}</span>
+        </div>`).join('');
+}
+
+function selectCorp(el, corpId, corpName) {
+    document.querySelectorAll('.corp-option').forEach(o => {
+        o.style.background = '';
+        o.style.borderColor = 'transparent';
+    });
+    el.style.background = '#1a1a0a';
+    el.style.borderColor = '#f4a30060';
+    document.getElementById('directorCorpId').value = corpId;
+    document.getElementById('directorCorpName').value = corpName;
+    document.getElementById('directorSubmit').disabled = false;
+}
+
+function filterCorps(q) {
+    const filtered = q ? _allCorps.filter(c => c.name.toLowerCase().includes(q.toLowerCase())) : _allCorps;
+    renderCorps(filtered);
+}
+</script>
 {% endblock %}
 

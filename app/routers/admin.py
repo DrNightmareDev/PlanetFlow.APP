@@ -170,16 +170,53 @@ def toggle_admin(
     return RedirectResponse(url="/admin", status_code=302)
 
 
-@router.get("/toggle-director/{target_account_id}")
-def toggle_director(
-    target_account_id: int,
+@router.get("/corps-list", response_class=JSONResponse)
+def corps_list(
     account=Depends(require_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+):
+    """Return distinct corps present in the characters table, for the director modal."""
+    from app.models import Character
+    rows = (
+        db.query(Character.corporation_id, Character.corporation_name)
+        .filter(Character.corporation_id.isnot(None))
+        .distinct()
+        .order_by(Character.corporation_name)
+        .all()
+    )
+    return JSONResponse([{"id": r.corporation_id, "name": r.corporation_name or str(r.corporation_id)} for r in rows])
+
+
+@router.post("/set-director/{target_account_id}")
+def set_director(
+    target_account_id: int,
+    corp_id: int = Form(...),
+    corp_name: str = Form(...),
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
 ):
     target = db.query(Account).filter(Account.id == target_account_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="Account nicht gefunden")
-    target.is_director = not target.is_director
+    target.is_director = True
+    target.director_corp_id = corp_id
+    target.director_corp_name = corp_name
+    db.commit()
+    return RedirectResponse(url="/admin", status_code=302)
+
+
+@router.get("/remove-director/{target_account_id}")
+def remove_director(
+    target_account_id: int,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    target = db.query(Account).filter(Account.id == target_account_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Account nicht gefunden")
+    target.is_director = False
+    target.director_corp_id = None
+    target.director_corp_name = None
     db.commit()
     return RedirectResponse(url="/admin", status_code=302)
 

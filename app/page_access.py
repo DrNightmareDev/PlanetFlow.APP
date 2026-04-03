@@ -18,7 +18,6 @@ class PageDefinition:
 
 
 PAGE_DEFINITIONS: tuple[PageDefinition, ...] = (
-    PageDefinition("dashboard_corp", "Corporation", "/dashboard/corp", "manager"),
     PageDefinition("dashboard_characters", "Characters", "/dashboard/characters", "member"),
     PageDefinition("dashboard", "Dashboard", "/dashboard", "member"),
     PageDefinition("skyhook", "Skyhooks", "/skyhook", "member"),

@@ -15,6 +15,8 @@ class Account(Base):
     is_admin = Column(Boolean, default=False, nullable=False)
     is_owner = Column(Boolean, default=False, nullable=False)
     is_director = Column(Boolean, default=False, nullable=False, server_default="false")
+    director_corp_id = Column(BigInteger, nullable=True)
+    director_corp_name = Column(String(255), nullable=True)
     main_character_id = Column(Integer, ForeignKey("characters.id", use_alter=True, name="fk_account_main_char"), nullable=True)
     price_mode = Column(String(10), nullable=False, default="sell")
 

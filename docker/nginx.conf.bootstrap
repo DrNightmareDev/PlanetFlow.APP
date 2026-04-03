@@ -1,0 +1,17 @@
+# nginx.conf.bootstrap — HTTP-only config for initial cert issuance
+# Used by nginx-entrypoint.sh before Let's Encrypt certs exist.
+
+server {
+    listen 80;
+    server_name planetflow.app www.planetflow.app;
+
+    # Let's Encrypt ACME challenge
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 200 'Waiting for SSL certificate...';
+        add_header Content-Type text/plain;
+    }
+}

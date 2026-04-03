@@ -29,7 +29,7 @@ PAGE_DEFINITIONS: tuple[PageDefinition, ...] = (
     PageDefinition("system", "System Analysis", "/system", "member,paid"),
     PageDefinition("market", "Market", "/market", "member,paid"),
     PageDefinition("intel_map", "Combat Intel Map", "/intel/map", "manager,paid"),
-    PageDefinition("admin", "Admin Panel", "/admin", "manager"),
+    PageDefinition("admin", "Admin Panel", "/admin", "admin"),
     PageDefinition("director", "Director Panel", "/director", "director,paid"),
     PageDefinition("billing", "Subscription", "/billing", "member", nav_group="account"),
 )
@@ -51,13 +51,20 @@ def ensure_page_access_settings(db: Session) -> None:
         db.rollback()
         return
     existing = {row.page_key for row in rows}
+    existing_rows = {row.page_key: row for row in rows}
     created = False
+    updated = False
     for page in PAGE_DEFINITIONS:
         if page.admin_only or page.key in existing:
             continue
         db.add(PageAccessSetting(page_key=page.key, access_level=page.default_access))
         created = True
-    if created:
+    # Never allow /admin to drift away from explicit admin-only role gate.
+    admin_row = existing_rows.get("admin")
+    if admin_row is not None and (admin_row.access_level or "").strip() != "admin":
+        admin_row.access_level = "admin"
+        updated = True
+    if created or updated:
         db.commit()
 
 

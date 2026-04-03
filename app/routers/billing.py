@@ -128,7 +128,7 @@ def billing_page(
     if account.is_admin or account.is_owner:
         settings_map = get_access_settings_map(db)
         for page in get_page_definitions():
-            if page.admin_only:
+            if page.admin_only or page.key == "admin":
                 continue
             page_access_rows.append({
                 "page": page,
@@ -169,6 +169,9 @@ async def billing_admin_page_access(
     if not page:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Page not found")
+    if page.key == "admin":
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Admin page access is fixed")
 
     # Map billing_mode to access_level
     _mode_map = {

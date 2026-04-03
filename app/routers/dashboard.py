@@ -1453,6 +1453,7 @@ def dashboard(
         "notification_colonies": notification_colonies,
         "price_mode": current_price_mode,
         "refreshing": refreshing,
+        "refresh_kicked_at": _bg_refresh_kicked_at.get(account.id),
         "market_last_updated_iso": market_last_updated_iso,
         "token_error_count": token_error_count,
         "token_error_chars": [c.character_name for c in token_error_chars],

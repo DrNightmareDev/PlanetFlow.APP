@@ -1196,9 +1196,10 @@ function setPriceMode(mode) {
 {% if refreshing %}
 showColoniesOverlay();
 (function pollBgRefresh() {
-    // Pass page-load timestamp so the server can detect completion via DB
-    // without relying on in-process state (which differs across gunicorn workers).
-    const since = Date.now() / 1000;
+    // Use the server-side kicked_at timestamp as reference so that tasks that
+    // complete before (or immediately after) the page loads are still detected.
+    // Falls back to a few seconds before page-load to avoid missing fast tasks.
+    const since = {{ refresh_kicked_at if refresh_kicked_at else '(Date.now() / 1000 - 10)' }};
     let polls = 0;
     const MAX_POLLS = 40; // max 120s (3s * 40)
     function poll() {

@@ -46,10 +46,14 @@
     <div class="container-fluid px-3">
         <!-- Brand -->
         <a class="navbar-brand eve-brand d-flex align-items-center gap-2" href="/dashboard">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 0 5px var(--eve-accent));flex-shrink:0;">
-                <circle cx="10" cy="10" r="8.5" stroke="var(--eve-accent)" stroke-width="1.4"/>
-                <ellipse cx="10" cy="10" rx="4" ry="8.5" stroke="var(--eve-accent)" stroke-width="1.4"/>
-                <ellipse cx="10" cy="10" rx="8.5" ry="3" stroke="var(--eve-accent)" stroke-width="1.1" opacity="0.6"/>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="22" height="22" style="flex-shrink:0;filter:drop-shadow(0 0 4px #f2c46f88);">
+                <defs>
+                    <linearGradient id="nb-planet" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#f2c46f"/><stop offset="100%" stop-color="#9b6328"/></linearGradient>
+                    <linearGradient id="nb-flow" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#ffe2a8"/><stop offset="100%" stop-color="#df8f32"/></linearGradient>
+                </defs>
+                <circle cx="47" cy="52" r="26" fill="url(#nb-planet)"/>
+                <path d="M70 43c18 0 33 6 40 16-9 6-18 10-28 13 4 7 9 14 16 22-18-4-31-12-40-24 11-3 21-8 31-14-6-3-12-5-19-6z" fill="url(#nb-flow)"/>
+                <path d="M37 44c7-9 17-12 28-10-6 1-11 5-15 10 4 2 7 5 10 9-10-3-18-6-23-9z" fill="#ffd391" opacity=".72"/>
             </svg>
             <span>PlanetFlow</span>
         </a>
@@ -356,10 +360,14 @@
     <div class="container-fluid px-3">
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
             <div class="eve-footer-brand d-flex align-items-center gap-2 flex-wrap">
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:var(--eve-accent);opacity:.7;">
-                    <circle cx="10" cy="10" r="8.5" stroke="var(--eve-accent)" stroke-width="1.4"/>
-                    <ellipse cx="10" cy="10" rx="4" ry="8.5" stroke="var(--eve-accent)" stroke-width="1.4"/>
-                    <ellipse cx="10" cy="10" rx="8.5" ry="3" stroke="var(--eve-accent)" stroke-width="1.1" opacity="0.6"/>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="16" height="16" style="flex-shrink:0;opacity:.7;">
+                    <defs>
+                        <linearGradient id="ft-planet" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#f2c46f"/><stop offset="100%" stop-color="#9b6328"/></linearGradient>
+                        <linearGradient id="ft-flow" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#ffe2a8"/><stop offset="100%" stop-color="#df8f32"/></linearGradient>
+                    </defs>
+                    <circle cx="47" cy="52" r="26" fill="url(#ft-planet)"/>
+                    <path d="M70 43c18 0 33 6 40 16-9 6-18 10-28 13 4 7 9 14 16 22-18-4-31-12-40-24 11-3 21-8 31-14-6-3-12-5-19-6z" fill="url(#ft-flow)"/>
+                    <path d="M37 44c7-9 17-12 28-10-6 1-11 5-15 10 4 2 7 5 10 9-10-3-18-6-23-9z" fill="#ffd391" opacity=".72"/>
                 </svg>
                 <span class="text-muted small">{{ t('app.name') }}</span>
                 <span class="text-muted small">|</span>

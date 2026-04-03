@@ -380,7 +380,11 @@
                 <td class="font-monospace">{{ row.event_type }}</td>
                 <td>{{ row.actor_account_id or '-' }}</td>
                 <td>{{ row.target_account_id or '-' }}</td>
-                <td class="text-muted small text-truncate" style="max-width:320px">{{ row.detail_json }}</td>
+                <td
+                  class="text-muted small text-truncate"
+                  style="max-width:320px; cursor:help;"
+                  title="{{ row.detail_json }}"
+                >{{ row.detail_json }}</td>
               </tr>
             {% else %}
               <tr><td colspan="5" class="text-muted">No entries.</td></tr>

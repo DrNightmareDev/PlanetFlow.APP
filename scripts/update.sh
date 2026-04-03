@@ -86,12 +86,34 @@ info "Baue Docker Images..."
 docker compose build --pull
 ok "Images gebaut"
 
-# ── 3. Stack neu starten ─────────────────────────────────────
+# ── 3. RabbitMQ-Credentials prüfen ──────────────────────────
+# RabbitMQ baked credentials into its volume on first start.
+# If RABBITMQ_USER/RABBITMQ_PASS changed since then, the broker
+# will refuse connections with ACCESS_REFUSED (403).
+# Detect this by checking if the running container accepts the current creds.
+RABBIT_USER="${RABBITMQ_USER:-planetflow}"
+RABBIT_PASS="${RABBITMQ_PASS:-planetflow_rabbit}"
+if docker compose ps --status running | grep -q rabbitmq; then
+    if ! docker compose exec -T rabbitmq rabbitmqctl authenticate_user "$RABBIT_USER" "$RABBIT_PASS" &>/dev/null; then
+        warn "RabbitMQ-Credentials stimmen nicht überein — Volume wird zurückgesetzt."
+        docker compose stop rabbitmq celery_worker celery_wallet celery_beat 2>/dev/null || true
+        VOL_NAME="$(docker compose config --volumes 2>/dev/null | grep rabbitmq || true)"
+        PROJECT="$(basename "$APP_DIR" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]_-')"
+        docker volume rm "${PROJECT}_rabbitmq_data" 2>/dev/null \
+            || docker volume rm "planetflow_rabbitmq_data" 2>/dev/null \
+            || warn "Volume konnte nicht automatisch entfernt werden — führe manuell aus: docker volume rm <project>_rabbitmq_data"
+        ok "RabbitMQ-Volume zurückgesetzt — wird mit neuen Credentials neu erstellt"
+    else
+        ok "RabbitMQ-Credentials OK"
+    fi
+fi
+
+# ── 4. Stack neu starten ─────────────────────────────────────
 info "Starte Stack neu..."
 docker compose up -d
 ok "Stack neu gestartet"
 
-# ── 4. Datenbank-Migrationen ─────────────────────────────────
+# ── 5. Datenbank-Migrationen ─────────────────────────────────
 info "Führe Datenbank-Migrationen aus..."
 # Warte bis App-Container healthy ist
 MAX_WAIT=60

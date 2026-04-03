@@ -27,17 +27,26 @@ def director_panel(
     corp_id = account.director_corp_id
     corp_name = account.director_corp_name or "—"
 
+    # CEO fallback: if no explicit director_corp_id, use the CEO's own corp
     if not corp_id:
-        return templates.TemplateResponse("director/index.html", {
-            "request": request,
-            "account": account,
-            "corp_id": None,
-            "corp_name": corp_name,
-            "alliance_id": None,
-            "alliance_name": None,
-            "member_rows": [],
-            "total_colonies": 0,
-        })
+        main_char = db.query(Character).filter(Character.id == account.main_character_id).first() if account.main_character_id else None
+        if not main_char:
+            # Try any character on the account
+            main_char = db.query(Character).filter(Character.account_id == account.id).first()
+        if main_char and main_char.corporation_id:
+            corp_id = main_char.corporation_id
+            corp_name = main_char.corporation_name or f"Corp #{corp_id}"
+        else:
+            return templates.TemplateResponse("director/index.html", {
+                "request": request,
+                "account": account,
+                "corp_id": None,
+                "corp_name": corp_name,
+                "alliance_id": None,
+                "alliance_name": None,
+                "member_rows": [],
+                "total_colonies": 0,
+            })
 
     # All characters in this corp
     corp_chars = db.query(Character).filter(Character.corporation_id == corp_id).all()

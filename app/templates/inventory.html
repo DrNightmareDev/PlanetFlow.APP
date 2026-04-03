@@ -1,28 +1,28 @@
 {% extends "base.html" %}
-{% block title %}Inventory - {{ t('app.name') }}{% endblock %}
+{% block title %}{{ t('inventory.title') }} - {{ t('app.name') }}{% endblock %}
 
 {% block content %}
 <div class="inventory-shell">
     <section class="inventory-hero eve-card card border-0">
         <div class="card-body inventory-hero-body">
             <div class="inventory-hero-copy">
-                <div class="inventory-kicker">PI inventory</div>
-                <h1><i class="bi bi-boxes me-2 eve-accent"></i>Inventory / Stock Management</h1>
-                <p>Track current PI stock, record purchased or self-produced batches, and keep a weighted average cost basis for better buy-vs-build decisions.</p>
+                <div class="inventory-kicker">{{ t('inventory.kicker') }}</div>
+                <h1><i class="bi bi-boxes me-2 eve-accent"></i>{{ t('inventory.heading') }}</h1>
+                <p>{{ t('inventory.description') }}</p>
             </div>
             <div class="inventory-hero-glow" aria-hidden="true"></div>
         </div>
         <div class="inventory-stats">
             <div class="inventory-stat">
-                <div class="inventory-stat-label">Tracked Items</div>
+                <div class="inventory-stat-label">{{ t('inventory.stat_tracked_items') }}</div>
                 <div class="inventory-stat-value">{{ inventory_stats.distinct_items }}</div>
             </div>
             <div class="inventory-stat">
-                <div class="inventory-stat-label">Units On Hand</div>
+                <div class="inventory-stat-label">{{ t('inventory.stat_units_on_hand') }}</div>
                 <div class="inventory-stat-value">{{ "{:,}".format(inventory_stats.total_units) }}</div>
             </div>
             <div class="inventory-stat">
-                <div class="inventory-stat-label">Estimated Stock Value</div>
+                <div class="inventory-stat-label">{{ t('inventory.stat_estimated_value') }}</div>
                 <div
                     class="inventory-stat-value"
                     id="inventoryEstimatedStockValue"
@@ -45,14 +45,14 @@
             <div class="card-body">
             <div class="inventory-panel-head">
                 <div>
-                    <div class="inventory-panel-kicker">Stock input</div>
-                    <div class="inventory-panel-title"><i class="bi bi-plus-square me-2"></i>Add Stock Batch</div>
+                    <div class="inventory-panel-kicker">{{ t('inventory.add_kicker') }}</div>
+                    <div class="inventory-panel-title"><i class="bi bi-plus-square me-2"></i>{{ t('inventory.add_title') }}</div>
                 </div>
-                <span class="inventory-panel-badge">Purchase / Production</span>
+                <span class="inventory-panel-badge">{{ t('inventory.add_badge') }}</span>
             </div>
             <form method="post" action="/inventory/lots" class="inventory-form-grid">
                 <div>
-                    <label class="form-label">PI Item</label>
+                    <label class="form-label">{{ t('inventory.field_item') }}</label>
                     <select name="type_id" class="form-select eve-input" required>
                         {% for item in inventory_catalog %}
                         <option value="{{ item.type_id }}">{{ item.tier }} - {{ item.display_name }}</option>
@@ -60,27 +60,27 @@
                     </select>
                 </div>
                 <div>
-                    <label class="form-label">Quantity</label>
+                    <label class="form-label">{{ t('inventory.field_quantity') }}</label>
                     <input type="number" min="1" step="1" name="quantity" class="form-control eve-input" required>
                 </div>
                 <div>
-                    <label class="form-label">Source</label>
+                    <label class="form-label">{{ t('inventory.field_source') }}</label>
                     <select name="source_kind" class="form-select eve-input" required>
-                        <option value="purchase">Purchased</option>
-                        <option value="production">Self-produced</option>
-                        <option value="manual">Manual stock</option>
+                        <option value="purchase">{{ t('inventory.source_purchase') }}</option>
+                        <option value="production">{{ t('inventory.source_production') }}</option>
+                        <option value="manual">{{ t('inventory.source_manual') }}</option>
                     </select>
                 </div>
                 <div>
-                    <label class="form-label">Unit Cost (ISK)</label>
-                    <input type="number" min="0" step="0.01" name="unit_cost" class="form-control eve-input" placeholder="Optional unless purchased">
+                    <label class="form-label">{{ t('inventory.field_unit_cost') }}</label>
+                    <input type="number" min="0" step="0.01" name="unit_cost" class="form-control eve-input" placeholder="{{ t('inventory.unit_cost_placeholder') }}">
                 </div>
                 <div class="inventory-form-wide">
-                    <label class="form-label">Note</label>
-                    <input type="text" maxlength="255" name="note" class="form-control eve-input" placeholder="Optional purchase or production note">
+                    <label class="form-label">{{ t('inventory.field_note') }}</label>
+                    <input type="text" maxlength="255" name="note" class="form-control eve-input" placeholder="{{ t('inventory.note_placeholder') }}">
                 </div>
                 <div class="inventory-form-actions">
-                    <button type="submit" class="btn eve-btn-primary">Add Batch</button>
+                    <button type="submit" class="btn eve-btn-primary">{{ t('inventory.btn_add_batch') }}</button>
                 </div>
             </form>
             </div>
@@ -90,14 +90,14 @@
             <div class="card-body">
             <div class="inventory-panel-head">
                 <div>
-                    <div class="inventory-panel-kicker">Corrections</div>
-                    <div class="inventory-panel-title"><i class="bi bi-sliders2 me-2"></i>Manual Adjustment</div>
+                    <div class="inventory-panel-kicker">{{ t('inventory.adjust_kicker') }}</div>
+                    <div class="inventory-panel-title"><i class="bi bi-sliders2 me-2"></i>{{ t('inventory.adjust_title') }}</div>
                 </div>
-                <span class="inventory-panel-badge">Inventory delta</span>
+                <span class="inventory-panel-badge">{{ t('inventory.adjust_badge') }}</span>
             </div>
             <form method="post" action="/inventory/adjust" class="inventory-form-grid">
                 <div>
-                    <label class="form-label">PI Item</label>
+                    <label class="form-label">{{ t('inventory.field_item') }}</label>
                     <select name="type_id" class="form-select eve-input" required>
                         {% for item in inventory_catalog %}
                         <option value="{{ item.type_id }}">{{ item.tier }} - {{ item.display_name }}</option>
@@ -105,26 +105,26 @@
                     </select>
                 </div>
                 <div>
-                    <label class="form-label">Direction</label>
+                    <label class="form-label">{{ t('inventory.field_direction') }}</label>
                     <select name="direction" class="form-select eve-input" required>
-                        <option value="add">Increase stock</option>
-                        <option value="remove">Decrease stock</option>
+                        <option value="add">{{ t('inventory.direction_increase') }}</option>
+                        <option value="remove">{{ t('inventory.direction_decrease') }}</option>
                     </select>
                 </div>
                 <div>
-                    <label class="form-label">Quantity</label>
+                    <label class="form-label">{{ t('inventory.field_quantity') }}</label>
                     <input type="number" min="1" step="1" name="quantity" class="form-control eve-input" required>
                 </div>
                 <div>
-                    <label class="form-label">Unit Cost (optional)</label>
-                    <input type="number" min="0" step="0.01" name="unit_cost" class="form-control eve-input" placeholder="Used for positive adjustments">
+                    <label class="form-label">{{ t('inventory.field_unit_cost_optional') }}</label>
+                    <input type="number" min="0" step="0.01" name="unit_cost" class="form-control eve-input" placeholder="{{ t('inventory.unit_cost_adjust_placeholder') }}">
                 </div>
                 <div class="inventory-form-wide">
-                    <label class="form-label">Reason / Note</label>
-                    <input type="text" maxlength="255" name="note" class="form-control eve-input" placeholder="Why was the stock corrected?">
+                    <label class="form-label">{{ t('inventory.field_reason') }}</label>
+                    <input type="text" maxlength="255" name="note" class="form-control eve-input" placeholder="{{ t('inventory.reason_placeholder') }}">
                 </div>
                 <div class="inventory-form-actions">
-                    <button type="submit" class="btn eve-btn-outline">Apply Adjustment</button>
+                    <button type="submit" class="btn eve-btn-outline">{{ t('inventory.btn_apply_adjustment') }}</button>
                 </div>
             </form>
             </div>
@@ -135,15 +135,15 @@
         <div class="card-body">
         <div class="inventory-table-header">
             <div>
-                <div class="inventory-panel-kicker">Overview</div>
-                <div class="inventory-panel-title"><i class="bi bi-grid-3x3-gap me-2"></i>Current Stock</div>
+                <div class="inventory-panel-kicker">{{ t('inventory.stock_kicker') }}</div>
+                <div class="inventory-panel-title"><i class="bi bi-grid-3x3-gap me-2"></i>{{ t('inventory.stock_title') }}</div>
             </div>
             <div class="inventory-table-actions">
-                <input type="search" id="inventorySearch" class="form-control eve-input" placeholder="Filter stock by item">
+                <input type="search" id="inventorySearch" class="form-control eve-input" placeholder="{{ t('inventory.search_placeholder') }}">
                 <select id="inventoryValueMode" class="form-select eve-input inventory-value-mode">
-                    <option value="split" selected>Jita Split</option>
-                    <option value="sell">Jita Sell</option>
-                    <option value="buy">Jita Buy</option>
+                    <option value="split" selected>{{ t('inventory.jita_split') }}</option>
+                    <option value="sell">{{ t('inventory.jita_sell') }}</option>
+                    <option value="buy">{{ t('inventory.jita_buy') }}</option>
                 </select>
                 <div class="btn-group">
                     <a href="/inventory" class="btn btn-sm {% if not selected_tier %}eve-btn-primary{% else %}eve-btn-ghost{% endif %}">All</a>
@@ -157,14 +157,14 @@
             <table class="table table-dark table-hover align-middle inventory-table" id="inventorySummaryTable">
                 <thead>
                     <tr>
-                        <th>Tier</th>
-                        <th>Item</th>
-                        <th class="text-end">On Hand</th>
-                        <th class="text-end">Consumption / Production (per hour)</th>
-                        <th class="text-end">Burn down</th>
-                        <th class="text-end">Weighted Avg Cost</th>
-                        <th class="text-end">Estimated Value</th>
-                        <th class="text-end">Actions</th>
+                        <th>{{ t('inventory.col_tier') }}</th>
+                        <th>{{ t('inventory.col_item') }}</th>
+                        <th class="text-end">{{ t('inventory.col_on_hand') }}</th>
+                        <th class="text-end">{{ t('inventory.col_rate_per_hour') }}</th>
+                        <th class="text-end">{{ t('inventory.col_burn_down') }}</th>
+                        <th class="text-end">{{ t('inventory.col_weighted_avg_cost') }}</th>
+                        <th class="text-end">{{ t('inventory.col_estimated_value') }}</th>
+                        <th class="text-end">{{ t('inventory.col_actions') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -188,10 +188,10 @@
                                     class="form-control form-control-sm eve-input"
                                     style="max-width:170px;"
                                     value="{% if row.net_rate_per_hour is not none %}{{ "{:.2f}".format(row.net_rate_per_hour) }}{% endif %}"
-                                    placeholder="-10 consume | +10 produce"
-                                    title="Negative values = consumption/h, positive = production/h"
+                                    placeholder="{{ t('inventory.rate_placeholder') }}"
+                                    title="{{ t('inventory.rate_title') }}"
                                 >
-                                <button type="submit" class="btn btn-sm eve-btn-ghost">Save</button>
+                                <button type="submit" class="btn btn-sm eve-btn-ghost">{{ t('common.save') }}</button>
                             </form>
                         </td>
                         <td class="text-end inventory-col-burn {% if row.rate_kind == 'consumption' %}text-warning{% elif row.rate_kind == 'production' %}text-success{% else %}text-muted{% endif %}">
@@ -208,12 +208,12 @@
                             <form method="post" action="/inventory/remove" class="inventory-remove-form">
                                 <input type="hidden" name="type_id" value="{{ row.type_id }}">
                                 <input type="hidden" name="tier" value="{{ selected_tier }}">
-                                <button type="submit" class="btn btn-sm eve-btn-ghost inventory-remove-btn">Remove</button>
+                                <button type="submit" class="btn btn-sm eve-btn-ghost inventory-remove-btn">{{ t('inventory.btn_remove') }}</button>
                             </form>
                         </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="8" class="text-center text-muted py-4">No PI stock tracked yet.</td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-4">{{ t('inventory.no_stock') }}</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -226,20 +226,20 @@
             <div class="card-body">
             <div class="inventory-panel-head">
                 <div>
-                    <div class="inventory-panel-kicker">History</div>
-                    <div class="inventory-panel-title"><i class="bi bi-clock-history me-2"></i>Recent Stock Batches</div>
+                    <div class="inventory-panel-kicker">{{ t('inventory.history_kicker') }}</div>
+                    <div class="inventory-panel-title"><i class="bi bi-clock-history me-2"></i>{{ t('inventory.history_title') }}</div>
                 </div>
             </div>
             <div class="table-responsive">
                 <table class="table table-dark table-sm align-middle">
                     <thead>
                         <tr>
-                            <th>Item</th>
-                            <th>Source</th>
-                            <th class="text-end">Added</th>
-                            <th class="text-end">Remaining</th>
-                            <th class="text-end">Unit Cost</th>
-                            <th>Created</th>
+                            <th>{{ t('inventory.col_item') }}</th>
+                            <th>{{ t('inventory.col_source') }}</th>
+                            <th class="text-end">{{ t('inventory.col_added') }}</th>
+                            <th class="text-end">{{ t('inventory.col_remaining') }}</th>
+                            <th class="text-end">{{ t('inventory.col_unit_cost') }}</th>
+                            <th>{{ t('inventory.col_created') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -253,7 +253,7 @@
                             <td>{{ lot.created_at }}</td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="6" class="text-center text-muted py-4">No stock batches yet.</td></tr>
+                        <tr><td colspan="6" class="text-center text-muted py-4">{{ t('inventory.no_batches') }}</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -265,21 +265,21 @@
             <div class="card-body">
             <div class="inventory-panel-head">
                 <div>
-                    <div class="inventory-panel-kicker">Audit</div>
-                    <div class="inventory-panel-title"><i class="bi bi-journal-check me-2"></i>Recent Transactions</div>
+                    <div class="inventory-panel-kicker">{{ t('inventory.audit_kicker') }}</div>
+                    <div class="inventory-panel-title"><i class="bi bi-journal-check me-2"></i>{{ t('inventory.audit_title') }}</div>
                 </div>
             </div>
             <div class="table-responsive">
                 <table class="table table-dark table-sm align-middle">
                     <thead>
                         <tr>
-                            <th>Item</th>
-                            <th>Type</th>
-                            <th>Status</th>
-                            <th>Reason</th>
-                            <th class="text-end">Delta</th>
-                            <th>Created</th>
-                            <th class="text-end">Action</th>
+                            <th>{{ t('inventory.col_item') }}</th>
+                            <th>{{ t('inventory.col_type') }}</th>
+                            <th>{{ t('inventory.col_status') }}</th>
+                            <th>{{ t('inventory.col_reason') }}</th>
+                            <th class="text-end">{{ t('inventory.col_delta') }}</th>
+                            <th>{{ t('inventory.col_created') }}</th>
+                            <th class="text-end">{{ t('inventory.col_actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -299,7 +299,7 @@
                                     <input type="hidden" name="transaction_kind" value="{{ entry.kind }}">
                                     <input type="hidden" name="transaction_id" value="{{ entry.id }}">
                                     <input type="hidden" name="tier" value="{{ selected_tier }}">
-                                    <button type="submit" class="btn btn-sm eve-btn-ghost inventory-remove-btn">Remove</button>
+                                    <button type="submit" class="btn btn-sm eve-btn-ghost inventory-remove-btn">{{ t('inventory.btn_remove') }}</button>
                                 </form>
                                 {% else %}
                                 <span class="text-muted small">-</span>
@@ -307,7 +307,7 @@
                             </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="7" class="text-center text-muted py-4">No transactions yet.</td></tr>
+                        <tr><td colspan="7" class="text-center text-muted py-4">{{ t('inventory.no_transactions') }}</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -322,8 +322,8 @@
         <div class="modal-content inventory-modal">
             <div class="modal-header border-0 pb-0">
                 <div>
-                    <div class="inventory-kicker mb-2">Stock Transactions</div>
-                    <h5 class="modal-title mb-0" id="inventoryItemModalTitle">Inventory Item</h5>
+                    <div class="inventory-kicker mb-2">{{ t('inventory.modal_kicker') }}</div>
+                    <h5 class="modal-title mb-0" id="inventoryItemModalTitle">{{ t('inventory.modal_title') }}</h5>
                 </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -331,45 +331,45 @@
                 <div class="inventory-modal-toolbar">
                     <div class="inventory-modal-stats">
                         <div class="inventory-modal-stat">
-                            <span>On Hand</span>
+                            <span>{{ t('inventory.modal_on_hand') }}</span>
                             <strong id="inventoryModalOnHand">0</strong>
                         </div>
                         <div class="inventory-modal-stat">
-                            <span>Weighted Avg Cost</span>
+                            <span>{{ t('inventory.modal_weighted_avg') }}</span>
                             <strong id="inventoryModalWeighted">n/a</strong>
                         </div>
                         <div class="inventory-modal-stat">
-                            <span>Estimated Value</span>
+                            <span>{{ t('inventory.modal_estimated_value') }}</span>
                             <strong id="inventoryModalEstimated">n/a</strong>
                         </div>
                         <div class="inventory-modal-stat">
-                            <span>Rate / hour</span>
+                            <span>{{ t('inventory.modal_rate_hour') }}</span>
                             <strong id="inventoryModalRate">n/a</strong>
                         </div>
                         <div class="inventory-modal-stat">
-                            <span>Burn down</span>
+                            <span>{{ t('inventory.modal_burn_down') }}</span>
                             <strong id="inventoryModalBurn">n/a</strong>
                         </div>
                     </div>
                     <div class="inventory-modal-actions">
                         <select id="inventoryModalValueMode" class="form-select eve-input inventory-value-mode">
-                            <option value="split" selected>Jita Split</option>
-                            <option value="sell">Jita Sell</option>
-                            <option value="buy">Jita Buy</option>
+                            <option value="split" selected>{{ t('inventory.jita_split') }}</option>
+                            <option value="sell">{{ t('inventory.jita_sell') }}</option>
+                            <option value="buy">{{ t('inventory.jita_buy') }}</option>
                         </select>
                     </div>
                 </div>
                 <div class="inventory-price-grid">
                     <div class="inventory-price-card">
-                        <div class="inventory-price-label">Jita Buy</div>
+                        <div class="inventory-price-label">{{ t('inventory.jita_buy') }}</div>
                         <div class="inventory-price-value" id="inventoryModalBuy">n/a</div>
                     </div>
                     <div class="inventory-price-card">
-                        <div class="inventory-price-label">Jita Sell</div>
+                        <div class="inventory-price-label">{{ t('inventory.jita_sell') }}</div>
                         <div class="inventory-price-value" id="inventoryModalSell">n/a</div>
                     </div>
                     <div class="inventory-price-card">
-                        <div class="inventory-price-label">Jita Split</div>
+                        <div class="inventory-price-label">{{ t('inventory.jita_split') }}</div>
                         <div class="inventory-price-value" id="inventoryModalSplit">n/a</div>
                     </div>
                 </div>
@@ -377,19 +377,19 @@
                     <table class="table table-dark table-hover align-middle inventory-modal-table">
                         <thead>
                             <tr>
-                                <th>Created UTC</th>
-                                <th>Type</th>
-                                <th>Label</th>
-                                <th class="text-end">Delta</th>
-                                <th class="text-end">Remaining</th>
-                                <th class="text-end">Unit Cost</th>
-                                <th class="text-end">Total Cost</th>
-                                <th>Note</th>
-                                <th class="text-end">Action</th>
+                                <th>{{ t('inventory.col_created_utc') }}</th>
+                                <th>{{ t('inventory.col_type') }}</th>
+                                <th>{{ t('inventory.col_label') }}</th>
+                                <th class="text-end">{{ t('inventory.col_delta') }}</th>
+                                <th class="text-end">{{ t('inventory.col_remaining') }}</th>
+                                <th class="text-end">{{ t('inventory.col_unit_cost') }}</th>
+                                <th class="text-end">{{ t('inventory.col_total_cost') }}</th>
+                                <th>{{ t('inventory.col_note') }}</th>
+                                <th class="text-end">{{ t('inventory.col_actions') }}</th>
                             </tr>
                         </thead>
                         <tbody id="inventoryModalTransactions">
-                            <tr><td colspan="9" class="text-center text-muted py-4">Select a current stock row to inspect transactions.</td></tr>
+                            <tr><td colspan="9" class="text-center text-muted py-4">{{ t('inventory.modal_select_row') }}</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -452,13 +452,13 @@
         const body = document.getElementById('inventoryModalTransactions');
         const rows = currentItemDetail.transactions || [];
         if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">No transactions found for this stock item.</td></tr>';
+            body.innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">{{ t('inventory.modal_no_transactions') }}</td></tr>`;
             return;
         }
         body.innerHTML = rows.map((entry) => `
             <tr>
                 <td>${entry.created_at || ''}</td>
-                <td>${entry.kind === 'batch' ? 'Batch' : 'Adjustment'}</td>
+                <td>${entry.kind === 'batch' ? {{ t('inventory.kind_batch') | tojson }} : {{ t('inventory.kind_adjustment') | tojson }}}</td>
                 <td>${entry.label || ''}</td>
                 <td class="text-end ${Number(entry.quantity_delta || 0) < 0 ? 'text-danger' : 'text-success'}">${Number(entry.quantity_delta || 0).toLocaleString(undefined, { signDisplay: 'always' })}</td>
                 <td class="text-end">${entry.quantity_remaining === null || entry.quantity_remaining === undefined ? '<span class="text-muted">n/a</span>' : Number(entry.quantity_remaining).toLocaleString()}</td>
@@ -471,7 +471,7 @@
                         class="btn btn-sm eve-btn-ghost inventory-transaction-remove-btn"
                         data-transaction-kind="${entry.kind}"
                         data-transaction-id="${entry.id}"
-                    >Remove</button>
+                    >{{ t('inventory.btn_remove') }}</button>
                 </td>
             </tr>
         `).join('');

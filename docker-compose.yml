@@ -80,7 +80,7 @@ services:
     build: .
     restart: unless-stopped
     entrypoint: ["/app/docker/celery_entrypoint.sh"]
-    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "--concurrency=4", "-Q", "celery,esi,billing"]
+    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "--concurrency=4", "-Q", "celery,esi,billing,ws"]
     depends_on:
       sde_init:
         condition: service_completed_successfully

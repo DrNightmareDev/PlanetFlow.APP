@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import secrets
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
@@ -207,10 +208,45 @@ def match_wallet_transaction(
         return False, "Transaction amount is zero or negative."
 
     # ── Individual: player donation ───────────────────────────────────────────
-    if tx.ref_type == "player_donation" and tx.sender_character_id:
-        char = db.query(Character).filter(
-            Character.eve_character_id == tx.sender_character_id
-        ).first()
+    if tx.ref_type == "player_donation":
+        receiver = db.get(BillingWalletReceiver, tx.receiver_id)
+
+        def _char_from_name(name: str | None) -> Character | None:
+            if not name:
+                return None
+            return db.query(Character).filter(
+                Character.character_name.ilike(str(name).strip())
+            ).order_by(Character.last_login.desc().nullslast()).first()
+
+        def _extract_name_from_description(description: str | None) -> str | None:
+            text = (description or "").strip()
+            if not text:
+                return None
+            patterns = [
+                r"^(.+?)\s+deposited cash into\s+.+?account",
+                r"^(.+?)\s+deposited cash into\s+your account",
+            ]
+            for pattern in patterns:
+                m = re.search(pattern, text, flags=re.IGNORECASE)
+                if m:
+                    return (m.group(1) or "").strip() or None
+            return None
+
+        char = None
+        if tx.sender_character_id:
+            char = db.query(Character).filter(
+                Character.eve_character_id == tx.sender_character_id
+            ).first()
+            if receiver and char and int(char.eve_character_id) == int(receiver.eve_character_id):
+                # Receiver side was parsed as sender — fall back to name-based matching.
+                char = None
+
+        if char is None:
+            char = _char_from_name(tx.sender_character_name)
+        if char is None:
+            parsed_name = _extract_name_from_description(tx.description)
+            char = _char_from_name(parsed_name)
+
         if char:
             account = db.query(Account).filter(Account.id == char.account_id).first()
             if account:
@@ -237,7 +273,7 @@ def match_wallet_transaction(
                         plan_id=plan.id,
                         days_granted=days,
                         match_status="matched",
-                        notes=f"Player donation from char {tx.sender_character_id}",
+                        notes=f"Player donation from char {char.eve_character_id}",
                     ))
                     _invalidate_entitlement_cache(db, account_id=account.id)
                     return True, f"Matched to account {account.id} ({days} days)."

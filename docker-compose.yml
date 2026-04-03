@@ -155,8 +155,8 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./docker/nginx.conf.bootstrap:/etc/nginx/conf.d/bootstrap.conf:ro
+      - ./docker/nginx.conf:/etc/nginx/templates/https.conf.template:ro
+      - ./docker/nginx.conf.bootstrap:/etc/nginx/templates/http.conf.template:ro
       - ./docker/nginx-entrypoint.sh:/etc/nginx/nginx-entrypoint.sh:ro
       - ./app/static:/app/static:ro
       - certbot_www:/var/www/certbot:ro

@@ -564,17 +564,37 @@ def revoke_bonus_code(
 
     affected_accounts: set[int] = set()
 
+    redemptions = db.query(BillingBonusCodeRedemption).filter(
+        BillingBonusCodeRedemption.code_id == code.id
+    ).all()
+    redeemed_account_ids = {int(r.account_id) for r in redemptions}
+    code_note = f"Code {code.code}"
+
     grants = db.query(BillingGrant).filter(
-        BillingGrant.source_code_id == code.id,
         BillingGrant.revoked_at.is_(None),
+        (
+            (BillingGrant.source_code_id == code.id) |
+            (
+                BillingGrant.source_code_id.is_(None) &
+                (BillingGrant.note == code_note) &
+                (BillingGrant.account_id.in_(list(redeemed_account_ids) or [-1]))
+            )
+        ),
     ).all()
     for grant in grants:
         grant.revoked_at = now
         affected_accounts.add(grant.account_id)
 
     periods = db.query(BillingSubscriptionPeriod).filter(
-        BillingSubscriptionPeriod.source_code_id == code.id,
         BillingSubscriptionPeriod.ends_at > now,
+        (
+            (BillingSubscriptionPeriod.source_code_id == code.id) |
+            (
+                BillingSubscriptionPeriod.source_code_id.is_(None) &
+                (BillingSubscriptionPeriod.source_type == "bonus_code") &
+                (BillingSubscriptionPeriod.note == code_note)
+            )
+        ),
     ).all()
     for period in periods:
         period.ends_at = now
@@ -597,6 +617,7 @@ def revoke_bonus_code(
             "code": code.code,
             "revoked_grants": len(grants),
             "ended_periods": len(periods),
+            "redemption_rows": len(redemptions),
             "affected_accounts": sorted(affected_accounts),
         },
     )

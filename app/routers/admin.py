@@ -960,9 +960,14 @@ def admin_billing_code_toggle(
     db: Session = Depends(get_db),
 ):
     from app.models import BillingBonusCode
+    from app.services.billing import revoke_bonus_code
     code = db.get(BillingBonusCode, code_id)
     if code:
+        turning_off = bool(code.is_active)
         code.is_active = not code.is_active
+        if turning_off:
+            # Deactivation should also remove already granted benefits to avoid stale entitlements.
+            revoke_bonus_code(db, code=code, actor_account_id=account.id)
         db.commit()
     return RedirectResponse(url="/admin/billing", status_code=303)
 

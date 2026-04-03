@@ -239,11 +239,9 @@
                   <form method="post" action="/admin/billing/code/toggle/{{ c.id }}" class="d-inline">
                     <button class="btn btn-xs btn-outline-secondary py-0 px-1">Toggle</button>
                   </form>
-                  {% if c.is_active %}
                   <form method="post" action="/admin/billing/code/revoke/{{ c.id }}" class="d-inline ms-1">
                     <button class="btn btn-xs btn-outline-danger py-0 px-1">Revoke + remove benefits</button>
                   </form>
-                  {% endif %}
                 </td>
               </tr>
             {% else %}

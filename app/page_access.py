@@ -51,30 +51,13 @@ def ensure_page_access_settings(db: Session) -> None:
         db.rollback()
         return
     existing = {row.page_key for row in rows}
-    existing_rows = {row.page_key: row for row in rows}
     created = False
-    updated = False
     for page in PAGE_DEFINITIONS:
         if page.admin_only or page.key in existing:
             continue
         db.add(PageAccessSetting(page_key=page.key, access_level=page.default_access))
         created = True
-    # Backward-compat migration:
-    # legacy defaults without paid should be lifted to the new default (role + paid).
-    # This closes accidental free-access after permission model changes.
-    for page in PAGE_DEFINITIONS:
-        row = existing_rows.get(page.key)
-        if row is None or page.admin_only:
-            continue
-        default_tokens = {t.strip() for t in (page.default_access or "").split(",") if t.strip()}
-        if "paid" not in default_tokens:
-            continue
-        current = (row.access_level or "").strip()
-        legacy_role = next((t for t in ("member", "manager", "fc", "director") if t in default_tokens), None)
-        if legacy_role and current == legacy_role:
-            row.access_level = page.default_access
-            updated = True
-    if created or updated:
+    if created:
         db.commit()
 
 

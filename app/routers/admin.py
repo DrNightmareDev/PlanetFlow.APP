@@ -909,6 +909,23 @@ def admin_billing_receiver_toggle(
     return RedirectResponse(url="/admin/billing", status_code=303)
 
 
+@router.post("/billing/wallet/refresh", response_class=HTMLResponse)
+def admin_billing_wallet_refresh(
+    request: Request,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from app.tasks import sync_billing_wallets, match_billing_transactions
+
+    try:
+        sync_billing_wallets.apply_async()
+        # Run matcher shortly after sync to process newly imported rows.
+        match_billing_transactions.apply_async(countdown=5)
+        return RedirectResponse(url="/admin/billing?msg=wallet_update_queued", status_code=303)
+    except Exception:
+        return RedirectResponse(url="/admin/billing?msg=wallet_update_failed", status_code=303)
+
+
 @router.post("/billing/grant/create", response_class=HTMLResponse)
 def admin_billing_grant_create(
     request: Request,

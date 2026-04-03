@@ -5,7 +5,7 @@ from sqlalchemy import func
 
 from app.database import get_db
 from app.dependencies import require_admin, require_account, require_manager_or_admin
-from app.i18n import get_translation_rows, save_translation, SUPPORTED_LANGUAGES
+from app.i18n import get_translation_rows, save_translation, reseed_translations, SUPPORTED_LANGUAGES
 from app.models import Account, Character, AccessPolicy, AccessPolicyEntry, PageAccessSetting
 from app.page_access import get_access_settings_map, get_page_definitions
 from app.session import create_session, create_impersonate_session, read_session
@@ -125,6 +125,15 @@ async def update_translation(
     return JSONResponse({"ok": True})
 
 
+@router.post("/i18n/reseed")
+async def reseed_translations_endpoint(
+    account=Depends(require_admin),
+):
+    """Force-upsert all seed JSON translations into the DB (insert new + update changed)."""
+    result = reseed_translations()
+    return JSONResponse({"ok": True, **result})
+
+
 @router.post("/reset-char-errors/{character_id}")
 def reset_char_errors(
     character_id: int,
@@ -153,17 +162,16 @@ def toggle_admin(
     account=Depends(require_admin),
     db: Session = Depends(get_db)
 ):
+    if not account.is_owner:
+        raise HTTPException(status_code=403, detail="Nur der Owner kann Admin-Rechte vergeben oder entziehen")
+
     target = db.query(Account).filter(Account.id == target_account_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="Account nicht gefunden")
 
-    # Administrator kann nur von sich selbst entfernt werden
-    if target.is_owner and not account.is_owner:
-        raise HTTPException(status_code=403, detail="Manager-Rechte des Administrators koennen nur vom Administrator selbst geaendert werden")
-
-    # Nicht-Administratoren koennen sich selbst nicht entfernen
-    if target_account_id == account.id and not account.is_owner:
-        raise HTTPException(status_code=400, detail="Du kannst deine eigenen Manager-Rechte nicht entziehen")
+    # Owner-Status ist an EVE_OWNER_CHARACTER_ID gebunden – kein DB-Toggle möglich
+    if target.is_owner:
+        raise HTTPException(status_code=400, detail="Owner-Rechte können nicht über die UI geändert werden")
 
     target.is_admin = not target.is_admin
     db.commit()
@@ -298,8 +306,9 @@ def impersonate_exit(request: Request, db: Session = Depends(get_db)):
     real_owner_id = session.get("real_owner_id") if session else None
     if not real_owner_id:
         return RedirectResponse(url="/dashboard", status_code=302)
-    owner = db.query(Account).filter(Account.id == real_owner_id).first()
-    if not owner or not owner.is_owner:
+    from sqlalchemy.orm import joinedload
+    owner = db.query(Account).options(joinedload(Account.characters)).filter(Account.id == real_owner_id).first()
+    if not owner or not (owner.is_owner or owner.is_admin):
         return RedirectResponse(url="/dashboard", status_code=302)
     response = RedirectResponse(url="/admin", status_code=302)
     create_session(response, account_id=real_owner_id)

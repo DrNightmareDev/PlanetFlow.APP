@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     # Markt API
     janice_api_key: str = Field(default="", alias="JANICE_API_KEY")
 
+    # Owner-Identifikation via EVE Character ID (kein DB-Flag)
+    # Der Account dessen Main-Charakter diese EVE-ID hat ist automatisch Owner+Admin.
+    # Transfer: .env-Wert ändern und Container neu starten.
+    eve_owner_character_id: int = Field(default=0, alias="EVE_OWNER_CHARACTER_ID")
+
     # Sicherheit
     secret_key: str = Field(default="change-me-to-a-secure-random-key-32chars", alias="SECRET_KEY")
 

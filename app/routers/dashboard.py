@@ -549,6 +549,19 @@ def _normalize_dashboard_colony(colony: dict) -> dict:
     if "extractor_rate_summary" not in item:
         item["extractor_rate_summary"] = None
     item["missing_inputs"] = item.get("missing_inputs") or []
+    # Fields added later — provide defaults so templates never get KeyError/None
+    if "upgrade_level" not in item:
+        item["upgrade_level"] = 0
+    if "num_pins" not in item:
+        item["num_pins"] = 0
+    if "highest_tier" not in item:
+        item["highest_tier"] = None
+    if "highest_tier_num" not in item:
+        item["highest_tier_num"] = 0
+    if "vacation_mode" not in item:
+        item["vacation_mode"] = False
+    if "isk_day" not in item:
+        item["isk_day"] = 0.0
     return item
 
 

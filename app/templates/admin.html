@@ -7,13 +7,7 @@
     <h2 class="eve-page-title mb-0">
         <i class="bi bi-shield-fill eve-gold me-2"></i>Admin Panel
     </h2>
-    {% if account.is_owner %}
-    <span class="badge" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;">
-        <i class="bi bi-star-fill me-1"></i>Owner
-    </span>
-    {% else %}
     <span class="badge eve-badge-admin-lg">Admin</span>
-    {% endif %}
 </div>
 
 <!-- Statistiken -->
@@ -195,14 +189,9 @@
                          class="eve-portrait-md rounded"
                          loading="lazy"
                          onerror="this.src='/static/img/default_char.svg'">
-                    {% if acc.is_owner and account.is_owner %}
+                    {% if acc.is_admin %}
                     <span class="eve-admin-indicator position-absolute top-0 start-0"
-                          title="Administrator" style="background:#f4a300;">
-                        <i class="bi bi-star-fill" style="font-size: 0.65rem;"></i>
-                    </span>
-                    {% elif acc.is_admin %}
-                    <span class="eve-admin-indicator position-absolute top-0 start-0"
-                          title="Manager">
+                          title="Admin">
                         <i class="bi bi-shield-fill" style="font-size: 0.65rem;"></i>
                     </span>
                     {% endif %}
@@ -219,11 +208,6 @@
                         <span class="fw-semibold">
                             {{ main.character_name if main else 'Account #' ~ acc.id }}
                         </span>
-                        {% if acc.is_owner and account.is_owner %}
-                        <span class="badge" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;">
-                            <i class="bi bi-star-fill me-1"></i>Administrator
-                        </span>
-                        {% endif %}
                         {% if acc.is_admin %}
                         <span class="badge eve-badge-admin">
                             <i class="bi bi-shield-fill me-1"></i>Admin
@@ -265,14 +249,21 @@
 
                 <!-- Aktionen -->
                 <div class="d-flex gap-2 flex-wrap">
-                    {% if acc.id != account.id or account.is_owner %}
-                    {% if not acc.is_owner or account.is_owner %}
+                    {% if acc.id == account.id %}
+                    <span class="btn btn-sm eve-btn-outline disabled">
+                        <i class="bi bi-lock me-1"></i>Eigener Account
+                    </span>
+                    {% else %}
+                    {# Toggle-Admin: nur Owner darf vergeben/entziehen; Owner selbst kann nicht revoked werden #}
+                    {% if account.is_owner and not acc.is_owner %}
                     <a href="/admin/toggle-admin/{{ acc.id }}"
                        class="btn btn-sm eve-btn-gold"
                        onclick="return confirm('Admin-Status von {{ main.character_name if main else 'Account #' ~ acc.id }} ändern?')">
                         <i class="bi bi-shield me-1"></i>
                         {{ 'Admin entfernen' if acc.is_admin else 'Admin machen' }}
                     </a>
+                    {% endif %}
+                    {# Director-Verwaltung: für alle Admins #}
                     {% if acc.is_director %}
                     <a href="/admin/remove-director/{{ acc.id }}"
                        class="btn btn-sm"
@@ -287,8 +278,8 @@
                         <i class="bi bi-building-add me-1"></i>Director machen
                     </button>
                     {% endif %}
-                    {% endif %}
-                    {% if acc.id != account.id and account.is_owner %}
+                    {# Impersonate: nur Owner #}
+                    {% if account.is_owner %}
                     <a href="/admin/impersonate/{{ acc.id }}"
                        class="btn btn-sm"
                        style="background:#7c2d1220;color:#f97316;border:1px solid #f9731640;"
@@ -297,17 +288,14 @@
                         <i class="bi bi-person-fill-exclamation me-1"></i>Ansehen
                     </a>
                     {% endif %}
-                    {% if acc.id != account.id and not acc.is_owner %}
+                    {# Löschen: nur für nicht-Owner, nur Owner darf löschen #}
+                    {% if account.is_owner and not acc.is_owner %}
                     <a href="/admin/delete-account/{{ acc.id }}"
                        class="btn btn-sm eve-btn-danger"
                        onclick="return confirm('Account #{{ acc.id }} und alle zugehörigen Charaktere wirklich löschen?')">
                         <i class="bi bi-trash3"></i>
                     </a>
                     {% endif %}
-                    {% else %}
-                    <span class="btn btn-sm eve-btn-outline disabled">
-                        <i class="bi bi-lock me-1"></i>Eigener Account
-                    </span>
                     {% endif %}
                 </div>
             </div>
@@ -630,6 +618,9 @@
                 </option>
                 {% endfor %}
             </select>
+            <button type="button" class="btn btn-sm eve-btn-ghost" id="i18nReseedBtn" title="Alle Seed-Übersetzungen in DB schreiben (insert + update)">
+                <i class="bi bi-arrow-clockwise me-1"></i>Reseed
+            </button>
         </div>
     </div>
     <div class="card-body p-3">
@@ -963,6 +954,25 @@ async function saveTranslationRow(idx) {
 document.getElementById('i18nSearch')?.addEventListener('input', renderTranslationRows);
 document.getElementById('i18nLangSelect')?.addEventListener('change', renderTranslationRows);
 document.getElementById('i18nScopeFilter')?.addEventListener('change', renderTranslationRows);
+document.getElementById('i18nReseedBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('i18nReseedBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Reseeding…';
+    try {
+        const res = await fetch('/admin/i18n/reseed', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            showToast(`Reseed: ${data.inserted} eingefügt, ${data.updated} aktualisiert`, 'success');
+        } else {
+            showToast('Reseed fehlgeschlagen', 'error');
+        }
+    } catch (e) {
+        showToast('Fehler beim Reseed', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Reseed';
+    }
+});
 document.querySelectorAll('.manager-subnav-btn').forEach(btn => {
     btn.addEventListener('click', () => switchManagerSection(btn.dataset.target));
 });

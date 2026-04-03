@@ -56,6 +56,8 @@ def _refresh_character_data(char, db) -> dict | None:
         _compute_factories, _compute_storage,
         _compute_missing_inputs, _get_extractor_status, _check_factory_stall,
     )
+    from app.sde import get_system_local
+    from app.pi_data import PLANET_TYPE_COLORS
 
     token = ensure_valid_token(char, db)
     if not token:
@@ -153,23 +155,41 @@ def _refresh_character_data(char, db) -> dict | None:
         planet_id = colony.get("planet_id")
         planet_type = colony.get("planet_type", "unknown").capitalize()
         planet_name = info.get("name") or f"Planet {planet_id}"
-        solar_system_name = info.get("solar_system_name") or ""
+        solar_system_id = info.get("system_id") or colony.get("solar_system_id")
+        highest_tier_num = int(highest_tier[1]) if highest_tier else 0
+
+        _sys_data = get_system_local(solar_system_id) if solar_system_id else {}
+        solar_system_name = (_sys_data or {}).get("name") or ""
+        region_name = (_sys_data or {}).get("region_name") or ""
 
         colonies.append({
             "character_name": char.character_name,
             "eve_character_id": char.eve_character_id,
             "character_portrait": char.portrait_url,
+            "corporation_id": char.corporation_id,
+            "corporation_name": char.corporation_name or "",
+            "alliance_name": char.alliance_name or "",
             "planet_id": planet_id,
             "planet_name": planet_name,
             "planet_type": planet_type,
+            "upgrade_level": colony.get("upgrade_level", 0),
+            "num_pins": colony.get("num_pins", len(pins)),
+            "last_update": colony.get("last_update", "—"),
+            "solar_system_id": solar_system_id,
             "solar_system_name": solar_system_name,
+            "region_name": region_name,
+            "color": PLANET_TYPE_COLORS.get(planet_type, "#586e75"),
             "productions": productions,
             "prod_tiers": prod_tiers,
+            "highest_tier": highest_tier,
+            "highest_tier_num": highest_tier_num,
+            "isk_day": 0.0,  # no price data in background task; dashboard router enriches if needed
             "expiry_hours": expiry_hours,
             "expiry_time": expiry_time.isoformat() if expiry_time else None,
             "expiry_iso": expiry_time.isoformat() if expiry_time else None,
             "is_stalled": is_stalled,
             "is_active": is_active,
+            "vacation_mode": False,
             "pins": pins,
             "extractor_status": _get_extractor_status(pins),
             "extractor_balance": _compute_extractor_balance(pins),

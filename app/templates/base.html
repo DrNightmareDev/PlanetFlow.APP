@@ -196,12 +196,6 @@
                         <i class="bi bi-shield-fill me-1"></i>{{ t('nav.admin') }}
                     </a>
                 </li>
-                {% elif account and account.is_owner %}
-                <li class="nav-item">
-                    <a class="nav-link" href="/auth/become-admin" style="color:#f4a300;">
-                        <i class="bi bi-star-fill me-1"></i>{{ t('nav.become_admin') }}
-                    </a>
-                </li>
                 {% endif %}
             </ul>
 
@@ -282,13 +276,6 @@
                             <i class="bi bi-person-plus me-2"></i>{{ t('common.add_alt') }}
                         </a>
                     </li>
-                    {% if account.is_owner and not account.is_admin %}
-                    <li>
-                        <a class="dropdown-item" href="/auth/become-admin" style="color:#f4a300;">
-                            <i class="bi bi-star-fill me-2"></i>{{ t('nav.become_admin') }}
-                        </a>
-                    </li>
-                    {% endif %}
                     <li>
                         <a class="dropdown-item text-danger" href="/auth/logout">
                             <i class="bi bi-box-arrow-right me-2"></i>{{ t('common.logout') }}

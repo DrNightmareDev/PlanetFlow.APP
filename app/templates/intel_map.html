@@ -57,7 +57,7 @@
                 <div class="intel-action-row">
                     <button type="button" class="btn btn-sm eve-btn-ghost" id="intelJumpCharacter">Jump</button>
                     <button type="button" class="btn btn-sm eve-btn-ghost" id="intelFollowCharacter">Follow off</button>
-                    {% if account.is_owner %}
+                    {% if account.is_admin or account.is_owner %}
                     <button type="button" class="btn btn-sm eve-btn-gold" id="intelForceRefresh">Force update</button>
                     {% endif %}
                 </div>
@@ -168,7 +168,7 @@ const INTEL_BOOTSTRAP = {
     wsStatus: {{ initial_ws_status | tojson }},
     wsLastSuccessAgo: {{ initial_ws_last_success_ago | tojson }},
     wsLastKillAgo: {{ initial_ws_last_kill_ago | tojson }},
-    canForceRefresh: {{ account.is_owner | tojson }},
+    canForceRefresh: {{ (account.is_admin or account.is_owner) | tojson }},
     trackedCharacterId: {{ selected_character_id | tojson }},
     followCharacter: {{ selected_follow | tojson }},
 };

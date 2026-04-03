@@ -179,7 +179,8 @@ def callback(
         # Zugangspolitik auch fÃƒÂ¼r bestehende Charaktere prÃƒÂ¼fen (corp/allianz kann sich geÃƒÂ¤ndert haben)
         # Ausnahmen: Owner immer erlaubt, add_character-Flow (bereits eingeloggt)
         if flow == "login":
-            acc = db.get(Account, existing_char.account_id)
+            from sqlalchemy.orm import joinedload as _jl
+            acc = db.query(Account).options(_jl(Account.characters)).filter(Account.id == existing_char.account_id).first()
             if not (acc and acc.is_owner) and not _check_access_policy(db, corporation_id, alliance_id):
                 return RedirectResponse(url="/?error=access_denied", status_code=302)
 
@@ -209,7 +210,7 @@ def callback(
         if not is_first and not _check_access_policy(db, corporation_id, alliance_id):
             return RedirectResponse(url="/?error=access_denied", status_code=302)
 
-        new_account = Account(is_admin=is_first, is_owner=is_first)
+        new_account = Account(is_admin=is_first)
         db.add(new_account)
         db.flush()
 
@@ -278,18 +279,6 @@ def callback(
 
     return response
 
-
-@router.get("/become-admin")
-def become_admin(
-    account=Depends(require_account),
-    db: Session = Depends(get_db)
-):
-    """Nur fuer den Owner: stellt Admin-Rechte wieder her."""
-    if not account.is_owner:
-        raise HTTPException(status_code=403, detail="Nur der Owner kann diesen Endpunkt nutzen")
-    account.is_admin = True
-    db.commit()
-    return RedirectResponse(url="/dashboard", status_code=302)
 
 
 @router.get("/logout")

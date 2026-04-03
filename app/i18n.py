@@ -46,15 +46,14 @@ def load_translations() -> dict[str, dict[str, str]]:
     try:
         from app.models import TranslationEntry
 
-        catalogs: dict[str, dict[str, str]] = {lang: {} for lang in SUPPORTED_LANGUAGES}
+        # Start with seed files so new keys always have a value even if
+        # bootstrap_translations() hasn't run yet for that locale.
+        catalogs: dict[str, dict[str, str]] = {lang: dict(seeds.get(lang, {})) for lang in SUPPORTED_LANGUAGES}
         with SessionLocal() as db:
             rows = db.query(TranslationEntry).all()
-        if not rows:
-            _translations_cache = seeds
-            return seeds
         for row in rows:
-            if row.locale in catalogs:
-                catalogs[row.locale][row.key] = row.text or ""
+            if row.locale in catalogs and row.text:
+                catalogs[row.locale][row.key] = row.text
         _translations_cache = catalogs
         return catalogs
     except Exception as exc:
@@ -205,6 +204,43 @@ def bootstrap_translations() -> int:
     if inserted:
         clear_translation_cache()
     return inserted
+
+
+def reseed_translations() -> dict[str, int]:
+    """Upsert all seed-file translations into the DB (insert new, update changed).
+
+    Unlike bootstrap_translations() this also updates existing rows so that
+    changes in the JSON files (e.g. after a rename or new locale) propagate to
+    the DB without requiring a manual SQL fix.
+    Returns a dict with 'inserted' and 'updated' counts.
+    """
+    if not _translation_table_exists():
+        return {"inserted": 0, "updated": 0}
+
+    from app.models import TranslationEntry
+
+    seeds = _load_seed_translations()
+    inserted = 0
+    updated = 0
+    with SessionLocal() as db:
+        for locale, catalog in seeds.items():
+            existing: dict[str, TranslationEntry] = {
+                row.key: row
+                for row in db.query(TranslationEntry).filter(TranslationEntry.locale == locale).all()
+            }
+            for key, text in catalog.items():
+                row = existing.get(key)
+                if row is None:
+                    db.add(TranslationEntry(locale=locale, key=key, text=text))
+                    inserted += 1
+                elif row.text != text:
+                    row.text = text
+                    updated += 1
+        if inserted or updated:
+            db.commit()
+    if inserted or updated:
+        clear_translation_cache()
+    return {"inserted": inserted, "updated": updated}
 
 
 def bootstrap_pi_type_translations() -> int:

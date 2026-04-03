@@ -13,8 +13,16 @@ class Account(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     is_admin = Column(Boolean, default=False, nullable=False)
-    is_owner = Column(Boolean, default=False, nullable=False)
     is_director = Column(Boolean, default=False, nullable=False, server_default="false")
+
+    @property
+    def is_owner(self) -> bool:
+        """True wenn einer der Charaktere dieses Accounts die EVE_OWNER_CHARACTER_ID hat."""
+        from app.config import get_settings
+        owner_id = get_settings().eve_owner_character_id
+        if not owner_id:
+            return False
+        return any(c.eve_character_id == owner_id for c in self.characters)
     director_corp_id = Column(BigInteger, nullable=True)
     director_corp_name = Column(String(255), nullable=True)
     main_character_id = Column(Integer, ForeignKey("characters.id", use_alter=True, name="fk_account_main_char"), nullable=True)

@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from app.config import get_settings
 from app.database import engine, SessionLocal
-from app.i18n import bootstrap_pi_type_translations, bootstrap_static_planets, bootstrap_static_stargates, bootstrap_translations
+from app.i18n import bootstrap_pi_type_translations, bootstrap_static_planets, bootstrap_static_stargates, bootstrap_translations, reseed_translations
 from app.models import SSOState
 from app.page_access import get_access_settings_map, get_page_visibility, is_public_path, match_page_for_path
 from app.routers import auth, dashboard, admin, director, pi, market, system, planner, skyhook, colony_plan, pi_templates, hauling, killboard, intel, inventory, billing
@@ -84,6 +84,9 @@ async def lifespan(app: FastAPI):
     logger.info("PlanetFlow startet...")
     from app import sde
     sde.init()
+    reseed_result = reseed_translations()
+    if reseed_result["inserted"] or reseed_result["updated"]:
+        logger.info("I18N: %s eingefuegt, %s aktualisiert (reseed).", reseed_result["inserted"], reseed_result["updated"])
     inserted_translations = bootstrap_translations()
     if inserted_translations:
         logger.info("I18N: %s Uebersetzungen in DB gebootstrapped.", inserted_translations)
@@ -223,7 +226,8 @@ def index(request: Request):
             account = db.query(Account).filter(Account.id == session.get("account_id")).first()
             if account:
                 return RedirectResponse(url="/dashboard", status_code=302)
-        has_owner = db.query(Account).filter(Account.is_owner == True).first() is not None
+        from app.config import get_settings as _gs
+        has_owner = bool(_gs().eve_owner_character_id)
     finally:
         db.close()
     return templates.TemplateResponse("index.html", {"request": request, "error": error, "has_owner": has_owner})

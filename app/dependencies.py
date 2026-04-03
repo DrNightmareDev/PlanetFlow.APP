@@ -1,5 +1,5 @@
 from fastapi import Depends, HTTPException, Request
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models import Account
@@ -13,7 +13,13 @@ def get_current_account(request: Request, db: Session = Depends(get_db)) -> Acco
     account_id = session.get("account_id")
     if not account_id:
         return None
-    account = db.query(Account).filter(Account.id == account_id).first()
+    # Eager-load characters so that Account.is_owner (property) can check them
+    account = (
+        db.query(Account)
+        .options(joinedload(Account.characters))
+        .filter(Account.id == account_id)
+        .first()
+    )
     return account
 
 
@@ -41,9 +47,10 @@ require_manager_or_admin = require_admin
 
 
 def require_owner(request: Request, db: Session = Depends(get_db)) -> Account:
+    """Requires the account to be the configured owner (EVE_OWNER_CHARACTER_ID)."""
     account = require_account(request, db)
     if not account.is_owner:
-        raise HTTPException(status_code=403, detail="Zugriff verweigert - Owner-Rechte erforderlich")
+        raise HTTPException(status_code=403, detail="Zugriff verweigert - Owner erforderlich")
     return account
 
 

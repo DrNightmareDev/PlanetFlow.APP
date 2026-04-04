@@ -239,6 +239,53 @@ def reset_char_errors(
     return JSONResponse({"ok": True, "character_name": char.character_name})
 
 
+@router.post("/reset-account-errors/{account_id}")
+def reset_account_errors(
+    account_id: int,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Reset esi_consecutive_errors for all characters in an account."""
+    import logging as _logging
+    _logger = _logging.getLogger(__name__)
+    chars = db.query(Character).filter(Character.account_id == account_id).all()
+    reset_count = 0
+    for char in chars:
+        if (char.esi_consecutive_errors or 0) > 0 or char.colony_sync_issue:
+            _logger.info(
+                "admin: %s reset ESI errors for char %s (%d errors → 0) via account reset",
+                account.id, char.character_name, char.esi_consecutive_errors or 0,
+            )
+            char.esi_consecutive_errors = 0
+            char.colony_sync_issue = False
+            reset_count += 1
+    db.commit()
+    return JSONResponse({"ok": True, "reset_count": reset_count})
+
+
+@router.post("/reset-all-errors")
+def reset_all_errors(
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Reset esi_consecutive_errors for every character site-wide."""
+    import logging as _logging
+    _logger = _logging.getLogger(__name__)
+    chars = db.query(Character).filter(
+        (Character.esi_consecutive_errors > 0) | (Character.colony_sync_issue == True)
+    ).all()
+    reset_count = len(chars)
+    for char in chars:
+        _logger.info(
+            "admin: %s reset ESI errors for char %s (%d errors → 0) via reset-all",
+            account.id, char.character_name, char.esi_consecutive_errors or 0,
+        )
+        char.esi_consecutive_errors = 0
+        char.colony_sync_issue = False
+    db.commit()
+    return JSONResponse({"ok": True, "reset_count": reset_count})
+
+
 @router.post("/toggle-admin/{target_account_id}")
 def toggle_admin(
     target_account_id: int,

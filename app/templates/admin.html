@@ -185,6 +185,12 @@
                     title="{{ t('admin.reload_all_title', default='Reload all accounts') }}">
                 <i class="bi bi-arrow-repeat me-1"></i>{{ t('admin.reload_all', default='Reload all') }}
             </button>
+            <!-- Reset all ESI errors site-wide -->
+            <button class="btn btn-sm eve-btn-outline" id="resetAllErrorsBtn"
+                    onclick="adminResetAllErrors(this)"
+                    title="Alle ESI-Fehler aller Charaktere zurücksetzen">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>Alle Fehler zurücksetzen
+            </button>
             <!-- Suche nach Charaktername -->
             <div class="input-group input-group-sm" style="width:220px;">
                 <span class="input-group-text eve-input-prefix"><i class="bi bi-search"></i></span>
@@ -302,6 +308,15 @@
                             onclick="adminTriggerRefresh({{ acc.id }}, this)">
                         <i class="bi bi-arrow-clockwise"></i>
                     </button>
+                    {# Reset ESI errors for all chars in this account #}
+                    {% if chars | selectattr('esi_consecutive_errors', 'ge', 1) | list %}
+                    <button type="button"
+                            class="btn btn-sm eve-btn-ghost"
+                            title="ESI-Fehler aller Charaktere dieses Accounts zurücksetzen"
+                            onclick="adminResetAccountErrors({{ acc.id }}, this)">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Fehler reset
+                    </button>
+                    {% endif %}
                     {% if acc.id == account.id %}
                     <span class="btn btn-sm eve-btn-outline disabled">
                         <i class="bi bi-lock me-1"></i>Eigener Account
@@ -1277,6 +1292,50 @@ async function adminResetCharErrors(charId, charName, btn) {
             showToast(`ESI-Fehler für ${charName} zurückgesetzt`, 'success');
             btn.closest('tr').querySelector('.badge.bg-danger')?.remove();
             btn.remove();
+        } else {
+            showToast('Fehler beim Zurücksetzen', 'error');
+            btn.disabled = false;
+        }
+    } catch(e) {
+        showToast('Netzwerkfehler', 'error');
+        btn.disabled = false;
+    }
+}
+
+async function adminResetAccountErrors(accountId, btn) {
+    btn.disabled = true;
+    try {
+        const resp = await fetch(`/admin/reset-account-errors/${accountId}`, { method: 'POST' });
+        const data = await resp.json();
+        if (data.ok) {
+            showToast(`${data.reset_count} ESI-Fehler zurückgesetzt`, 'success');
+            // Remove error badges and per-char reset buttons in this account block
+            const entry = btn.closest('.acc-entry');
+            entry?.querySelectorAll('.badge.bg-danger, .badge[style*="f4a300"]').forEach(b => b.remove());
+            entry?.querySelectorAll('button[onclick*="adminResetCharErrors"]').forEach(b => b.remove());
+            btn.remove();
+        } else {
+            showToast('Fehler beim Zurücksetzen', 'error');
+            btn.disabled = false;
+        }
+    } catch(e) {
+        showToast('Netzwerkfehler', 'error');
+        btn.disabled = false;
+    }
+}
+
+async function adminResetAllErrors(btn) {
+    if (!confirm('ESI-Fehler aller Charaktere auf der gesamten Instanz zurücksetzen?')) return;
+    btn.disabled = true;
+    try {
+        const resp = await fetch('/admin/reset-all-errors', { method: 'POST' });
+        const data = await resp.json();
+        if (data.ok) {
+            showToast(`${data.reset_count} ESI-Fehler zurückgesetzt`, 'success');
+            // Remove all error badges and per-char/per-account reset buttons
+            document.querySelectorAll('.badge.bg-danger, .badge[style*="f4a300"]').forEach(b => b.remove());
+            document.querySelectorAll('button[onclick*="adminResetCharErrors"], button[onclick*="adminResetAccountErrors"]').forEach(b => b.remove());
+            btn.disabled = false;
         } else {
             showToast('Fehler beim Zurücksetzen', 'error');
             btn.disabled = false;

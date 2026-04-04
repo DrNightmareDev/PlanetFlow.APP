@@ -446,12 +446,17 @@
                                             <i class="bi bi-shield-exclamation me-1"></i>Scope fehlt
                                         </span>
                                         {% elif char.esi_consecutive_errors >= 3 %}
-                                        <span class="badge bg-danger" title="{{ char.esi_consecutive_errors }}× ESI-Fehler — blockiert bis Reset">
+                                        <span class="badge bg-danger"
+                                              title="{{ char.esi_consecutive_errors }}× ESI-Fehler — blockiert bis Reset{% if char.colony_sync_issue_note %}&#10;Grund: {{ char.colony_sync_issue_note }}{% endif %}"
+                                              data-bs-toggle="tooltip" data-bs-placement="top"
+                                              data-bs-title="{{ char.esi_consecutive_errors }}× ESI-Fehler — blockiert bis Reset{% if char.colony_sync_issue_note %}&#10;Grund: {{ char.colony_sync_issue_note }}{% endif %}">
                                             <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ char.esi_consecutive_errors }}× Fehler
                                         </span>
                                         {% elif char.esi_consecutive_errors >= 1 %}
                                         <span class="badge" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;"
-                                              title="{{ char.esi_consecutive_errors }}× ESI-Fehler">
+                                              title="{{ char.esi_consecutive_errors }}× ESI-Fehler{% if char.colony_sync_issue_note %}&#10;Grund: {{ char.colony_sync_issue_note }}{% endif %}"
+                                              data-bs-toggle="tooltip" data-bs-placement="top"
+                                              data-bs-title="{{ char.esi_consecutive_errors }}× ESI-Fehler{% if char.colony_sync_issue_note %}&#10;Grund: {{ char.colony_sync_issue_note }}{% endif %}">
                                             <i class="bi bi-exclamation me-1"></i>{{ char.esi_consecutive_errors }}× Fehler
                                         </span>
                                         {% else %}
@@ -1440,5 +1445,12 @@ function filterCorps(q) {
         if (opt) { opt.style.background = '#1a1a0a'; opt.style.borderColor = '#f4a30060'; }
     }
 }
+
+// Bootstrap tooltip init for sync error badges
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+        new bootstrap.Tooltip(el, { html: false });
+    });
+});
 </script>
 {% endblock %}

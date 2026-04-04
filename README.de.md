@@ -4,6 +4,8 @@
 
 `PlanetFlow` ist eine selbst gehostete EVE-Online-PI-Plattform, die das klassische Dashboard um Billing, seitenbasierte Zugriffskontrolle und ein produktionsnahes Docker-Deployment mit TLS erweitert.
 
+> **[planetflow.app](https://planetflow.app)** — gehostete Version ausprobieren oder direkt mit dem Self-Hosting loslegen.
+
 Wenn dir das Projekt hilft, freue ich mich über Ingame-ISK an `DrNightmare`.
 
 ## Funktionsumfang

@@ -4,6 +4,8 @@
 
 `PlanetFlow` 是一个面向 EVE Online 的自托管 PI 平台，在传统仪表盘基础上增加了计费、页面访问控制以及带 TLS 的生产级 Docker 部署方案。
 
+> **[planetflow.app](https://planetflow.app)** — 体验托管版本，或直接开始自托管部署。
+
 如果这个项目对你有帮助，欢迎向 `DrNightmare` 发送游戏内 ISK 赞助。
 
 ## 功能概览

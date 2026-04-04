@@ -4,6 +4,8 @@
 
 Self-hosted Planetary Industry platform for EVE Online with page-based access control, billing, planning tools, background refresh workers, and production-ready Docker deployment.
 
+> **[planetflow.app](https://planetflow.app)** — try the hosted version or get started with self-hosting.
+
 If the project is useful to you, in-game ISK donations to `DrNightmare` are welcome.
 
 ## Highlights

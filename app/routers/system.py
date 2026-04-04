@@ -202,8 +202,9 @@ def _serialize_character_fittings(character, db: Session) -> dict:
     scopes = _scope_set(character.scopes)
     if FITTINGS_SCOPE not in scopes:
         data["status"] = "missing_scope"
-        data["warning"] = "Fittings konnten nicht gelesen werden. Der Scope 'esi-fittings.read_fittings.v1' fehlt."
+        data["has_fitting_scope"] = False
         return data
+    data["has_fitting_scope"] = True
 
     access_token = ensure_valid_token(character, db)
     if not access_token:

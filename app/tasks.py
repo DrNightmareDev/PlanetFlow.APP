@@ -273,13 +273,16 @@ def refresh_account_task(self, account_id: int) -> dict:
                 cols = _refresh_character_data(char, db)
                 if cols is None:
                     char.esi_consecutive_errors += 1
+                    char.esi_last_error = "Kein gültiger Token oder ESI nicht erreichbar"
                     char_errors += 1
                 else:
                     all_colonies.extend(cols)
                     char.esi_consecutive_errors = 0
+                    char.esi_last_error = None
                     char.last_esi_refresh_at = datetime.now(timezone.utc)
             except Exception as exc:
                 char.esi_consecutive_errors += 1
+                char.esi_last_error = str(exc)[:512]
                 char_errors += 1
                 logger.warning("tasks: char %s failed: %s", char.character_name, exc)
 

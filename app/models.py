@@ -68,6 +68,7 @@ class Character(Base):
     last_colony_sync_at = Column(DateTime(timezone=True), nullable=True)
     last_esi_refresh_at = Column(DateTime(timezone=True), nullable=True)
     esi_consecutive_errors = Column(Integer, nullable=False, default=0, server_default="0")
+    esi_last_error = Column(String(512), nullable=True)
     vacation_mode = Column(Boolean, nullable=False, default=False, server_default="false")
     corp_roles = Column(Text, nullable=True)  # JSON list of ESI corp role strings, cached from last refresh
 

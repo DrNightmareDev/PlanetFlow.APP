@@ -954,13 +954,20 @@ def _update_character_colony_sync_status(
             if count == 0 and previous_count > 0:
                 char.colony_sync_issue = True
                 char.colony_sync_issue_note = "previous_colonies_missing"
+                char.esi_last_error = "Sync OK aber 0 Kolonien zurückgegeben (vorher: %d)" % previous_count
             else:
                 char.last_known_colony_count = count
                 char.colony_sync_issue = False
                 char.colony_sync_issue_note = None
+                char.esi_last_error = None
         elif previous_count > 0 and status in {"error", "token_missing"}:
             char.colony_sync_issue = True
             char.colony_sync_issue_note = "fetch_failed" if status == "error" else "token_missing"
+            if status == "token_missing":
+                char.esi_last_error = "Kein gültiger Token — Charakter muss sich neu einloggen"
+            else:
+                error_detail = result.get("error_detail")
+                char.esi_last_error = ("ESI-Fehler: " + error_detail) if error_detail else "ESI-Abruf fehlgeschlagen"
 
         char.last_colony_sync_at = now_utc
         dirty = True

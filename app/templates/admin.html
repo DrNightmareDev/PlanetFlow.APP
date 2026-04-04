@@ -461,19 +461,31 @@
                                             <i class="bi bi-shield-exclamation me-1"></i>Scope fehlt
                                         </span>
                                         {% elif char.esi_consecutive_errors >= 3 %}
-                                        <span class="badge bg-danger"
-                                              title="{{ char.esi_consecutive_errors }}× ESI-Fehler — blockiert bis Reset{% if char.colony_sync_issue_note %}&#10;Grund: {{ char.colony_sync_issue_note }}{% endif %}"
-                                              data-bs-toggle="tooltip" data-bs-placement="top"
-                                              data-bs-title="{{ char.esi_consecutive_errors }}× ESI-Fehler — blockiert bis Reset{% if char.colony_sync_issue_note %}&#10;Grund: {{ char.colony_sync_issue_note }}{% endif %}">
-                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ char.esi_consecutive_errors }}× Fehler
+                                        <span class="badge bg-danger">
+                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ char.esi_consecutive_errors }}× Fehler — blockiert
                                         </span>
+                                        {% if char.esi_last_error %}
+                                        <div class="text-danger small mt-1" style="font-size:.72rem;max-width:220px;word-break:break-word;">
+                                            <i class="bi bi-bug me-1"></i>{{ char.esi_last_error }}
+                                        </div>
+                                        {% elif char.colony_sync_issue_note %}
+                                        <div class="text-danger small mt-1" style="font-size:.72rem;">
+                                            <i class="bi bi-info-circle me-1"></i>{{ char.colony_sync_issue_note }}
+                                        </div>
+                                        {% endif %}
                                         {% elif char.esi_consecutive_errors >= 1 %}
-                                        <span class="badge" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;"
-                                              title="{{ char.esi_consecutive_errors }}× ESI-Fehler{% if char.colony_sync_issue_note %}&#10;Grund: {{ char.colony_sync_issue_note }}{% endif %}"
-                                              data-bs-toggle="tooltip" data-bs-placement="top"
-                                              data-bs-title="{{ char.esi_consecutive_errors }}× ESI-Fehler{% if char.colony_sync_issue_note %}&#10;Grund: {{ char.colony_sync_issue_note }}{% endif %}">
+                                        <span class="badge" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;">
                                             <i class="bi bi-exclamation me-1"></i>{{ char.esi_consecutive_errors }}× Fehler
                                         </span>
+                                        {% if char.esi_last_error %}
+                                        <div class="small mt-1" style="font-size:.72rem;color:#f4a300;max-width:220px;word-break:break-word;">
+                                            <i class="bi bi-bug me-1"></i>{{ char.esi_last_error }}
+                                        </div>
+                                        {% elif char.colony_sync_issue_note %}
+                                        <div class="small mt-1" style="font-size:.72rem;color:#f4a300;">
+                                            <i class="bi bi-info-circle me-1"></i>{{ char.colony_sync_issue_note }}
+                                        </div>
+                                        {% endif %}
                                         {% else %}
                                         {% if char.last_esi_refresh_at %}
                                         <span class="badge" style="background:#2dc65318;color:#2dc653;border:1px solid #2dc65330;"

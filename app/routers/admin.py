@@ -235,6 +235,7 @@ def reset_char_errors(
     )
     char.esi_consecutive_errors = 0
     char.colony_sync_issue = False
+    char.esi_last_error = None
     db.commit()
     return JSONResponse({"ok": True, "character_name": char.character_name})
 
@@ -258,6 +259,7 @@ def reset_account_errors(
             )
             char.esi_consecutive_errors = 0
             char.colony_sync_issue = False
+            char.esi_last_error = None
             reset_count += 1
     db.commit()
     return JSONResponse({"ok": True, "reset_count": reset_count})
@@ -282,6 +284,7 @@ def reset_all_errors(
         )
         char.esi_consecutive_errors = 0
         char.colony_sync_issue = False
+        char.esi_last_error = None
     db.commit()
     return JSONResponse({"ok": True, "reset_count": reset_count})
 

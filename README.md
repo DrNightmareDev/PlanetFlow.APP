@@ -14,6 +14,18 @@ If the project is useful to you, in-game ISK donations to `DrNightmare` are welc
 - FastAPI + PostgreSQL + Celery + RabbitMQ deployment with nginx and certbot
 - German, English, and Simplified Chinese UI translations
 
+## Screenshots
+
+![Dashboard](docs/img/dashboard.png)
+
+![PI Chain Planner](docs/img/PI_Chain_Planner.png)
+
+![Colony Assignment Planner](docs/img/colony_assignment_planner.png)
+
+![System Analyzer](docs/img/System_Analyser.png)
+
+![Combat Intel Map](docs/img/Combat_Intel_Map.png)
+
 ## Quick Start
 
 ```bash

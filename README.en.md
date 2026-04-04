@@ -16,6 +16,18 @@ If this project is useful to you, in-game ISK donations to `DrNightmare` are wel
 - HTTPS deployment with nginx + certbot in Docker Compose
 - UI translations for German, English, and Simplified Chinese
 
+## Screenshots
+
+![Dashboard](docs/img/dashboard.png)
+
+![PI Chain Planner](docs/img/PI_Chain_Planner.png)
+
+![Colony Assignment Planner](docs/img/colony_assignment_planner.png)
+
+![System Analyzer](docs/img/System_Analyser.png)
+
+![Combat Intel Map](docs/img/Combat_Intel_Map.png)
+
 ## Pages
 
 - `Dashboard`

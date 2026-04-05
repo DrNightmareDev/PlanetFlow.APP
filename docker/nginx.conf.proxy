@@ -1,0 +1,72 @@
+# nginx.conf.proxy — PlanetFlow Reverse-Proxy Mode
+# Use this when an upstream load balancer / firewall (e.g. OPNsense, Traefik, Caddy)
+# handles TLS termination.  nginx listens on port 80 only and trusts the
+# X-Forwarded-Proto header from the upstream.
+#
+# Activate by setting  NGINX_MODE=proxy  in your .env file.
+
+limit_req_zone $binary_remote_addr zone=planetflow_auth:10m rate=10r/m;
+
+server {
+    listen 80;
+    server_name _;
+
+    # Static files served directly by nginx
+    location /static/ {
+        alias /app/static/;
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Drop common secret/repo probes at the edge.
+    location ~* (^|/)\.(env|env\..*|git|hg|svn|bzr|DS_Store|htaccess|htpasswd) {
+        access_log off;
+        return 404;
+    }
+
+    location ~* /(config|files|src|media|project)/\.git/ {
+        access_log off;
+        return 404;
+    }
+
+    # Security headers (no HSTS — TLS is handled upstream)
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+    add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https: wss:; frame-ancestors 'self'; base-uri 'self'; form-action 'self';" always;
+
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $upstream http://app:8000;
+
+    location ~ ^/auth/(login|callback|add-character|refresh-scopes)$ {
+        limit_req zone=planetflow_auth burst=20 nodelay;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_read_timeout 120s;
+        proxy_connect_timeout 10s;
+    }
+
+    location / {
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_read_timeout 120s;
+        proxy_connect_timeout 10s;
+    }
+}

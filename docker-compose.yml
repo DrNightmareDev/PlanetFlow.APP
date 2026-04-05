@@ -148,6 +148,8 @@ services:
       - proxy
 
   # ── nginx reverse proxy + TLS ─────────────────────────────────────────────
+  # NGINX_MODE=https (default) — Let's Encrypt, ports 80+443
+  # NGINX_MODE=proxy           — upstream (OPNsense/Traefik) terminates TLS, port 80 only
   nginx:
     image: nginx:alpine
     restart: unless-stopped
@@ -157,9 +159,12 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      NGINX_MODE: ${NGINX_MODE:-https}
     volumes:
       - ./docker/nginx.conf:/etc/nginx/templates/https.conf.template:ro
       - ./docker/nginx.conf.bootstrap:/etc/nginx/templates/http.conf.template:ro
+      - ./docker/nginx.conf.proxy:/etc/nginx/templates/proxy.conf.template:ro
       - ./docker/nginx-entrypoint.sh:/etc/nginx/nginx-entrypoint.sh:ro
       - ./app/static:/app/static:ro
       - certbot_www:/var/www/certbot:ro
@@ -168,6 +173,7 @@ services:
       - proxy
 
   # ── Let's Encrypt certificate renewal ────────────────────────────────────
+  # Not needed when NGINX_MODE=proxy (but harmless to keep running).
   certbot:
     image: certbot/certbot:latest
     restart: unless-stopped

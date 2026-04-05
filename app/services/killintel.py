@@ -56,13 +56,13 @@ def _zkill_stats(character_id: int) -> dict:
 
 
 def _zkill_kills(character_id: int) -> list[tuple[dict, bool]]:
-    """Fetch page 1 only (≤200 most recent stubs) of kills + losses for a pilot."""
+    """Fetch the 20 most recent kills and 20 most recent losses for a pilot."""
     result = []
     for kind, is_loss in [("kills", False), ("losses", True)]:
         try:
             data = _fetch_json(f"{ZKILL_BASE}/{kind}/characterID/{character_id}/page/1/")
             if isinstance(data, list):
-                result.extend([(k, is_loss) for k in data])
+                result.extend([(k, is_loss) for k in data[:20]])
         except Exception as e:
             logger.warning("killintel: zkill %s failed for %d: %s", kind, character_id, e)
     return result

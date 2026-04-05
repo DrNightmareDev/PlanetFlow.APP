@@ -366,6 +366,10 @@
                         <i class="bi bi-github me-1"></i>GitHub
                     </a>
                 </div>
+                <div class="mt-2 small text-muted" style="font-size:.72rem;">
+                    <i class="bi bi-shield-check me-1"></i>
+                    This app uses only essential cookies (session, language, theme). No tracking or advertising.
+                </div>
             </div>
         </div>
     </div>
@@ -755,6 +759,30 @@ document.addEventListener('DOMContentLoaded', function() {
 {% endif %}
 
 {% block extra_scripts %}{% endblock %}
+
+<!-- Cookie consent banner -->
+<div id="cookieBanner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#1a1d23;border-top:1px solid #2e3244;padding:12px 20px;">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <span class="small text-muted" style="max-width:720px;">
+            <i class="bi bi-shield-check me-1" style="color:var(--eve-accent);"></i>
+            This site uses only essential cookies required for login, session management, and language preference. No tracking or advertising cookies are used.
+        </span>
+        <button id="cookieAcceptBtn" class="btn btn-sm" style="background:var(--eve-accent);color:#000;white-space:nowrap;">
+            OK, got it
+        </button>
+    </div>
+</div>
+<script>
+(function() {
+    if (!localStorage.getItem('cookie_consent')) {
+        document.getElementById('cookieBanner').style.display = '';
+    }
+    document.getElementById('cookieAcceptBtn').addEventListener('click', function() {
+        localStorage.setItem('cookie_consent', '1');
+        document.getElementById('cookieBanner').style.display = 'none';
+    });
+})();
+</script>
 </body>
 </html>
 

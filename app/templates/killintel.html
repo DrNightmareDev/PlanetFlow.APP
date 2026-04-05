@@ -45,6 +45,9 @@
                 <button id="cacheBtn" class="btn eve-btn-ghost w-100 d-none" onclick="runAnalysis(true)" title="Show results from DB cache — no zKillboard call">
                     <i class="bi bi-database me-1"></i>Use Cache
                 </button>
+                <button id="shareBtn" class="btn eve-btn-ghost w-100 d-none" onclick="shareSearch(this)" title="Copy shareable link">
+                    <i class="bi bi-share me-1"></i>Share Link
+                </button>
                 <button class="btn eve-btn-ghost w-100" onclick="clearAll()">
                     <i class="bi bi-x-circle me-1"></i>Clear
                 </button>
@@ -188,6 +191,42 @@ function applyParsedInput(raw) {
         document.getElementById('pilotNames').value = names.join('\n');
     }
     return names;
+}
+
+// ── Share link ────────────────────────────────────────────────────────────────
+function buildShareUrl() {
+    const names = document.getElementById('pilotNames').value.trim();
+    const window_ = document.getElementById('timeWindow').value;
+    const params = new URLSearchParams();
+    if (names) params.set('names', names.split('\n').map(s=>s.trim()).filter(Boolean).join(','));
+    if (window_) params.set('window', window_);
+    return location.origin + location.pathname + '?' + params.toString();
+}
+
+function shareSearch(btn) {
+    const url = buildShareUrl();
+    navigator.clipboard.writeText(url).then(() => {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Copied!';
+        btn.style.color = '#2dc653';
+        setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 1800);
+    });
+}
+
+function loadFromUrl() {
+    const params = new URLSearchParams(location.search);
+    const names = params.get('names');
+    const win = params.get('window');
+    if (!names) return;
+    document.getElementById('pilotNames').value = names.split(',').join('\n');
+    if (win !== null) {
+        const sel = document.getElementById('timeWindow');
+        const opt = [...sel.options].find(o => o.value === win);
+        if (opt) sel.value = win;
+    }
+    scheduleCacheCheck();
+    // Auto-run analysis
+    setTimeout(() => runAnalysis(false), 200);
 }
 
 // ── Copy URL ──────────────────────────────────────────────────────────────────
@@ -489,6 +528,7 @@ async function runAnalysis(useCacheOnly) {
     RESULTS = [];
     document.getElementById('analyzeBtn').disabled = true;
     document.getElementById('cacheBtn').disabled = true;
+    document.getElementById('shareBtn').classList.remove('d-none');
     document.getElementById('errorBar').classList.add('d-none');
     document.getElementById('resultsGrid').innerHTML = '';
     document.getElementById('resultsHeader').classList.add('d-none');
@@ -590,10 +630,20 @@ function clearAll() {
 // Ctrl+Enter submits; textarea input triggers parse + cache check
 const ta = document.getElementById('pilotNames');
 ta.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter') runAnalysis(false); });
-ta.addEventListener('input', () => { applyParsedInput(ta.value); scheduleCacheCheck(); });
-ta.addEventListener('paste', e => {
-    // On paste: let browser insert text first, then parse
-    setTimeout(() => { applyParsedInput(ta.value); scheduleCacheCheck(); }, 30);
+ta.addEventListener('input', () => {
+    applyParsedInput(ta.value);
+    scheduleCacheCheck();
+    document.getElementById('shareBtn').classList.toggle('d-none', !ta.value.trim());
 });
+ta.addEventListener('paste', e => {
+    setTimeout(() => {
+        applyParsedInput(ta.value);
+        scheduleCacheCheck();
+        document.getElementById('shareBtn').classList.toggle('d-none', !ta.value.trim());
+    }, 30);
+});
+
+// Load search state from URL on page load
+loadFromUrl();
 </script>
 {% endblock %}

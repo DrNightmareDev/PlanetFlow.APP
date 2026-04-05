@@ -9,7 +9,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.esi import get_killmail, universe_names
+from app.esi import get_killmail, universe_names, universe_ids
 from app import sde
 
 logger = logging.getLogger(__name__)
@@ -135,13 +135,13 @@ def analyze_pilots(names: list[str], db: Session) -> list[dict]:
     if not names:
         return []
 
-    # 1. Resolve names → character IDs via ESI
-    resolved = universe_names([])  # warm call
+    # 1. Resolve names → character IDs via ESI /universe/ids/
     char_map: dict[str, int] = {}  # name → char_id
     for chunk_start in range(0, len(names), 1000):
         chunk = names[chunk_start:chunk_start + 1000]
-        for item in universe_names(chunk):
-            if item.get("category") == "character":
+        result = universe_ids(chunk)
+        for item in result.get("characters", []):
+            if item.get("id") and item.get("name"):
                 char_map[item["name"]] = int(item["id"])
 
     now = datetime.now(timezone.utc)

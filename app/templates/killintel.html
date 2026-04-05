@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+{% block title %}KillIntel — {{ t('app.name') }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+        <h4 class="fw-semibold mb-0" style="color:var(--eve-accent);">
+            <i class="bi bi-crosshair2 me-2"></i>KillIntel
+        </h4>
+        <div class="text-muted small mt-1">
+            Paste EVE Local Chat names — get instant threat analysis from zKillboard.
+        </div>
+    </div>
+</div>
+
+<!-- Input -->
+<div class="eve-card card border-0 mb-3">
+    <div class="card-body py-3">
+        <div class="row g-3 align-items-end">
+            <div class="col-12 col-md-8">
+                <label class="form-label small text-muted mb-1">
+                    <i class="bi bi-clipboard me-1"></i>Paste Local Chat names (one per line, max 50)
+                </label>
+                <textarea id="pilotNames" class="form-control eve-input" rows="5"
+                          placeholder="Pilot Name&#10;Another Pilot&#10;..."></textarea>
+            </div>
+            <div class="col-12 col-md-4 d-flex flex-column gap-2">
+                <button id="analyzeBtn" class="btn eve-btn-primary w-100" onclick="runAnalysis()">
+                    <i class="bi bi-search me-1"></i>Analyze
+                </button>
+                <button class="btn eve-btn-ghost w-100" onclick="clearAll()">
+                    <i class="bi bi-x-circle me-1"></i>Clear
+                </button>
+                <div class="d-flex align-items-center gap-2 mt-1">
+                    <label class="form-label small text-muted mb-0">Sort:</label>
+                    <select id="sortSelect" class="form-select form-select-sm eve-input" onchange="sortAndRender()">
+                        <option value="dangerous_score">Danger Score</option>
+                        <option value="ships_destroyed">Ships Killed</option>
+                        <option value="isk_destroyed">ISK Destroyed</option>
+                        <option value="last_activity">Last Active</option>
+                        <option value="name">Name</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="d-flex align-items-center gap-3 mt-3 flex-wrap" style="font-size:.75rem;">
+            <span class="text-muted">Score:</span>
+            <span><span class="badge" style="background:#e6394622;color:#e63946;border:1px solid #e6394640;">&#9632; &gt;3.5 Dangerous</span></span>
+            <span><span class="badge" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;">&#9632; 2–3.5 Moderate</span></span>
+            <span><span class="badge" style="background:#2dc65322;color:#2dc653;border:1px solid #2dc65340;">&#9632; &lt;2 Harmless</span></span>
+            <span class="text-muted ms-2"><i class="bi bi-hourglass-split me-1"></i>Analysis may take 10–60s (rate limited)</span>
+        </div>
+    </div>
+</div>
+
+<!-- Status -->
+<div id="statusBar" class="d-none mb-3">
+    <div class="eve-help-note d-flex align-items-center gap-2" id="statusMsg">
+        <div class="spinner-border spinner-border-sm" style="color:var(--eve-accent);"></div>
+        <span id="statusText">Analyzing pilots…</span>
+    </div>
+</div>
+
+<!-- Error -->
+<div id="errorBar" class="d-none mb-3">
+    <div class="alert" style="background:#e6394618;border:1px solid #e6394640;color:#e63946;">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        <span id="errorText"></span>
+    </div>
+</div>
+
+<!-- Results -->
+<div id="resultsHeader" class="d-none d-flex align-items-center justify-content-between mb-2">
+    <span class="small text-muted" id="resultCount"></span>
+</div>
+<div id="resultsGrid" class="row g-3"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let RESULTS = [];
+
+// ── Colour helpers ────────────────────────────────────────────────────────────
+function scoreColor(score) {
+    if (score >= 3.5) return {bg:'#e6394618', border:'#e6394640', text:'#e63946'};
+    if (score >= 2.0) return {bg:'#f4a30018', border:'#f4a30040', text:'#f4a300'};
+    return {bg:'#2dc65318', border:'#2dc65340', text:'#2dc653'};
+}
+
+function formatIsk(v) {
+    if (!v) return '0 ISK';
+    if (v >= 1e12) return (v/1e12).toFixed(2) + ' T ISK';
+    if (v >= 1e9)  return (v/1e9).toFixed(2) + ' B ISK';
+    if (v >= 1e6)  return (v/1e6).toFixed(1) + ' M ISK';
+    return v.toLocaleString() + ' ISK';
+}
+
+function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function slotBadge(slot) {
+    const map = {
+        high: ['#7ec8e3','High'],
+        mid: ['#f2c46f','Mid'],
+        low: ['#a78bfa','Low'],
+        rig: ['#6ee7b7','Rig'],
+        sub: ['#f9a8d4','Sub'],
+    };
+    const [color, label] = map[slot] || ['#aaa','?'];
+    return `<span style="font-size:.62rem;color:${color};border:1px solid ${color}40;padding:1px 5px;border-radius:3px;">${label}</span>`;
+}
+
+// ── Card rendering ────────────────────────────────────────────────────────────
+function renderCard(r) {
+    if (r.error) {
+        return `<div class="col-12 col-lg-6">
+            <div class="eve-card card border-0 h-100" style="border-left:3px solid #4a4a6a !important;">
+                <div class="card-body py-2 px-3">
+                    <div class="fw-medium">${esc(r.name)}</div>
+                    <div class="small text-muted">${esc(r.error)}</div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    const c = scoreColor(r.dangerous_score);
+    const zkillLink = `<a href="${esc(r.zkill_url)}" target="_blank" rel="noopener" style="color:var(--eve-accent);" title="zKillboard"><i class="bi bi-box-arrow-up-right"></i></a>`;
+    const lastAct = r.last_activity ? new Date(r.last_activity).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) : '—';
+
+    // Ships
+    let shipsHtml = '';
+    for (const ship of (r.top_ships || [])) {
+        const mods = (ship.typical_modules || []).slice(0, 8);
+        const modsHtml = mods.length ? mods.map(m =>
+            `<div class="d-flex align-items-center gap-2 py-1" style="border-bottom:1px solid #1a2a3a;">
+                ${slotBadge(m.slot)}
+                <span class="small flex-grow-1" style="color:#cdd6f4;">${esc(m.name)}</span>
+                <span class="small text-muted">${Math.round(m.frequency*100)}%</span>
+            </div>`
+        ).join('') : '<div class="small text-muted py-1">No fit data (no losses on record)</div>';
+
+        shipsHtml += `
+        <div class="mb-3">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <img src="https://images.evetech.net/types/${ship.ship_type_id}/icon?size=32"
+                     width="28" height="28" style="border-radius:4px;flex-shrink:0;"
+                     onerror="this.style.display='none'">
+                <div class="flex-grow-1">
+                    <div class="fw-medium small">${esc(ship.ship_name)}</div>
+                    <div style="height:4px;background:#1a2a3a;border-radius:2px;margin-top:3px;">
+                        <div style="height:4px;background:${c.text};border-radius:2px;width:${ship.usage_percent}%;"></div>
+                    </div>
+                </div>
+                <span class="small text-muted">${ship.usage_percent}%</span>
+            </div>
+            <div class="ps-2" style="border-left:2px solid #2a3a4a;">
+                ${modsHtml}
+            </div>
+        </div>`;
+    }
+    if (!shipsHtml) shipsHtml = '<div class="small text-muted">No killmail data in last 90 days</div>';
+
+    return `<div class="col-12 col-xl-6">
+        <div class="eve-card card border-0 h-100" style="border-left:3px solid ${c.text} !important;">
+            <div class="card-body py-3 px-3">
+                <!-- Header -->
+                <div class="d-flex align-items-start gap-2 mb-2">
+                    <img src="https://images.evetech.net/characters/${r.character_id}/portrait?size=64"
+                         width="40" height="40" style="border-radius:6px;flex-shrink:0;"
+                         onerror="this.src='/static/img/default_char.svg'">
+                    <div class="flex-grow-1 min-width-0">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="fw-semibold" style="color:#e8eaf6;">${esc(r.name)}</span>
+                            ${zkillLink}
+                        </div>
+                        <div class="small text-muted">${esc(r.corporation)}${r.alliance && r.alliance !== '—' ? ' · <span style="color:#f2c46f;">'+esc(r.alliance)+'</span>' : ''}</div>
+                    </div>
+                    <!-- Score badge -->
+                    <div class="text-center flex-shrink-0">
+                        <div style="font-size:1.4rem;font-weight:700;color:${c.text};line-height:1;">${r.dangerous_score.toFixed(1)}</div>
+                        <div style="font-size:.62rem;color:${c.text};">DANGER</div>
+                    </div>
+                </div>
+
+                <!-- Stats row -->
+                <div class="d-flex gap-3 mb-3 flex-wrap" style="font-size:.75rem;">
+                    <div class="text-center">
+                        <div class="fw-medium" style="color:#e63946;">${(r.ships_destroyed||0).toLocaleString()}</div>
+                        <div class="text-muted">Kills</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="fw-medium">${(r.ships_lost||0).toLocaleString()}</div>
+                        <div class="text-muted">Losses</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="fw-medium" style="color:#2dc653;">${formatIsk(r.isk_destroyed)}</div>
+                        <div class="text-muted">ISK Killed</div>
+                    </div>
+                    <div class="text-center ms-auto">
+                        <div class="fw-medium text-muted">${lastAct}</div>
+                        <div class="text-muted">Last Active</div>
+                    </div>
+                </div>
+
+                <!-- Ships -->
+                <div class="small fw-medium text-muted mb-2" style="letter-spacing:.04em;">TOP SHIPS (90d)</div>
+                ${shipsHtml}
+            </div>
+        </div>
+    </div>`;
+}
+
+// ── Sort & render ─────────────────────────────────────────────────────────────
+function sortAndRender() {
+    const col = document.getElementById('sortSelect').value;
+    const sorted = [...RESULTS].sort((a, b) => {
+        if (col === 'name') return (a.name||'').localeCompare(b.name||'');
+        if (col === 'last_activity') {
+            return (b.last_activity||'').localeCompare(a.last_activity||'');
+        }
+        return (b[col]||0) - (a[col]||0);
+    });
+    const grid = document.getElementById('resultsGrid');
+    grid.innerHTML = sorted.map(renderCard).join('');
+    document.getElementById('resultsHeader').classList.remove('d-none');
+    document.getElementById('resultCount').textContent =
+        `${sorted.length} pilot${sorted.length!==1?'s':''} analyzed`;
+}
+
+// ── Analyze ───────────────────────────────────────────────────────────────────
+async function runAnalysis() {
+    const text = document.getElementById('pilotNames').value.trim();
+    if (!text) return;
+
+    const names = text.split('\n').map(s=>s.trim()).filter(Boolean);
+    if (names.length > 50) {
+        showError('Max 50 pilots per request.');
+        return;
+    }
+
+    setStatus(`Analyzing ${names.length} pilot${names.length!==1?'s':''}… (may take up to ${names.length*3}s)`);
+    document.getElementById('analyzeBtn').disabled = true;
+    document.getElementById('errorBar').classList.add('d-none');
+    document.getElementById('resultsGrid').innerHTML = '';
+    document.getElementById('resultsHeader').classList.add('d-none');
+
+    try {
+        const resp = await fetch('/intel/killintel/analyze', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({names: text}),
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            showError(data.error || 'Request failed');
+            return;
+        }
+        RESULTS = data.results || [];
+        sortAndRender();
+    } catch(e) {
+        showError('Network error: ' + e.message);
+    } finally {
+        document.getElementById('statusBar').classList.add('d-none');
+        document.getElementById('analyzeBtn').disabled = false;
+    }
+}
+
+function setStatus(msg) {
+    document.getElementById('statusText').textContent = msg;
+    document.getElementById('statusBar').classList.remove('d-none');
+}
+
+function showError(msg) {
+    document.getElementById('errorText').textContent = msg;
+    document.getElementById('errorBar').classList.remove('d-none');
+    document.getElementById('statusBar').classList.add('d-none');
+}
+
+function clearAll() {
+    document.getElementById('pilotNames').value = '';
+    document.getElementById('resultsGrid').innerHTML = '';
+    document.getElementById('resultsHeader').classList.add('d-none');
+    document.getElementById('errorBar').classList.add('d-none');
+    document.getElementById('statusBar').classList.add('d-none');
+    RESULTS = [];
+}
+
+// Ctrl+Enter submits
+document.getElementById('pilotNames').addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 'Enter') runAnalysis();
+});
+</script>
+{% endblock %}

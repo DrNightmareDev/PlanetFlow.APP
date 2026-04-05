@@ -181,8 +181,8 @@
                 {% endif %}
 
                 <!-- Combat Dropdown -->
-                {% set combat_visible = request.state.page_permissions.get('intel_map', False) or request.state.page_permissions.get('ess', False) %}
-                {% set combat_active = request.url.path.startswith('/intel/map') or request.url.path.startswith('/intel/ess') %}
+                {% set combat_visible = request.state.page_permissions.get('intel_map', False) or request.state.page_permissions.get('ess', False) or request.state.page_permissions.get('killintel', True) %}
+                {% set combat_active = request.url.path.startswith('/intel/map') or request.url.path.startswith('/intel/ess') or request.url.path.startswith('/intel/killintel') %}
                 {% if combat_visible %}
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle {% if combat_active %}active{% endif %}"
@@ -203,6 +203,14 @@
                             <a class="dropdown-item {% if request.url.path.startswith('/intel/ess') %}active{% endif %}" href="/intel/ess">
                                 <i class="bi bi-clock-history me-2 text-muted"></i>Sov Timers
                                 {% if nav_sub_badges.get('ess', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if request.state.page_permissions.get('killintel', True) %}
+                        <li>
+                            <a class="dropdown-item {% if request.url.path.startswith('/intel/killintel') %}active{% endif %}" href="/intel/killintel">
+                                <i class="bi bi-crosshair2 me-2 text-muted"></i>KillIntel
+                                {% if nav_sub_badges.get('killintel', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                             </a>
                         </li>
                         {% endif %}

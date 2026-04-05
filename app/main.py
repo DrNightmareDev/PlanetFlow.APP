@@ -21,7 +21,7 @@ from app.page_access import (
     match_page_for_path,
 )
 from app.security import decrypt_text, encrypt_text, require_strong_secret_key
-from app.routers import auth, dashboard, admin, director, pi, market, system, planner, skyhook, colony_plan, pi_templates, hauling, killboard, intel, inventory, billing
+from app.routers import auth, dashboard, admin, director, pi, market, system, planner, skyhook, colony_plan, pi_templates, hauling, killboard, intel, inventory, billing, killintel
 from app.templates_env import templates
 
 logging.basicConfig(level=logging.INFO)
@@ -286,6 +286,7 @@ app.include_router(killboard.router)
 app.include_router(colony_plan.router)
 app.include_router(pi_templates.router)
 app.include_router(intel.router)
+app.include_router(killintel.router)
 app.include_router(billing.router)
 app.include_router(director.router)
 

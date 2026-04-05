@@ -694,6 +694,55 @@ class SiteSettings(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class KillIntelPilot(Base):
+    """Cached pilot profile from zKill stats. TTL ~1h."""
+    __tablename__ = "killintel_pilots"
+
+    character_id = Column(BigInteger, primary_key=True)
+    name = Column(String(255), nullable=False)
+    corporation_id = Column(BigInteger, nullable=True)
+    corporation_name = Column(String(255), nullable=True)
+    alliance_id = Column(BigInteger, nullable=True)
+    alliance_name = Column(String(255), nullable=True)
+    danger_ratio = Column(Integer, nullable=True)       # 0-100 from zKill
+    ships_destroyed = Column(Integer, nullable=True)
+    ships_lost = Column(Integer, nullable=True)
+    isk_destroyed = Column(BigInteger, nullable=True)
+    isk_lost = Column(BigInteger, nullable=True)
+    last_activity = Column(DateTime(timezone=True), nullable=True)
+    fetched_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class KillIntelKillmail(Base):
+    """Cached killmail stubs + hydrated data for killintel pilots."""
+    __tablename__ = "killintel_killmails"
+    __table_args__ = (
+        Index("ix_killintel_km_char_time", "character_id", "killmail_time"),
+    )
+
+    killmail_id = Column(BigInteger, primary_key=True)
+    character_id = Column(BigInteger, nullable=False, index=True)
+    ship_type_id = Column(Integer, nullable=True)
+    ship_name = Column(String(255), nullable=True)
+    is_loss = Column(Boolean, nullable=False, default=False)  # True = pilot was victim
+    killmail_time = Column(DateTime(timezone=True), nullable=True, index=True)
+    total_value = Column(BigInteger, nullable=True)
+    hydrated = Column(Boolean, nullable=False, default=False)  # items resolved?
+    fetched_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class KillIntelItem(Base):
+    """Module/item from a hydrated killintel killmail (victim fit)."""
+    __tablename__ = "killintel_items"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    killmail_id = Column(BigInteger, nullable=False, index=True)
+    type_id = Column(Integer, nullable=False)
+    type_name = Column(String(255), nullable=True)
+    slot = Column(String(16), nullable=True)   # low/mid/high/rig/sub/cargo/drone
+    quantity = Column(Integer, nullable=False, default=1)
+
+
 class SovStructure(Base):
     """Cached sovereignty structure (IHub) data from ESI, refreshed every 15 min."""
     __tablename__ = "sov_structures"

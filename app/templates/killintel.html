@@ -230,14 +230,14 @@ function renderCard(r) {
                 </div>
 
                 <!-- Ships -->
-                <div class="small fw-medium text-muted mb-2" style="letter-spacing:.04em;">TOP SHIPS (90d)</div>
+                <div class="small fw-medium text-muted mb-2" style="letter-spacing:.04em;">TOP SHIPS</div>
                 ${shipsHtml}
             </div>
         </div>
     </div>`;
 }
 
-// ── Sort & render ─────────────────────────────────────────────────────────────
+// ── Sort & render (re-sorts the accumulated RESULTS in-place) ─────────────────
 function sortAndRender() {
     const col = document.getElementById('sortSelect').value;
     const sorted = [...RESULTS].sort((a, b) => {
@@ -252,12 +252,17 @@ function sortAndRender() {
         `${sorted.length} pilot${sorted.length!==1?'s':''} analyzed`;
 }
 
+// Insert one card into the grid keeping current sort order
+function insertCard(r) {
+    RESULTS.push(r);
+    sortAndRender();
+}
+
 // ── Cache check ───────────────────────────────────────────────────────────────
 async function checkCache() {
     const text = document.getElementById('pilotNames').value.trim();
     const btn = document.getElementById('cacheBtn');
     if (!text) { btn.classList.add('d-none'); return; }
-
     try {
         const resp = await fetch('/intel/killintel/check-cache', {
             method: 'POST',
@@ -267,11 +272,7 @@ async function checkCache() {
         if (!resp.ok) { btn.classList.add('d-none'); return; }
         const data = await resp.json();
         const anyInCache = Object.values(data).some(v => v === true);
-        if (anyInCache) {
-            btn.classList.remove('d-none');
-        } else {
-            btn.classList.add('d-none');
-        }
+        btn.classList.toggle('d-none', !anyInCache);
     } catch {
         btn.classList.add('d-none');
     }
@@ -282,52 +283,82 @@ function scheduleCacheCheck() {
     _cacheCheckTimer = setTimeout(checkCache, 600);
 }
 
-// ── Analyze ───────────────────────────────────────────────────────────────────
+// ── Analyze (streaming NDJSON) ────────────────────────────────────────────────
 async function runAnalysis(useCacheOnly) {
     const text = document.getElementById('pilotNames').value.trim();
     if (!text) return;
 
     const names = text.split('\n').map(s=>s.trim()).filter(Boolean);
-    if (names.length > 50) {
-        showError('Max 50 pilots per request.');
-        return;
-    }
+    if (names.length > 50) { showError('Max 50 pilots per request.'); return; }
 
     const timeWindow = document.getElementById('timeWindow').value;
     const windowLabel = timeWindow === '1' ? '24h' : timeWindow === '7' ? '7d' : timeWindow === '14' ? '14d' : 'any';
 
-    if (useCacheOnly) {
-        setStatus(`Loading ${names.length} pilot${names.length!==1?'s':''} from cache…`);
-    } else {
-        setStatus(`Analyzing ${names.length} pilot${names.length!==1?'s':''}… window: ${windowLabel}`);
-    }
+    RESULTS = [];
     document.getElementById('analyzeBtn').disabled = true;
     document.getElementById('cacheBtn').disabled = true;
     document.getElementById('errorBar').classList.add('d-none');
     document.getElementById('resultsGrid').innerHTML = '';
     document.getElementById('resultsHeader').classList.add('d-none');
+    document.getElementById('cacheNote').textContent = '';
+
+    const total = names.length;
+    let done = 0;
+
+    function updateStatus() {
+        const label = useCacheOnly ? 'from cache' : `window: ${windowLabel}`;
+        setStatus(`${done}/${total} pilots loaded… (${label})`);
+    }
+    updateStatus();
 
     try {
-        const body = {names: text, use_cache_only: useCacheOnly};
-        if (!useCacheOnly && timeWindow) body.time_window_days = parseInt(timeWindow);
+        const bodyObj = {names: text, use_cache_only: useCacheOnly};
+        if (!useCacheOnly && timeWindow) bodyObj.time_window_days = parseInt(timeWindow);
+
         const resp = await fetch('/intel/killintel/analyze', {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
-            body: JSON.stringify(body),
+            body: JSON.stringify(bodyObj),
         });
+
         if (!resp.ok) {
             let errMsg = 'Request failed';
             try { const d = await resp.json(); errMsg = d.error || errMsg; } catch {}
             showError(errMsg);
             return;
         }
-        const data = await resp.json();
-        RESULTS = data.results || [];
-        sortAndRender();
+
+        // Read NDJSON stream — render each pilot as it arrives
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+
+        while (true) {
+            const {value, done: streamDone} = await reader.read();
+            if (streamDone) break;
+            buf += decoder.decode(value, {stream: true});
+            const lines = buf.split('\n');
+            buf = lines.pop(); // last potentially incomplete line
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                try {
+                    const r = JSON.parse(trimmed);
+                    done++;
+                    insertCard(r);
+                    updateStatus();
+                } catch { /* ignore malformed line */ }
+            }
+        }
+        // Flush any remaining buffer content
+        if (buf.trim()) {
+            try { const r = JSON.parse(buf.trim()); done++; insertCard(r); } catch {}
+        }
+
         if (useCacheOnly) {
             document.getElementById('cacheNote').textContent = 'Showing cached data — no live zKillboard call';
-        } else {
-            document.getElementById('cacheNote').textContent = timeWindow ? `Window: last ${windowLabel}` : '';
+        } else if (timeWindow) {
+            document.getElementById('cacheNote').textContent = `Window: last ${windowLabel}`;
         }
     } catch(e) {
         showError('Network error: ' + e.message);

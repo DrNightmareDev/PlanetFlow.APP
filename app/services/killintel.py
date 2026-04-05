@@ -5,7 +5,7 @@ import logging
 import time
 from collections import Counter, defaultdict
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Generator, Optional
 
 from sqlalchemy.orm import Session
 
@@ -18,11 +18,11 @@ ZKILL_BASE = "https://zkillboard.com/api"
 HEADERS = {"User-Agent": "PlanetFlow/1.0 github.com/DrNightmareDev/PlanetFlow.APP", "Accept-Encoding": "gzip"}
 
 # Cache tiers
-TTL_FRESH   = timedelta(minutes=5)   # use DB as-is, no zKill call
-TTL_PARTIAL = timedelta(hours=24)    # fetch only new stubs since last fetch, append to DB
+TTL_FRESH   = timedelta(minutes=5)   # use DB as-is, zero zKill calls
+TTL_PARTIAL = timedelta(hours=24)    # incremental refresh
 # > 24h: drop all killmail/item data, run full fresh analysis
 
-# EVE inventory flag → slot name (only fitted slots we care about)
+# EVE inventory flag → slot name
 _FLAG_SLOT: dict[int, str] = {}
 for _f in range(11, 19): _FLAG_SLOT[_f] = "low"
 for _f in range(19, 27): _FLAG_SLOT[_f] = "mid"
@@ -56,12 +56,12 @@ def _zkill_stats(character_id: int) -> dict:
 
 
 def _zkill_kills(character_id: int, start_time: Optional[datetime] = None) -> list[tuple[dict, bool]]:
-    """Fetch the 20 most recent kills and 20 most recent losses for a pilot.
-    If start_time is given, only mails after that date are requested from zKill."""
+    """Fetch up to 20 kills + 20 losses. start_time restricts via zKill's startTime filter."""
     result = []
     time_segment = ""
     if start_time is not None:
-        time_segment = f"startTime/{start_time.strftime('%Y%m%d%H%I')}/"
+        # zKill startTime format: YYYYMMDDHHmm
+        time_segment = f"startTime/{start_time.strftime('%Y%m%d%H%M')}/"
     for kind, is_loss in [("kills", False), ("losses", True)]:
         try:
             url = f"{ZKILL_BASE}/{kind}/characterID/{character_id}/{time_segment}page/1/"
@@ -93,18 +93,20 @@ def _age(pilot, now: datetime) -> Optional[timedelta]:
     return now - fetched
 
 
-# ── Name resolution ─────────────────────────────────────────────────────────
+# ── Name resolution ──────────────────────────────────────────────────────────
+
+def _sde_type_name(type_id: int) -> Optional[str]:
+    raw = sde.get_type_name(type_id)
+    if isinstance(raw, dict):
+        return raw.get("en") or next(iter(raw.values()), None)
+    return raw  # scalar or None
+
 
 def _resolve_type_names(type_ids: set[int]) -> dict[int, str]:
     result: dict[int, str] = {}
     missing = []
     for tid in type_ids:
-        # get_type_name returns a dict {lang: name} or None
-        raw = sde.get_type_name(tid)
-        if isinstance(raw, dict):
-            name = raw.get("en") or next(iter(raw.values()), None)
-        else:
-            name = raw  # legacy scalar, or None
+        name = _sde_type_name(tid)
         if name:
             result[tid] = name
         else:
@@ -137,34 +139,28 @@ def _ingest_stubs(
     db: Session,
     now: datetime,
     since: Optional[datetime] = None,
+    cutoff: Optional[datetime] = None,
     hydrate_cap: int = 20,
 ) -> set[int]:
-    """
-    Process kill stubs into DB.  Returns set of type_ids that need name resolution.
-    If `since` is set, skip stubs whose killmail_id is already in DB (incremental mode).
-    """
     from app.models import KillIntelKillmail, KillIntelItem
 
     cutoff_90d = now - timedelta(days=90)
+    effective_cutoff = cutoff if cutoff is not None else cutoff_90d
     type_ids_to_resolve: set[int] = set()
     hydrated_count = 0
 
-    # Existing killmail IDs for this character (for dedup in incremental mode)
+    existing_ids: set[int] = set()
     if since is not None:
-        existing_ids: set[int] = {
+        existing_ids = {
             km_id for (km_id,) in db.query(KillIntelKillmail.killmail_id)
             .filter(KillIntelKillmail.character_id == char_id)
             .all()
         }
-    else:
-        existing_ids = set()
 
     for stub, is_loss in stubs:
         km_id = int(stub.get("killmail_id", 0))
         if not km_id:
             continue
-
-        # In incremental mode skip already-stored mails
         if since is not None and km_id in existing_ids:
             continue
 
@@ -175,8 +171,13 @@ def _ingest_stubs(
         existing_km = db.get(KillIntelKillmail, km_id)
 
         if existing_km and existing_km.hydrated:
-            if existing_km.killmail_time and existing_km.killmail_time < cutoff_90d:
-                continue
+            if existing_km.killmail_time:
+                if existing_km.killmail_time.tzinfo is None:
+                    km_t = existing_km.killmail_time.replace(tzinfo=timezone.utc)
+                else:
+                    km_t = existing_km.killmail_time
+                if km_t < effective_cutoff:
+                    continue
             if existing_km.ship_type_id:
                 type_ids_to_resolve.add(existing_km.ship_type_id)
             continue
@@ -195,8 +196,11 @@ def _ingest_stubs(
             continue
 
         km_time = _parse_timestamp(esi_km.get("killmail_time", ""))
-        if km_time and km_time < cutoff_90d:
-            continue
+        if km_time:
+            if km_time.tzinfo is None:
+                km_time = km_time.replace(tzinfo=timezone.utc)
+            if km_time < effective_cutoff:
+                continue
 
         victim = esi_km.get("victim", {})
         attackers = esi_km.get("attackers", [])
@@ -204,9 +208,7 @@ def _ingest_stubs(
         if is_loss:
             ship_type_id = victim.get("ship_type_id")
         else:
-            our_attacker = next(
-                (a for a in attackers if a.get("character_id") == char_id), None
-            )
+            our_attacker = next((a for a in attackers if a.get("character_id") == char_id), None)
             ship_type_id = our_attacker.get("ship_type_id") if our_attacker else None
 
         if ship_type_id:
@@ -247,11 +249,8 @@ def _ingest_stubs(
 
 
 def _patch_names(char_id: int, type_name_map: dict[int, str], db: Session) -> None:
-    """Fill in ship_name / type_name for rows that are still missing them.
-    Also resolves any previously stored NULL names on the fly."""
     from app.models import KillIntelKillmail, KillIntelItem
 
-    # Collect all type_ids with NULL names so we can resolve them too
     km_rows = db.query(KillIntelKillmail).filter(
         KillIntelKillmail.character_id == char_id,
         KillIntelKillmail.ship_type_id.isnot(None),
@@ -267,7 +266,6 @@ def _patch_names(char_id: int, type_name_map: dict[int, str], db: Session) -> No
         KillIntelItem.type_name.is_(None),
     ).all()
 
-    # Resolve any IDs not already in the map
     extra_ids = (
         {km.ship_type_id for km in km_rows if km.ship_type_id not in type_name_map} |
         {itm.type_id for itm in itm_rows if itm.type_id not in type_name_map}
@@ -278,7 +276,6 @@ def _patch_names(char_id: int, type_name_map: dict[int, str], db: Session) -> No
     for km in km_rows:
         if km.ship_type_id in type_name_map:
             km.ship_name = type_name_map[km.ship_type_id]
-
     for itm in itm_rows:
         if itm.type_id in type_name_map:
             itm.type_name = type_name_map[itm.type_id]
@@ -286,16 +283,22 @@ def _patch_names(char_id: int, type_name_map: dict[int, str], db: Session) -> No
 
 # ── Aggregation ──────────────────────────────────────────────────────────────
 
-def _aggregate_pilot(pilot, char_id: int, now: datetime, db: Session) -> dict:
-    """Build the result dict from DB data for one pilot."""
+def _aggregate_pilot(
+    pilot,
+    char_id: int,
+    now: datetime,
+    db: Session,
+    cutoff: Optional[datetime] = None,
+) -> dict:
     from app.models import KillIntelKillmail, KillIntelItem
 
-    cutoff = now - timedelta(days=90)
+    effective_cutoff = cutoff if cutoff is not None else (now - timedelta(days=90))
+
     kms = (
         db.query(KillIntelKillmail)
         .filter(
             KillIntelKillmail.character_id == char_id,
-            KillIntelKillmail.killmail_time >= cutoff,
+            KillIntelKillmail.killmail_time >= effective_cutoff,
         )
         .all()
     )
@@ -306,7 +309,7 @@ def _aggregate_pilot(pilot, char_id: int, now: datetime, db: Session) -> dict:
     ship_counter: Counter = Counter()
     for km in kms:
         if km.ship_type_id and km.ship_type_id not in (670, 33328):
-            ship_counter[(km.ship_type_id, km.ship_name or f"Type {km.ship_type_id}")] += 1
+            ship_counter[(km.ship_type_id, km.ship_name or f"#{km.ship_type_id}")] += 1
 
     total_appearances = sum(ship_counter.values()) or 1
 
@@ -318,7 +321,6 @@ def _aggregate_pilot(pilot, char_id: int, now: datetime, db: Session) -> dict:
             km.killmail_id for km in kms
             if km.ship_type_id == ship_type_id and km.is_loss and km.hydrated
         ]
-
         module_slot_counter: dict[tuple[int, str, str], int] = defaultdict(int)
         loss_count = len(loss_km_ids) or 1
 
@@ -332,7 +334,7 @@ def _aggregate_pilot(pilot, char_id: int, now: datetime, db: Session) -> dict:
                 .all()
             )
             for itm in items:
-                key = (itm.type_id, itm.type_name or f"Type {itm.type_id}", itm.slot)
+                key = (itm.type_id, itm.type_name or f"#{itm.type_id}", itm.slot)
                 module_slot_counter[key] += 1
 
         typical_modules = []
@@ -380,13 +382,9 @@ def _aggregate_pilot(pilot, char_id: int, now: datetime, db: Session) -> dict:
     }
 
 
-# ── Cache check (for UI button) ──────────────────────────────────────────────
+# ── Cache check ──────────────────────────────────────────────────────────────
 
 def check_names_in_cache(names: list[str], db: Session) -> dict[str, bool]:
-    """
-    Returns {name: True/False} — True if the pilot is in the DB cache at all
-    (regardless of age). Used by the frontend to enable the 'Use Cache' button.
-    """
     from app.models import KillIntelPilot
 
     names = [n.strip() for n in names if n.strip()]
@@ -412,32 +410,145 @@ def check_names_in_cache(names: list[str], db: Session) -> dict[str, bool]:
     return out
 
 
-# ── Main entry point ─────────────────────────────────────────────────────────
+# ── Single-pilot analysis (for streaming) ────────────────────────────────────
 
-def analyze_pilots(
+def analyze_one_pilot(
+    name: str,
+    char_id: int,
+    db: Session,
+    now: datetime,
+    use_cache_only: bool = False,
+    time_window_days: Optional[int] = None,
+) -> dict:
+    """Fetch and return the result dict for a single pilot. Called per-pilot in the stream."""
+    from app.models import KillIntelPilot, KillIntelKillmail, KillIntelItem
+
+    # Cutoff for aggregation window
+    cutoff: Optional[datetime] = (
+        now - timedelta(days=time_window_days) if time_window_days else None
+    )
+    # zKill start_time for fetching (same window)
+    zkill_start_time: Optional[datetime] = cutoff
+
+    pilot = db.get(KillIntelPilot, char_id)
+
+    if use_cache_only:
+        if pilot is None:
+            return {"name": name, "error": "Not in cache — run a live analysis first"}
+        _patch_names(char_id, {}, db)
+        db.commit()
+        return _aggregate_pilot(pilot, char_id, now, db, cutoff=cutoff)
+
+    age = _age(pilot, now)
+
+    if age is not None and age < TTL_FRESH:
+        # Tier 1: fresh — use DB as-is
+        logger.debug("killintel: FRESH %s age=%s", name, age)
+        _patch_names(char_id, {}, db)
+        db.commit()
+
+    elif age is not None and age < TTL_PARTIAL:
+        # Tier 2: partial — refresh stats + new stubs only
+        logger.info("killintel: PARTIAL %s age=%s", name, age)
+        time.sleep(1.0)
+        stats = _zkill_stats(char_id)
+        info = stats.get("info") or {}
+        corp_id = int(info.get("corporationID") or info.get("corporation_id") or 0) or None
+        alliance_id = int(info.get("allianceID") or info.get("alliance_id") or 0) or None
+        names_map = _resolve_corp_alliance_names(
+            {corp_id} if corp_id else set(), {alliance_id} if alliance_id else set()
+        )
+        pilot.name = info.get("name") or name
+        pilot.corporation_id = corp_id
+        pilot.corporation_name = names_map.get(corp_id) if corp_id else pilot.corporation_name
+        pilot.alliance_id = alliance_id
+        pilot.alliance_name = names_map.get(alliance_id) if alliance_id else pilot.alliance_name
+        pilot.danger_ratio = stats.get("dangerRatio") or pilot.danger_ratio
+        pilot.ships_destroyed = stats.get("shipsDestroyed") or pilot.ships_destroyed
+        pilot.ships_lost = stats.get("shipsLost") or pilot.ships_lost
+        isk_d = stats.get("iskDestroyed")
+        isk_l = stats.get("iskLost")
+        if isk_d: pilot.isk_destroyed = int(isk_d)
+        if isk_l: pilot.isk_lost = int(isk_l)
+        pilot.fetched_at = now
+
+        time.sleep(1.0)
+        stubs = _zkill_kills(char_id, start_time=zkill_start_time)
+        type_ids = _ingest_stubs(char_id, stubs, db, now, since=pilot.fetched_at, cutoff=cutoff)
+        type_name_map = _resolve_type_names(type_ids)
+        _patch_names(char_id, type_name_map, db)
+        db.commit()
+
+    else:
+        # Tier 3: stale or new — full refresh
+        logger.info("killintel: FULL %s age=%s", name, age)
+        if pilot is not None:
+            existing_km_ids = [
+                km_id for (km_id,) in db.query(KillIntelKillmail.killmail_id)
+                .filter(KillIntelKillmail.character_id == char_id).all()
+            ]
+            if existing_km_ids:
+                db.query(KillIntelItem).filter(
+                    KillIntelItem.killmail_id.in_(existing_km_ids)
+                ).delete(synchronize_session=False)
+                db.query(KillIntelKillmail).filter(
+                    KillIntelKillmail.character_id == char_id
+                ).delete(synchronize_session=False)
+
+        time.sleep(1.0)
+        stats = _zkill_stats(char_id)
+        info = stats.get("info") or {}
+        corp_id = int(info.get("corporationID") or info.get("corporation_id") or 0) or None
+        alliance_id = int(info.get("allianceID") or info.get("alliance_id") or 0) or None
+        names_map = _resolve_corp_alliance_names(
+            {corp_id} if corp_id else set(), {alliance_id} if alliance_id else set()
+        )
+
+        if pilot is None:
+            pilot = KillIntelPilot(character_id=char_id)
+            db.add(pilot)
+
+        pilot.name = info.get("name") or name
+        pilot.corporation_id = corp_id
+        pilot.corporation_name = names_map.get(corp_id) if corp_id else None
+        pilot.alliance_id = alliance_id
+        pilot.alliance_name = names_map.get(alliance_id) if alliance_id else None
+        pilot.danger_ratio = stats.get("dangerRatio")
+        pilot.ships_destroyed = stats.get("shipsDestroyed")
+        pilot.ships_lost = stats.get("shipsLost")
+        isk_d = stats.get("iskDestroyed")
+        isk_l = stats.get("iskLost")
+        pilot.isk_destroyed = int(isk_d) if isk_d else None
+        pilot.isk_lost = int(isk_l) if isk_l else None
+        pilot.fetched_at = now
+
+        time.sleep(1.0)
+        stubs = _zkill_kills(char_id, start_time=zkill_start_time)
+        type_ids = _ingest_stubs(char_id, stubs, db, now, since=None, cutoff=cutoff)
+        type_name_map = _resolve_type_names(type_ids)
+        _patch_names(char_id, type_name_map, db)
+        db.commit()
+
+    return _aggregate_pilot(pilot, char_id, now, db, cutoff=cutoff)
+
+
+# ── Streaming entry point ────────────────────────────────────────────────────
+
+def stream_pilots(
     names: list[str],
     db: Session,
     use_cache_only: bool = False,
     time_window_days: Optional[int] = None,
-) -> list[dict]:
+) -> Generator[dict, None, None]:
     """
-    Resolve names → character IDs, fetch/cache pilot data, return aggregated profiles.
-
-    time_window_days: 1, 7, 14 → only fetch kills newer than N days from zKill.
-                      None      → no time restriction (any).
-
-    Cache tiers (ignored when use_cache_only=True):
-      < 5 min   → use DB as-is, no zKill call
-      5–24 h    → fetch new stubs only (incremental), append to existing DB data
-      > 24 h    → drop all killmail/item data, run full fresh analysis
+    Yields one result dict per pilot as it completes.
+    Frontend can render each card immediately without waiting for the full list.
     """
-    from app.models import KillIntelPilot, KillIntelKillmail, KillIntelItem
-
     names = [n.strip() for n in names if n.strip()]
     if not names:
-        return []
+        return
 
-    # 1. Resolve names → character IDs via ESI /universe/ids/
+    # Bulk name → ID resolution up front (single ESI call for all names)
     char_map: dict[str, int] = {}
     for chunk_start in range(0, len(names), 1000):
         chunk = names[chunk_start:chunk_start + 1000]
@@ -447,130 +558,19 @@ def analyze_pilots(
                 char_map[item["name"]] = int(item["id"])
 
     now = datetime.now(timezone.utc)
-    zkill_start_time: Optional[datetime] = (
-        now - timedelta(days=time_window_days) if time_window_days else None
-    )
-    results = []
 
     for name in names:
         char_id = char_map.get(name)
         if not char_id:
-            results.append({"name": name, "error": "Character not found"})
+            yield {"name": name, "error": "Character not found"}
             continue
-
-        pilot = db.get(KillIntelPilot, char_id)
-
-        if use_cache_only:
-            # Ignore age — just aggregate whatever is in DB
-            if pilot is None:
-                results.append({"name": name, "error": "Not in cache — run a live analysis first"})
-                continue
-            results.append(_aggregate_pilot(pilot, char_id, now, db))
-            continue
-
-        age = _age(pilot, now)
-
-        if age is not None and age < TTL_FRESH:
-            # ── Tier 1: fresh — use DB as-is ────────────────────────────────
-            logger.debug("killintel: FRESH cache hit for %s (%d), age=%s", name, char_id, age)
-
-        elif age is not None and age < TTL_PARTIAL:
-            # ── Tier 2: partial — refresh stats + fetch only new stubs ──────
-            logger.info("killintel: PARTIAL refresh for %s (%d), age=%s", name, char_id, age)
-            time.sleep(1.0)
-            stats = _zkill_stats(char_id)
-            info = stats.get("info") or {}
-
-            corp_id = int(info.get("corporationID") or info.get("corporation_id") or 0) or None
-            alliance_id = int(info.get("allianceID") or info.get("alliance_id") or 0) or None
-            names_map = _resolve_corp_alliance_names(
-                {corp_id} if corp_id else set(),
-                {alliance_id} if alliance_id else set(),
+        try:
+            result = analyze_one_pilot(
+                name, char_id, db, now,
+                use_cache_only=use_cache_only,
+                time_window_days=time_window_days,
             )
-
-            pilot.name = info.get("name") or name
-            pilot.corporation_id = corp_id
-            pilot.corporation_name = names_map.get(corp_id) if corp_id else pilot.corporation_name
-            pilot.alliance_id = alliance_id
-            pilot.alliance_name = names_map.get(alliance_id) if alliance_id else pilot.alliance_name
-            pilot.danger_ratio = stats.get("dangerRatio") or pilot.danger_ratio
-            pilot.ships_destroyed = stats.get("shipsDestroyed") or pilot.ships_destroyed
-            pilot.ships_lost = stats.get("shipsLost") or pilot.ships_lost
-            isk_d = stats.get("iskDestroyed")
-            isk_l = stats.get("iskLost")
-            if isk_d: pilot.isk_destroyed = int(isk_d)
-            if isk_l: pilot.isk_lost = int(isk_l)
-            pilot.fetched_at = now
-
-            # Fetch new stubs — incremental (skip IDs already in DB)
-            time.sleep(1.0)
-            stubs = _zkill_kills(char_id, start_time=zkill_start_time)
-            since = pilot.fetched_at  # we already updated it above, use now as marker
-            type_ids = _ingest_stubs(char_id, stubs, db, now, since=since)
-            type_name_map = _resolve_type_names(type_ids)
-            _patch_names(char_id, type_name_map, db)
-            db.commit()
-
-        else:
-            # ── Tier 3: stale (>24 h) or never fetched — full refresh ───────
-            logger.info("killintel: FULL refresh for %s (%d), age=%s", name, char_id, age)
-
-            # Drop existing killmail/item data for this pilot
-            if pilot is not None:
-                existing_km_ids = [
-                    km_id for (km_id,) in db.query(KillIntelKillmail.killmail_id)
-                    .filter(KillIntelKillmail.character_id == char_id)
-                    .all()
-                ]
-                if existing_km_ids:
-                    db.query(KillIntelItem).filter(
-                        KillIntelItem.killmail_id.in_(existing_km_ids)
-                    ).delete(synchronize_session=False)
-                    db.query(KillIntelKillmail).filter(
-                        KillIntelKillmail.character_id == char_id
-                    ).delete(synchronize_session=False)
-
-            time.sleep(1.0)
-            stats = _zkill_stats(char_id)
-            info = stats.get("info") or {}
-
-            corp_id = int(info.get("corporationID") or info.get("corporation_id") or 0) or None
-            alliance_id = int(info.get("allianceID") or info.get("alliance_id") or 0) or None
-            names_map = _resolve_corp_alliance_names(
-                {corp_id} if corp_id else set(),
-                {alliance_id} if alliance_id else set(),
-            )
-
-            if pilot is None:
-                pilot = KillIntelPilot(character_id=char_id)
-                db.add(pilot)
-
-            pilot.name = info.get("name") or name
-            pilot.corporation_id = corp_id
-            pilot.corporation_name = names_map.get(corp_id) if corp_id else None
-            pilot.alliance_id = alliance_id
-            pilot.alliance_name = names_map.get(alliance_id) if alliance_id else None
-            pilot.danger_ratio = stats.get("dangerRatio")
-            pilot.ships_destroyed = stats.get("shipsDestroyed")
-            pilot.ships_lost = stats.get("shipsLost")
-            isk_d = stats.get("iskDestroyed")
-            isk_l = stats.get("iskLost")
-            pilot.isk_destroyed = int(isk_d) if isk_d else None
-            pilot.isk_lost = int(isk_l) if isk_l else None
-            pilot.fetched_at = now
-
-            time.sleep(1.0)
-            stubs = _zkill_kills(char_id, start_time=zkill_start_time)
-            type_ids = _ingest_stubs(char_id, stubs, db, now, since=None)
-            type_name_map = _resolve_type_names(type_ids)
-            _patch_names(char_id, type_name_map, db)
-            db.commit()
-
-        # Opportunistically patch any NULL names left over from prior runs
-        _patch_names(char_id, {}, db)
-        db.commit()
-
-        results.append(_aggregate_pilot(pilot, char_id, now, db))
-
-    results.sort(key=lambda r: r.get("dangerous_score", 0), reverse=True)
-    return results
+            yield result
+        except Exception as e:
+            logger.error("killintel: error analyzing %s: %s", name, e)
+            yield {"name": name, "error": f"Analysis failed: {e}"}

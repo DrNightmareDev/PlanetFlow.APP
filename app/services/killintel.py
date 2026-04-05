@@ -94,7 +94,12 @@ def _resolve_type_names(type_ids: set[int]) -> dict[int, str]:
     result: dict[int, str] = {}
     missing = []
     for tid in type_ids:
-        name = sde.get_type_name(tid)
+        # get_type_name returns a dict {lang: name} or None
+        raw = sde.get_type_name(tid)
+        if isinstance(raw, dict):
+            name = raw.get("en") or next(iter(raw.values()), None)
+        else:
+            name = raw  # legacy scalar, or None
         if name:
             result[tid] = name
         else:
@@ -237,25 +242,39 @@ def _ingest_stubs(
 
 
 def _patch_names(char_id: int, type_name_map: dict[int, str], db: Session) -> None:
-    """Fill in ship_name / type_name for rows that are still missing them."""
+    """Fill in ship_name / type_name for rows that are still missing them.
+    Also resolves any previously stored NULL names on the fly."""
     from app.models import KillIntelKillmail, KillIntelItem
 
-    for km in db.query(KillIntelKillmail).filter(
+    # Collect all type_ids with NULL names so we can resolve them too
+    km_rows = db.query(KillIntelKillmail).filter(
         KillIntelKillmail.character_id == char_id,
         KillIntelKillmail.ship_type_id.isnot(None),
         KillIntelKillmail.ship_name.is_(None),
-    ).all():
-        if km.ship_type_id in type_name_map:
-            km.ship_name = type_name_map[km.ship_type_id]
+    ).all()
 
-    for itm in db.query(KillIntelItem).filter(
+    itm_rows = db.query(KillIntelItem).filter(
         KillIntelItem.killmail_id.in_(
             db.query(KillIntelKillmail.killmail_id).filter(
                 KillIntelKillmail.character_id == char_id
             )
         ),
         KillIntelItem.type_name.is_(None),
-    ).all():
+    ).all()
+
+    # Resolve any IDs not already in the map
+    extra_ids = (
+        {km.ship_type_id for km in km_rows if km.ship_type_id not in type_name_map} |
+        {itm.type_id for itm in itm_rows if itm.type_id not in type_name_map}
+    )
+    if extra_ids:
+        type_name_map.update(_resolve_type_names(extra_ids))
+
+    for km in km_rows:
+        if km.ship_type_id in type_name_map:
+            km.ship_name = type_name_map[km.ship_type_id]
+
+    for itm in itm_rows:
         if itm.type_id in type_name_map:
             itm.type_name = type_name_map[itm.type_id]
 
@@ -530,6 +549,10 @@ def analyze_pilots(names: list[str], db: Session, use_cache_only: bool = False) 
             type_name_map = _resolve_type_names(type_ids)
             _patch_names(char_id, type_name_map, db)
             db.commit()
+
+        # Opportunistically patch any NULL names left over from prior runs
+        _patch_names(char_id, {}, db)
+        db.commit()
 
         results.append(_aggregate_pilot(pilot, char_id, now, db))
 

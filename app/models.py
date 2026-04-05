@@ -711,6 +711,7 @@ class KillIntelPilot(Base):
     isk_lost = Column(BigInteger, nullable=True)
     last_activity = Column(DateTime(timezone=True), nullable=True)
     fetched_at = Column(DateTime(timezone=True), server_default=func.now())
+    kills_window_days = Column(Integer, nullable=True)  # None=all-time, 1/7/14=restricted window
 
 
 class KillIntelKillmail(Base):

@@ -74,10 +74,12 @@ async def killintel_check_cache(
 ):
     body = await request.json()
     raw_text: str = body.get("names", "")
+    raw_days = body.get("time_window_days")
+    time_window_days: int | None = int(raw_days) if raw_days and str(raw_days).isdigit() else None
     names = [line.strip() for line in raw_text.splitlines() if line.strip()]
     if not names:
         return JSONResponse({})
-    result = check_names_in_cache(names, db)
+    result = check_names_in_cache(names, db, time_window_days=time_window_days)
     return JSONResponse(result)
 
 

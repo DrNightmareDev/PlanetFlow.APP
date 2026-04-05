@@ -55,7 +55,7 @@
                 </button>
                 <div class="d-flex align-items-center gap-2">
                     <label class="form-label small text-muted mb-0 text-nowrap">Window:</label>
-                    <select id="timeWindow" class="form-select form-select-sm eve-input">
+                    <select id="timeWindow" class="form-select form-select-sm eve-input" onchange="scheduleCacheCheck()">
                         <option value="1">24h</option>
                         <option value="7">7d</option>
                         <option value="14">14d</option>
@@ -417,10 +417,13 @@ async function checkCache() {
     const names = text.split('\n').map(s => s.trim()).filter(Boolean);
 
     try {
+        const timeWindow = document.getElementById('timeWindow').value;
+        const cacheBody = {names: text};
+        if (timeWindow) cacheBody.time_window_days = parseInt(timeWindow);
         const resp = await fetch('/intel/killintel/check-cache', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({names: text}),
+            body: JSON.stringify(cacheBody),
         });
         if (!resp.ok) { btn.classList.add('d-none'); return; }
         const data = await resp.json();  // {name: "fresh"|"stale"|"none"}

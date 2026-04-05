@@ -385,12 +385,31 @@ def _aggregate_pilot(
 
 # ── Cache check ──────────────────────────────────────────────────────────────
 
-def check_names_in_cache(names: list[str], db: Session) -> dict[str, str]:
+def _window_covered(pilot, requested_days: Optional[int]) -> bool:
+    """
+    Returns True if the stored kill data covers the requested time window.
+    - stored None (all-time) covers any request
+    - stored N covers requests for N or fewer days
+    - stored N does NOT cover a request for more days (or all-time)
+    """
+    stored = pilot.kills_window_days  # None = all-time
+    if stored is None:
+        return True  # all-time data covers everything
+    if requested_days is None:
+        return False  # need all-time, only have N days
+    return stored <= requested_days  # stored window is same or narrower → data is a superset
+
+
+def check_names_in_cache(
+    names: list[str],
+    db: Session,
+    time_window_days: Optional[int] = None,
+) -> dict[str, str]:
     """
     Returns {name: status} where status is one of:
-      "fresh"  — in DB, fetched_at < 5 min ago  → green  (instant from cache)
-      "stale"  — in DB, fetched_at >= 5 min ago → orange (partial refresh needed)
-      "none"   — not in DB                       → red    (full fetch needed)
+      "fresh"  — in DB, age < 5 min, window covered → green  (instant)
+      "stale"  — in DB but older or window not covered → orange (refresh needed)
+      "none"   — not in DB                             → red    (full fetch)
     """
     from app.models import KillIntelPilot
 
@@ -418,7 +437,9 @@ def check_names_in_cache(names: list[str], db: Session) -> dict[str, str]:
             out[name] = "none"
         else:
             age = _age(pilot, now)
-            out[name] = "fresh" if (age is not None and age < TTL_FRESH) else "stale"
+            is_age_fresh = age is not None and age < TTL_FRESH
+            is_window_ok = _window_covered(pilot, time_window_days)
+            out[name] = "fresh" if (is_age_fresh and is_window_ok) else "stale"
     return out
 
 
@@ -473,7 +494,8 @@ def stream_pilots(
             continue
         pilot = db.get(KillIntelPilot, char_id)
         age = _age(pilot, now)
-        if not use_cache_only and (age is None or age >= TTL_FRESH):
+        window_ok = pilot is not None and _window_covered(pilot, time_window_days)
+        if not use_cache_only and (age is None or age >= TTL_FRESH or not window_ok):
             needs_fetch.append((name, char_id))
         else:
             fresh_names.append((name, char_id))
@@ -626,11 +648,14 @@ def stream_pilots(
         age = pilot_data[char_id]["age"]
         try:
             zkill_gap()
-            since = pilot.fetched_at if (age is not None and age < TTL_PARTIAL) else None
+            age = pilot_data[char_id]["age"]
+            since = pilot.fetched_at if (age is not None and age < TTL_PARTIAL and _window_covered(pilot, time_window_days)) else None
             stubs = _zkill_kills(char_id, start_time=zkill_start_time)
             type_ids = _ingest_stubs(char_id, stubs, db, now, since=since, cutoff=cutoff)
             type_name_map = _resolve_type_names(type_ids)
             _patch_names(char_id, type_name_map, db)
+            # Store which window was used so future requests can check coverage
+            pilot.kills_window_days = time_window_days
             db.commit()
             yield _aggregate_pilot(pilot, char_id, now, db, cutoff=cutoff)
         except Exception as e:

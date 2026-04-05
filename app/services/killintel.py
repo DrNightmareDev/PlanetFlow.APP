@@ -53,19 +53,17 @@ def _zkill_stats(character_id: int) -> dict:
 
 
 def _zkill_kills(character_id: int) -> list[dict]:
-    """Fetch up to 200 most recent kill stubs (kills + losses) for a pilot."""
-    try:
-        kills = _fetch_json(f"{ZKILL_BASE}/kills/characterID/{character_id}/")
-        losses = _fetch_json(f"{ZKILL_BASE}/losses/characterID/{character_id}/")
-        result = []
-        if isinstance(kills, list):
-            result.extend([(k, False) for k in kills])
-        if isinstance(losses, list):
-            result.extend([(k, True) for k in losses])
-        return result
-    except Exception as e:
-        logger.warning("killintel: zkill kills failed for %d: %s", character_id, e)
-        return []
+    """Fetch page 1 only (≤200 most recent stubs) of kills + losses for a pilot."""
+    result = []
+    for kind, is_loss in [("kills", False), ("losses", True)]:
+        try:
+            # page=1 returns the most recent ~200 entries; never paginate here
+            data = _fetch_json(f"{ZKILL_BASE}/{kind}/characterID/{character_id}/page/1/")
+            if isinstance(data, list):
+                result.extend([(k, is_loss) for k in data])
+        except Exception as e:
+            logger.warning("killintel: zkill %s failed for %d: %s", kind, character_id, e)
+    return result
 
 
 def _parse_timestamp(ts: str) -> Optional[datetime]:
@@ -228,7 +226,7 @@ def analyze_pilots(names: list[str], db: Session) -> list[dict]:
                     continue
 
                 try:
-                    time.sleep(0.3)
+                    time.sleep(0.1)
                     esi_km = get_killmail(km_id, km_hash)
                 except Exception as e:
                     logger.debug("killintel: ESI km %d failed: %s", km_id, e)
@@ -270,8 +268,8 @@ def analyze_pilots(names: list[str], db: Session) -> list[dict]:
                 existing_km.hydrated = True
                 existing_km.fetched_at = now
 
-                # Store items for losses (fit analysis)
-                if is_loss and hydrated_count < 50:
+                # Store items for losses (fit analysis) — cap at 20 to stay fast
+                if is_loss and hydrated_count < 20:
                     hydrated_count += 1
                     # Remove old items for this km
                     db.query(KillIntelItem).filter(KillIntelItem.killmail_id == km_id).delete()

@@ -11,6 +11,9 @@
             Paste EVE Local Chat names — get instant threat analysis from zKillboard.
         </div>
     </div>
+    <button id="copyUrlBtn" class="btn eve-btn-ghost btn-sm d-none" onclick="copyPageUrl(this)" title="Copy shareable link to clipboard">
+        <i class="bi bi-link-45deg me-1"></i>Copy Link
+    </button>
 </div>
 
 <!-- Input -->
@@ -45,15 +48,12 @@
                 <button id="cacheBtn" class="btn eve-btn-ghost w-100 d-none" onclick="runAnalysis(true)" title="Show results from DB cache — no zKillboard call">
                     <i class="bi bi-database me-1"></i>Use Cache
                 </button>
-                <button id="shareBtn" class="btn eve-btn-ghost w-100 d-none" onclick="shareSearch(this)" title="Copy shareable link">
-                    <i class="bi bi-share me-1"></i>Share Link
-                </button>
                 <button class="btn eve-btn-ghost w-100" onclick="clearAll()">
                     <i class="bi bi-x-circle me-1"></i>Clear
                 </button>
                 <div class="d-flex align-items-center gap-2">
                     <label class="form-label small text-muted mb-0 text-nowrap">Window:</label>
-                    <select id="timeWindow" class="form-select form-select-sm eve-input" onchange="scheduleCacheCheck()">
+                    <select id="timeWindow" class="form-select form-select-sm eve-input" onchange="scheduleCacheCheck();syncUrl()">
                         <option value="1">24h</option>
                         <option value="7">7d</option>
                         <option value="14">14d</option>
@@ -193,19 +193,23 @@ function applyParsedInput(raw) {
     return names;
 }
 
-// ── Share link ────────────────────────────────────────────────────────────────
-function buildShareUrl() {
+// ── URL state sync ────────────────────────────────────────────────────────────
+// The browser URL is always the shareable link — no separate share button needed.
+// Names and window are kept in sync via history.replaceState as the user types.
+
+function syncUrl() {
     const names = document.getElementById('pilotNames').value.trim();
-    const window_ = document.getElementById('timeWindow').value;
+    const win = document.getElementById('timeWindow').value;
     const params = new URLSearchParams();
     if (names) params.set('names', names.split('\n').map(s=>s.trim()).filter(Boolean).join(','));
-    if (window_) params.set('window', window_);
-    return location.origin + location.pathname + '?' + params.toString();
+    if (win) params.set('window', win);
+    const qs = params.toString();
+    history.replaceState(null, '', qs ? '?' + qs : location.pathname);
+    document.getElementById('copyUrlBtn').classList.toggle('d-none', !names);
 }
 
-function shareSearch(btn) {
-    const url = buildShareUrl();
-    navigator.clipboard.writeText(url).then(() => {
+function copyPageUrl(btn) {
+    navigator.clipboard.writeText(location.href).then(() => {
         const orig = btn.innerHTML;
         btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Copied!';
         btn.style.color = '#2dc653';
@@ -224,8 +228,9 @@ function loadFromUrl() {
         const opt = [...sel.options].find(o => o.value === win);
         if (opt) sel.value = win;
     }
+    document.getElementById('copyUrlBtn').classList.remove('d-none');
     scheduleCacheCheck();
-    // Auto-run analysis
+    // Auto-run — always live so recipient sees fresh data
     setTimeout(() => runAnalysis(false), 200);
 }
 
@@ -528,7 +533,6 @@ async function runAnalysis(useCacheOnly) {
     RESULTS = [];
     document.getElementById('analyzeBtn').disabled = true;
     document.getElementById('cacheBtn').disabled = true;
-    document.getElementById('shareBtn').classList.remove('d-none');
     document.getElementById('errorBar').classList.add('d-none');
     document.getElementById('resultsGrid').innerHTML = '';
     document.getElementById('resultsHeader').classList.add('d-none');
@@ -621,10 +625,12 @@ function clearAll() {
     document.getElementById('errorBar').classList.add('d-none');
     document.getElementById('statusBar').classList.add('d-none');
     document.getElementById('cacheBtn').classList.add('d-none');
+    document.getElementById('copyUrlBtn').classList.add('d-none');
     document.getElementById('cacheNote').textContent = '';
     document.getElementById('cacheStatusList').innerHTML =
         '<span class="text-muted fst-italic">type names to check…</span>';
     RESULTS = [];
+    history.replaceState(null, '', location.pathname);
 }
 
 // Ctrl+Enter submits; textarea input triggers parse + cache check
@@ -633,13 +639,13 @@ ta.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter') runAna
 ta.addEventListener('input', () => {
     applyParsedInput(ta.value);
     scheduleCacheCheck();
-    document.getElementById('shareBtn').classList.toggle('d-none', !ta.value.trim());
+    syncUrl();
 });
 ta.addEventListener('paste', e => {
     setTimeout(() => {
         applyParsedInput(ta.value);
         scheduleCacheCheck();
-        document.getElementById('shareBtn').classList.toggle('d-none', !ta.value.trim());
+        syncUrl();
     }, 30);
 });
 

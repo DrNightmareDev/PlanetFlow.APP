@@ -692,6 +692,7 @@ def stream_pilots(
             since = pilot.fetched_at if (age is not None and age < TTL_PARTIAL and _window_covered(pilot, time_window_days)) else None
             stubs = _zkill_kills(char_id, start_time=zkill_start_time)
             type_ids = _ingest_stubs(char_id, stubs, db, now, since=since, cutoff=cutoff)
+            db.flush()  # make new killmail/item rows visible to _patch_names queries
             type_name_map = _resolve_type_names(type_ids)
             _patch_names(char_id, type_name_map, db)
             # Store which window was used so future requests can check coverage

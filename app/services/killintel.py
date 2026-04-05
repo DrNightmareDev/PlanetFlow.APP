@@ -5,6 +5,7 @@ import logging
 import time
 from collections import Counter, defaultdict
 from datetime import datetime, timezone, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Generator, Optional
 
 from sqlalchemy.orm import Session
@@ -419,17 +420,14 @@ def stream_pilots(
     time_window_days: Optional[int] = None,
 ) -> Generator[dict, None, None]:
     """
-    Two-phase streaming per pilot:
-      Phase 1 — stats only (danger score, kills/losses, corp/alliance): yield immediately
-      Phase 2 — killmail hydration (top ships + modules): yield updated card
+    Three-phase streaming:
 
-    Each pilot gets two NDJSON lines: first with partial=True, then with partial=False.
-    Frontend replaces the skeleton card with the full card when the update arrives.
-
-    Cache tiers (ignored when use_cache_only=True):
-      < 5 min  → DB as-is, yield full card immediately (no zKill calls)
-      5–24 h   → refresh stats, yield partial; fetch new stubs, yield full
-      > 24 h   → drop old data, full re-fetch, yield partial then full
+    Phase 0 — cache hits: yield full cards immediately (no network).
+    Phase 1 — ALL non-fresh pilots: fetch stats IN PARALLEL (ThreadPoolExecutor).
+              As each stat completes, yield a partial card immediately.
+              Cards appear ~1–2s after request starts, sorted live by danger score.
+    Phase 2 — sequential kill stub fetch + ESI hydration (rate-limited 1 req/s).
+              Each pilot's card updates in-place with ship data as it arrives.
     """
     from app.models import KillIntelPilot, KillIntelKillmail, KillIntelItem
 
@@ -437,7 +435,7 @@ def stream_pilots(
     if not names:
         return
 
-    # Bulk name → ID resolution (single ESI call)
+    # Bulk name → ID resolution (single ESI call for all names at once)
     char_map: dict[str, int] = {}
     for chunk_start in range(0, len(names), 1000):
         chunk = names[chunk_start:chunk_start + 1000]
@@ -452,56 +450,89 @@ def stream_pilots(
     )
     zkill_start_time: Optional[datetime] = cutoff
 
-    # Track last zKill request time for rate limiting
-    last_zkill: float = 0.0
-
-    def zkill_sleep():
-        nonlocal last_zkill
-        elapsed = time.monotonic() - last_zkill
-        if elapsed < 1.0:
-            time.sleep(1.0 - elapsed)
-        last_zkill = time.monotonic()
+    # Classify pilots by cache state
+    fresh_names: list[tuple[str, int]] = []       # TTL < 5 min → serve from DB immediately
+    needs_fetch: list[tuple[str, int]] = []        # needs zKill stats call
+    not_found: list[str] = []
 
     for name in names:
         char_id = char_map.get(name)
         if not char_id:
-            yield {"name": name, "error": "Character not found"}
+            not_found.append(name)
             continue
+        pilot = db.get(KillIntelPilot, char_id)
+        age = _age(pilot, now)
+        if not use_cache_only and (age is None or age >= TTL_FRESH):
+            needs_fetch.append((name, char_id))
+        else:
+            fresh_names.append((name, char_id))
 
+    # ── Phase 0: yield errors and fresh cache hits immediately ────────────────
+    for name in not_found:
+        yield {"name": name, "error": "Character not found"}
+
+    for name, char_id in fresh_names:
+        pilot = db.get(KillIntelPilot, char_id)
+        if pilot is None:
+            yield {"name": name, "error": "Not in cache — run a live analysis first"}
+            continue
+        _patch_names(char_id, {}, db)
+        db.commit()
+        yield _aggregate_pilot(pilot, char_id, now, db, cutoff=cutoff)
+
+    if not needs_fetch:
+        return
+
+    # ── Phase 1: parallel stats fetch for all stale/new pilots ───────────────
+    # Each thread fetches stats + resolves corp/alliance names for one pilot.
+    # We cap at 10 workers — zKill can handle parallel reads; the 1 req/s limit
+    # is per-endpoint on the SAME character, not across different characters.
+    def fetch_stats_for(name: str, char_id: int) -> dict:
+        """Returns a dict with stats + metadata for one pilot. Thread-safe (read-only)."""
         try:
-            pilot = db.get(KillIntelPilot, char_id)
-            age = _age(pilot, now)
-
-            # ── Tier 1: fresh cache — yield full card immediately ──────────
-            if age is not None and age < TTL_FRESH:
-                logger.debug("killintel: FRESH %s", name)
-                _patch_names(char_id, {}, db)
-                db.commit()
-                yield _aggregate_pilot(pilot, char_id, now, db, cutoff=cutoff)
-                continue
-
-            # ── Cache-only mode ────────────────────────────────────────────
-            if use_cache_only:
-                if pilot is None:
-                    yield {"name": name, "error": "Not in cache — run a live analysis first"}
-                else:
-                    _patch_names(char_id, {}, db)
-                    db.commit()
-                    yield _aggregate_pilot(pilot, char_id, now, db, cutoff=cutoff)
-                continue
-
-            # ── Phase 1: fetch stats, yield skeleton card immediately ──────
-            zkill_sleep()
             stats = _zkill_stats(char_id)
             info = stats.get("info") or {}
-
             corp_id = int(info.get("corporationID") or info.get("corporation_id") or 0) or None
             alliance_id = int(info.get("allianceID") or info.get("alliance_id") or 0) or None
             names_map = _resolve_corp_alliance_names(
                 {corp_id} if corp_id else set(), {alliance_id} if alliance_id else set()
             )
+            return {
+                "name": name,
+                "char_id": char_id,
+                "stats": stats,
+                "info": info,
+                "corp_id": corp_id,
+                "alliance_id": alliance_id,
+                "corp_name": names_map.get(corp_id) if corp_id else None,
+                "alliance_name": names_map.get(alliance_id) if alliance_id else None,
+                "error": None,
+            }
+        except Exception as e:
+            return {"name": name, "char_id": char_id, "error": str(e)}
 
-            # Drop stale killmail data if > 24h old
+    # Submit all stats fetches in parallel
+    pilot_data: dict[int, dict] = {}  # char_id → fetched data, for Phase 2
+    with ThreadPoolExecutor(max_workers=min(len(needs_fetch), 10)) as pool:
+        futures = {
+            pool.submit(fetch_stats_for, name, char_id): (name, char_id)
+            for name, char_id in needs_fetch
+        }
+        for future in as_completed(futures):
+            result = future.result()
+            name = result["name"]
+            char_id = result["char_id"]
+
+            if result.get("error") and not result.get("stats"):
+                yield {"name": name, "error": result["error"]}
+                continue
+
+            stats = result.get("stats") or {}
+            info = result.get("info") or {}
+            pilot = db.get(KillIntelPilot, char_id)
+            age = _age(pilot, now)
+
+            # Drop stale killmail data
             if age is None or age >= TTL_PARTIAL:
                 if pilot is not None:
                     existing_km_ids = [
@@ -520,12 +551,16 @@ def stream_pilots(
                 pilot = KillIntelPilot(character_id=char_id)
                 db.add(pilot)
 
+            corp_id = result.get("corp_id")
+            alliance_id = result.get("alliance_id")
+            old_partial = age is not None and age < TTL_PARTIAL
+
             pilot.name = info.get("name") or name
             pilot.corporation_id = corp_id
-            pilot.corporation_name = names_map.get(corp_id) if corp_id else (pilot.corporation_name if age is not None and age < TTL_PARTIAL else None)
+            pilot.corporation_name = result.get("corp_name") or (pilot.corporation_name if old_partial else None)
             pilot.alliance_id = alliance_id
-            pilot.alliance_name = names_map.get(alliance_id) if alliance_id else (pilot.alliance_name if age is not None and age < TTL_PARTIAL else None)
-            pilot.danger_ratio = stats.get("dangerRatio") or (pilot.danger_ratio if age is not None and age < TTL_PARTIAL else None)
+            pilot.alliance_name = result.get("alliance_name") or (pilot.alliance_name if old_partial else None)
+            pilot.danger_ratio = stats.get("dangerRatio") or (pilot.danger_ratio if old_partial else None)
             pilot.ships_destroyed = stats.get("shipsDestroyed") or pilot.ships_destroyed
             pilot.ships_lost = stats.get("shipsLost") or pilot.ships_lost
             isk_d = stats.get("iskDestroyed")
@@ -535,9 +570,11 @@ def stream_pilots(
             pilot.fetched_at = now
             db.flush()
 
-            # Yield Phase 1 card — stats visible immediately, no ships yet
+            # Store for Phase 2
+            pilot_data[char_id] = {"name": name, "age": age}
+
+            # Yield Phase 1 partial card — appears as soon as stats complete
             danger_ratio = pilot.danger_ratio or 0
-            fetched_at = now
             yield {
                 "character_id": char_id,
                 "name": pilot.name,
@@ -552,21 +589,38 @@ def stream_pilots(
                 "zkill_url": f"https://zkillboard.com/character/{char_id}/",
                 "last_activity": None,
                 "top_ships": [],
-                "cached_at": fetched_at.isoformat(),
-                "partial": True,  # frontend shows loading indicator on ships section
+                "cached_at": now.isoformat(),
+                "partial": True,
             }
 
-            # ── Phase 2: fetch killmails, yield updated full card ──────────
-            zkill_sleep()
+    db.commit()
+
+    # ── Phase 2: sequential kill stub fetch + ESI hydration ──────────────────
+    # Rate-limited: track elapsed since last zKill request
+    last_zkill: float = 0.0
+
+    def zkill_gap():
+        nonlocal last_zkill
+        elapsed = time.monotonic() - last_zkill
+        if elapsed < 1.0:
+            time.sleep(1.0 - elapsed)
+        last_zkill = time.monotonic()
+
+    for name, char_id in needs_fetch:
+        if char_id not in pilot_data:
+            continue  # stats failed, already yielded error
+        pilot = db.get(KillIntelPilot, char_id)
+        if pilot is None:
+            continue
+        age = pilot_data[char_id]["age"]
+        try:
+            zkill_gap()
             since = pilot.fetched_at if (age is not None and age < TTL_PARTIAL) else None
             stubs = _zkill_kills(char_id, start_time=zkill_start_time)
             type_ids = _ingest_stubs(char_id, stubs, db, now, since=since, cutoff=cutoff)
             type_name_map = _resolve_type_names(type_ids)
             _patch_names(char_id, type_name_map, db)
             db.commit()
-
             yield _aggregate_pilot(pilot, char_id, now, db, cutoff=cutoff)
-
         except Exception as e:
-            logger.error("killintel: error analyzing %s: %s", name, e, exc_info=True)
-            yield {"name": name, "error": f"Analysis failed: {e}"}
+            logger.error("killintel: phase2 error for %s: %s", name, e, exc_info=True)

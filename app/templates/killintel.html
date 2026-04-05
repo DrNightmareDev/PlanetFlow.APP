@@ -25,8 +25,11 @@
                           placeholder="Pilot Name&#10;Another Pilot&#10;..."></textarea>
             </div>
             <div class="col-12 col-md-4 d-flex flex-column gap-2">
-                <button id="analyzeBtn" class="btn eve-btn-primary w-100" onclick="runAnalysis()">
+                <button id="analyzeBtn" class="btn eve-btn-primary w-100" onclick="runAnalysis(false)">
                     <i class="bi bi-search me-1"></i>Analyze
+                </button>
+                <button id="cacheBtn" class="btn eve-btn-ghost w-100 d-none" onclick="runAnalysis(true)" title="Show results from DB cache — no zKillboard call">
+                    <i class="bi bi-database me-1"></i>Use Cache
                 </button>
                 <button class="btn eve-btn-ghost w-100" onclick="clearAll()">
                     <i class="bi bi-x-circle me-1"></i>Clear
@@ -74,6 +77,7 @@
 <!-- Results -->
 <div id="resultsHeader" class="d-none d-flex align-items-center justify-content-between mb-2">
     <span class="small text-muted" id="resultCount"></span>
+    <span class="small text-muted" id="cacheNote"></span>
 </div>
 <div id="resultsGrid" class="row g-3"></div>
 {% endblock %}
@@ -81,6 +85,7 @@
 {% block extra_scripts %}
 <script>
 let RESULTS = [];
+let _cacheCheckTimer = null;
 
 // ── Colour helpers ────────────────────────────────────────────────────────────
 function scoreColor(score) {
@@ -131,6 +136,14 @@ function renderCard(r) {
     const zkillLink = `<a href="${esc(r.zkill_url)}" target="_blank" rel="noopener" style="color:var(--eve-accent);" title="zKillboard"><i class="bi bi-box-arrow-up-right"></i></a>`;
     const lastAct = r.last_activity ? new Date(r.last_activity).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) : '—';
 
+    let cachedBadge = '';
+    if (r.cached_at) {
+        const age = Date.now() - new Date(r.cached_at).getTime();
+        const ageMin = Math.floor(age / 60000);
+        const ageLabel = ageMin < 1 ? 'just now' : ageMin < 60 ? `${ageMin}m ago` : `${Math.floor(ageMin/60)}h ago`;
+        cachedBadge = `<span class="small text-muted ms-1" title="Cache age: ${ageLabel}"><i class="bi bi-database me-1"></i>${ageLabel}</span>`;
+    }
+
     // Ships
     let shipsHtml = '';
     for (const ship of (r.top_ships || [])) {
@@ -173,9 +186,10 @@ function renderCard(r) {
                          width="40" height="40" style="border-radius:6px;flex-shrink:0;"
                          onerror="this.src='/static/img/default_char.svg'">
                     <div class="flex-grow-1 min-width-0">
-                        <div class="d-flex align-items-center gap-2">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
                             <span class="fw-semibold" style="color:#e8eaf6;">${esc(r.name)}</span>
                             ${zkillLink}
+                            ${cachedBadge}
                         </div>
                         <div class="small text-muted">${esc(r.corporation)}${r.alliance && r.alliance !== '—' ? ' · <span style="color:#f2c46f;">'+esc(r.alliance)+'</span>' : ''}</div>
                     </div>
@@ -219,9 +233,7 @@ function sortAndRender() {
     const col = document.getElementById('sortSelect').value;
     const sorted = [...RESULTS].sort((a, b) => {
         if (col === 'name') return (a.name||'').localeCompare(b.name||'');
-        if (col === 'last_activity') {
-            return (b.last_activity||'').localeCompare(a.last_activity||'');
-        }
+        if (col === 'last_activity') return (b.last_activity||'').localeCompare(a.last_activity||'');
         return (b[col]||0) - (a[col]||0);
     });
     const grid = document.getElementById('resultsGrid');
@@ -231,8 +243,38 @@ function sortAndRender() {
         `${sorted.length} pilot${sorted.length!==1?'s':''} analyzed`;
 }
 
+// ── Cache check ───────────────────────────────────────────────────────────────
+async function checkCache() {
+    const text = document.getElementById('pilotNames').value.trim();
+    const btn = document.getElementById('cacheBtn');
+    if (!text) { btn.classList.add('d-none'); return; }
+
+    try {
+        const resp = await fetch('/intel/killintel/check-cache', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({names: text}),
+        });
+        if (!resp.ok) { btn.classList.add('d-none'); return; }
+        const data = await resp.json();
+        const anyInCache = Object.values(data).some(v => v === true);
+        if (anyInCache) {
+            btn.classList.remove('d-none');
+        } else {
+            btn.classList.add('d-none');
+        }
+    } catch {
+        btn.classList.add('d-none');
+    }
+}
+
+function scheduleCacheCheck() {
+    clearTimeout(_cacheCheckTimer);
+    _cacheCheckTimer = setTimeout(checkCache, 600);
+}
+
 // ── Analyze ───────────────────────────────────────────────────────────────────
-async function runAnalysis() {
+async function runAnalysis(useCacheOnly) {
     const text = document.getElementById('pilotNames').value.trim();
     if (!text) return;
 
@@ -242,8 +284,13 @@ async function runAnalysis() {
         return;
     }
 
-    setStatus(`Analyzing ${names.length} pilot${names.length!==1?'s':''}… (may take up to ${names.length*3}s)`);
+    if (useCacheOnly) {
+        setStatus(`Loading ${names.length} pilot${names.length!==1?'s':''} from cache…`);
+    } else {
+        setStatus(`Analyzing ${names.length} pilot${names.length!==1?'s':''}… (may take up to ${names.length*3}s)`);
+    }
     document.getElementById('analyzeBtn').disabled = true;
+    document.getElementById('cacheBtn').disabled = true;
     document.getElementById('errorBar').classList.add('d-none');
     document.getElementById('resultsGrid').innerHTML = '';
     document.getElementById('resultsHeader').classList.add('d-none');
@@ -252,20 +299,28 @@ async function runAnalysis() {
         const resp = await fetch('/intel/killintel/analyze', {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({names: text}),
+            body: JSON.stringify({names: text, use_cache_only: useCacheOnly}),
         });
-        const data = await resp.json();
         if (!resp.ok) {
-            showError(data.error || 'Request failed');
+            let errMsg = 'Request failed';
+            try { const d = await resp.json(); errMsg = d.error || errMsg; } catch {}
+            showError(errMsg);
             return;
         }
+        const data = await resp.json();
         RESULTS = data.results || [];
         sortAndRender();
+        if (useCacheOnly) {
+            document.getElementById('cacheNote').textContent = 'Showing cached data — no live zKillboard call';
+        } else {
+            document.getElementById('cacheNote').textContent = '';
+        }
     } catch(e) {
         showError('Network error: ' + e.message);
     } finally {
         document.getElementById('statusBar').classList.add('d-none');
         document.getElementById('analyzeBtn').disabled = false;
+        document.getElementById('cacheBtn').disabled = false;
     }
 }
 
@@ -286,12 +341,15 @@ function clearAll() {
     document.getElementById('resultsHeader').classList.add('d-none');
     document.getElementById('errorBar').classList.add('d-none');
     document.getElementById('statusBar').classList.add('d-none');
+    document.getElementById('cacheBtn').classList.add('d-none');
+    document.getElementById('cacheNote').textContent = '';
     RESULTS = [];
 }
 
-// Ctrl+Enter submits
-document.getElementById('pilotNames').addEventListener('keydown', e => {
-    if (e.ctrlKey && e.key === 'Enter') runAnalysis();
-});
+// Ctrl+Enter submits; textarea input triggers cache check
+const ta = document.getElementById('pilotNames');
+ta.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter') runAnalysis(false); });
+ta.addEventListener('input', scheduleCacheCheck);
+ta.addEventListener('paste', () => setTimeout(scheduleCacheCheck, 50));
 </script>
 {% endblock %}

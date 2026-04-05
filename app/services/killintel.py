@@ -16,8 +16,11 @@ logger = logging.getLogger(__name__)
 
 ZKILL_BASE = "https://zkillboard.com/api"
 HEADERS = {"User-Agent": "PlanetFlow/1.0 github.com/DrNightmareDev/PlanetFlow.APP", "Accept-Encoding": "gzip"}
-PILOT_TTL = timedelta(hours=1)
-KILLS_90D = 90 * 86400  # seconds
+
+# Cache tiers
+TTL_FRESH   = timedelta(minutes=5)   # use DB as-is, no zKill call
+TTL_PARTIAL = timedelta(hours=24)    # fetch only new stubs since last fetch, append to DB
+# > 24h: drop all killmail/item data, run full fresh analysis
 
 # EVE inventory flag → slot name (only fitted slots we care about)
 _FLAG_SLOT: dict[int, str] = {}
@@ -52,12 +55,11 @@ def _zkill_stats(character_id: int) -> dict:
         return {}
 
 
-def _zkill_kills(character_id: int) -> list[dict]:
+def _zkill_kills(character_id: int) -> list[tuple[dict, bool]]:
     """Fetch page 1 only (≤200 most recent stubs) of kills + losses for a pilot."""
     result = []
     for kind, is_loss in [("kills", False), ("losses", True)]:
         try:
-            # page=1 returns the most recent ~200 entries; never paginate here
             data = _fetch_json(f"{ZKILL_BASE}/{kind}/characterID/{character_id}/page/1/")
             if isinstance(data, list):
                 result.extend([(k, is_loss) for k in data])
@@ -77,6 +79,15 @@ def _slot_for_flag(flag: int) -> str:
     return _FLAG_SLOT.get(flag, "other")
 
 
+def _age(pilot, now: datetime) -> Optional[timedelta]:
+    if pilot is None or pilot.fetched_at is None:
+        return None
+    fetched = pilot.fetched_at
+    if fetched.tzinfo is None:
+        fetched = fetched.replace(tzinfo=timezone.utc)
+    return now - fetched
+
+
 # ── Name resolution ─────────────────────────────────────────────────────────
 
 def _resolve_type_names(type_ids: set[int]) -> dict[int, str]:
@@ -88,7 +99,6 @@ def _resolve_type_names(type_ids: set[int]) -> dict[int, str]:
             result[tid] = name
         else:
             missing.append(tid)
-    # Bulk ESI for any not in SDE
     if missing:
         for chunk_start in range(0, len(missing), 1000):
             chunk = missing[chunk_start:chunk_start + 1000]
@@ -109,23 +119,285 @@ def _resolve_corp_alliance_names(corp_ids: set[int], alliance_ids: set[int]) -> 
     return result
 
 
-# ── DB helpers ───────────────────────────────────────────────────────────────
+# ── Kill data ingestion ──────────────────────────────────────────────────────
 
-def _pilot_is_fresh(pilot, now: datetime) -> bool:
-    if pilot is None or pilot.fetched_at is None:
-        return False
-    fetched = pilot.fetched_at
-    if fetched.tzinfo is None:
-        fetched = fetched.replace(tzinfo=timezone.utc)
-    return (now - fetched) < PILOT_TTL
+def _ingest_stubs(
+    char_id: int,
+    stubs: list[tuple[dict, bool]],
+    db: Session,
+    now: datetime,
+    since: Optional[datetime] = None,
+    hydrate_cap: int = 20,
+) -> set[int]:
+    """
+    Process kill stubs into DB.  Returns set of type_ids that need name resolution.
+    If `since` is set, skip stubs whose killmail_id is already in DB (incremental mode).
+    """
+    from app.models import KillIntelKillmail, KillIntelItem
+
+    cutoff_90d = now - timedelta(days=90)
+    type_ids_to_resolve: set[int] = set()
+    hydrated_count = 0
+
+    # Existing killmail IDs for this character (for dedup in incremental mode)
+    if since is not None:
+        existing_ids: set[int] = {
+            km_id for (km_id,) in db.query(KillIntelKillmail.killmail_id)
+            .filter(KillIntelKillmail.character_id == char_id)
+            .all()
+        }
+    else:
+        existing_ids = set()
+
+    for stub, is_loss in stubs:
+        km_id = int(stub.get("killmail_id", 0))
+        if not km_id:
+            continue
+
+        # In incremental mode skip already-stored mails
+        if since is not None and km_id in existing_ids:
+            continue
+
+        zkb = stub.get("zkb", {})
+        km_hash = zkb.get("hash", "")
+        total_value = int(zkb.get("totalValue", 0) or 0)
+
+        existing_km = db.get(KillIntelKillmail, km_id)
+
+        if existing_km and existing_km.hydrated:
+            if existing_km.killmail_time and existing_km.killmail_time < cutoff_90d:
+                continue
+            if existing_km.ship_type_id:
+                type_ids_to_resolve.add(existing_km.ship_type_id)
+            continue
+
+        if not km_hash:
+            continue
+
+        try:
+            time.sleep(0.1)
+            esi_km = get_killmail(km_id, km_hash)
+        except Exception as e:
+            logger.debug("killintel: ESI km %d failed: %s", km_id, e)
+            continue
+
+        if not esi_km:
+            continue
+
+        km_time = _parse_timestamp(esi_km.get("killmail_time", ""))
+        if km_time and km_time < cutoff_90d:
+            continue
+
+        victim = esi_km.get("victim", {})
+        attackers = esi_km.get("attackers", [])
+
+        if is_loss:
+            ship_type_id = victim.get("ship_type_id")
+        else:
+            our_attacker = next(
+                (a for a in attackers if a.get("character_id") == char_id), None
+            )
+            ship_type_id = our_attacker.get("ship_type_id") if our_attacker else None
+
+        if ship_type_id:
+            type_ids_to_resolve.add(ship_type_id)
+
+        if existing_km is None:
+            existing_km = KillIntelKillmail(killmail_id=km_id)
+            db.add(existing_km)
+
+        existing_km.character_id = char_id
+        existing_km.ship_type_id = ship_type_id
+        existing_km.is_loss = is_loss
+        existing_km.killmail_time = km_time
+        existing_km.total_value = total_value
+        existing_km.hydrated = True
+        existing_km.fetched_at = now
+
+        if is_loss and hydrated_count < hydrate_cap:
+            hydrated_count += 1
+            db.query(KillIntelItem).filter(KillIntelItem.killmail_id == km_id).delete()
+            for itm in victim.get("items", []):
+                flag = itm.get("flag", 0)
+                slot = _slot_for_flag(flag)
+                if slot == "other":
+                    continue
+                tid = itm.get("item_type_id")
+                if not tid:
+                    continue
+                type_ids_to_resolve.add(tid)
+                db.add(KillIntelItem(
+                    killmail_id=km_id,
+                    type_id=tid,
+                    slot=slot,
+                    quantity=int(itm.get("quantity_destroyed", 0) or itm.get("quantity_dropped", 0) or 1),
+                ))
+
+    return type_ids_to_resolve
+
+
+def _patch_names(char_id: int, type_name_map: dict[int, str], db: Session) -> None:
+    """Fill in ship_name / type_name for rows that are still missing them."""
+    from app.models import KillIntelKillmail, KillIntelItem
+
+    for km in db.query(KillIntelKillmail).filter(
+        KillIntelKillmail.character_id == char_id,
+        KillIntelKillmail.ship_type_id.isnot(None),
+        KillIntelKillmail.ship_name.is_(None),
+    ).all():
+        if km.ship_type_id in type_name_map:
+            km.ship_name = type_name_map[km.ship_type_id]
+
+    for itm in db.query(KillIntelItem).filter(
+        KillIntelItem.killmail_id.in_(
+            db.query(KillIntelKillmail.killmail_id).filter(
+                KillIntelKillmail.character_id == char_id
+            )
+        ),
+        KillIntelItem.type_name.is_(None),
+    ).all():
+        if itm.type_id in type_name_map:
+            itm.type_name = type_name_map[itm.type_id]
+
+
+# ── Aggregation ──────────────────────────────────────────────────────────────
+
+def _aggregate_pilot(pilot, char_id: int, now: datetime, db: Session) -> dict:
+    """Build the result dict from DB data for one pilot."""
+    from app.models import KillIntelKillmail, KillIntelItem
+
+    cutoff = now - timedelta(days=90)
+    kms = (
+        db.query(KillIntelKillmail)
+        .filter(
+            KillIntelKillmail.character_id == char_id,
+            KillIntelKillmail.killmail_time >= cutoff,
+        )
+        .all()
+    )
+
+    times = [km.killmail_time for km in kms if km.killmail_time]
+    last_activity = max(times).isoformat() if times else None
+
+    ship_counter: Counter = Counter()
+    for km in kms:
+        if km.ship_type_id and km.ship_type_id not in (670, 33328):
+            ship_counter[(km.ship_type_id, km.ship_name or f"Type {km.ship_type_id}")] += 1
+
+    total_appearances = sum(ship_counter.values()) or 1
+
+    top_ships = []
+    for (ship_type_id, ship_name), count in ship_counter.most_common(3):
+        usage_pct = round(count / total_appearances * 100)
+
+        loss_km_ids = [
+            km.killmail_id for km in kms
+            if km.ship_type_id == ship_type_id and km.is_loss and km.hydrated
+        ]
+
+        module_slot_counter: dict[tuple[int, str, str], int] = defaultdict(int)
+        loss_count = len(loss_km_ids) or 1
+
+        if loss_km_ids:
+            items = (
+                db.query(KillIntelItem)
+                .filter(
+                    KillIntelItem.killmail_id.in_(loss_km_ids),
+                    KillIntelItem.slot.in_(["low", "mid", "high", "rig", "sub"]),
+                )
+                .all()
+            )
+            for itm in items:
+                key = (itm.type_id, itm.type_name or f"Type {itm.type_id}", itm.slot)
+                module_slot_counter[key] += 1
+
+        typical_modules = []
+        for (tid, tname, slot), freq_count in sorted(
+            module_slot_counter.items(), key=lambda x: -x[1]
+        )[:12]:
+            freq = round(freq_count / loss_count, 2)
+            if freq < 0.1:
+                continue
+            typical_modules.append({"type_id": tid, "name": tname, "slot": slot, "frequency": freq})
+
+        slot_order = {"high": 0, "mid": 1, "low": 2, "rig": 3, "sub": 4}
+        typical_modules.sort(key=lambda m: (slot_order.get(m["slot"], 9), -m["frequency"]))
+
+        top_ships.append({
+            "ship_type_id": ship_type_id,
+            "ship_name": ship_name,
+            "usage_percent": usage_pct,
+            "appearances": count,
+            "typical_modules": typical_modules[:10],
+        })
+
+    danger_ratio = pilot.danger_ratio or 0
+    dangerous_score = round(danger_ratio / 20, 1)
+
+    fetched_at = pilot.fetched_at
+    if fetched_at and fetched_at.tzinfo is None:
+        fetched_at = fetched_at.replace(tzinfo=timezone.utc)
+
+    return {
+        "character_id": char_id,
+        "name": pilot.name,
+        "corporation": pilot.corporation_name or "—",
+        "alliance": pilot.alliance_name or "—",
+        "dangerous_score": dangerous_score,
+        "danger_ratio": danger_ratio,
+        "ships_destroyed": pilot.ships_destroyed or 0,
+        "ships_lost": pilot.ships_lost or 0,
+        "isk_destroyed": pilot.isk_destroyed or 0,
+        "isk_lost": pilot.isk_lost or 0,
+        "zkill_url": f"https://zkillboard.com/character/{char_id}/",
+        "last_activity": last_activity,
+        "top_ships": top_ships,
+        "cached_at": fetched_at.isoformat() if fetched_at else None,
+    }
+
+
+# ── Cache check (for UI button) ──────────────────────────────────────────────
+
+def check_names_in_cache(names: list[str], db: Session) -> dict[str, bool]:
+    """
+    Returns {name: True/False} — True if the pilot is in the DB cache at all
+    (regardless of age). Used by the frontend to enable the 'Use Cache' button.
+    """
+    from app.models import KillIntelPilot
+
+    names = [n.strip() for n in names if n.strip()]
+    if not names:
+        return {}
+
+    char_map: dict[str, int] = {}
+    for chunk_start in range(0, len(names), 1000):
+        chunk = names[chunk_start:chunk_start + 1000]
+        result = universe_ids(chunk)
+        for item in result.get("characters", []):
+            if item.get("id") and item.get("name"):
+                char_map[item["name"]] = int(item["id"])
+
+    out: dict[str, bool] = {}
+    for name in names:
+        char_id = char_map.get(name)
+        if not char_id:
+            out[name] = False
+            continue
+        pilot = db.get(KillIntelPilot, char_id)
+        out[name] = pilot is not None
+    return out
 
 
 # ── Main entry point ─────────────────────────────────────────────────────────
 
-def analyze_pilots(names: list[str], db: Session) -> list[dict]:
+def analyze_pilots(names: list[str], db: Session, use_cache_only: bool = False) -> list[dict]:
     """
     Resolve names → character IDs, fetch/cache pilot data, return aggregated profiles.
-    Rate-limited to ~1 req/s against zKill.
+
+    Cache tiers (ignored when use_cache_only=True):
+      < 5 min   → use DB as-is, no zKill call
+      5–24 h    → fetch new stubs only (incremental), append to existing DB data
+      > 24 h    → drop all killmail/item data, run full fresh analysis
     """
     from app.models import KillIntelPilot, KillIntelKillmail, KillIntelItem
 
@@ -134,7 +406,7 @@ def analyze_pilots(names: list[str], db: Session) -> list[dict]:
         return []
 
     # 1. Resolve names → character IDs via ESI /universe/ids/
-    char_map: dict[str, int] = {}  # name → char_id
+    char_map: dict[str, int] = {}
     for chunk_start in range(0, len(names), 1000):
         chunk = names[chunk_start:chunk_start + 1000]
         result = universe_ids(chunk)
@@ -151,26 +423,89 @@ def analyze_pilots(names: list[str], db: Session) -> list[dict]:
             results.append({"name": name, "error": "Character not found"})
             continue
 
-        # 2. Check DB cache
         pilot = db.get(KillIntelPilot, char_id)
-        if _pilot_is_fresh(pilot, now):
-            logger.debug("killintel: cache hit for %s (%d)", name, char_id)
-        else:
-            # 3. Fetch from zKill
-            time.sleep(1.0)  # rate limit: 1 req/s
+
+        if use_cache_only:
+            # Ignore age — just aggregate whatever is in DB
+            if pilot is None:
+                results.append({"name": name, "error": "Not in cache — run a live analysis first"})
+                continue
+            results.append(_aggregate_pilot(pilot, char_id, now, db))
+            continue
+
+        age = _age(pilot, now)
+
+        if age is not None and age < TTL_FRESH:
+            # ── Tier 1: fresh — use DB as-is ────────────────────────────────
+            logger.debug("killintel: FRESH cache hit for %s (%d), age=%s", name, char_id, age)
+
+        elif age is not None and age < TTL_PARTIAL:
+            # ── Tier 2: partial — refresh stats + fetch only new stubs ──────
+            logger.info("killintel: PARTIAL refresh for %s (%d), age=%s", name, char_id, age)
+            time.sleep(1.0)
             stats = _zkill_stats(char_id)
             info = stats.get("info") or {}
 
             corp_id = int(info.get("corporationID") or info.get("corporation_id") or 0) or None
             alliance_id = int(info.get("allianceID") or info.get("alliance_id") or 0) or None
-
-            # Resolve corp/alliance names
             names_map = _resolve_corp_alliance_names(
                 {corp_id} if corp_id else set(),
                 {alliance_id} if alliance_id else set(),
             )
 
-            # Upsert pilot
+            pilot.name = info.get("name") or name
+            pilot.corporation_id = corp_id
+            pilot.corporation_name = names_map.get(corp_id) if corp_id else pilot.corporation_name
+            pilot.alliance_id = alliance_id
+            pilot.alliance_name = names_map.get(alliance_id) if alliance_id else pilot.alliance_name
+            pilot.danger_ratio = stats.get("dangerRatio") or pilot.danger_ratio
+            pilot.ships_destroyed = stats.get("shipsDestroyed") or pilot.ships_destroyed
+            pilot.ships_lost = stats.get("shipsLost") or pilot.ships_lost
+            isk_d = stats.get("iskDestroyed")
+            isk_l = stats.get("iskLost")
+            if isk_d: pilot.isk_destroyed = int(isk_d)
+            if isk_l: pilot.isk_lost = int(isk_l)
+            pilot.fetched_at = now
+
+            # Fetch new stubs — incremental (skip IDs already in DB)
+            time.sleep(1.0)
+            stubs = _zkill_kills(char_id)
+            since = pilot.fetched_at  # we already updated it above, use now as marker
+            type_ids = _ingest_stubs(char_id, stubs, db, now, since=since)
+            type_name_map = _resolve_type_names(type_ids)
+            _patch_names(char_id, type_name_map, db)
+            db.commit()
+
+        else:
+            # ── Tier 3: stale (>24 h) or never fetched — full refresh ───────
+            logger.info("killintel: FULL refresh for %s (%d), age=%s", name, char_id, age)
+
+            # Drop existing killmail/item data for this pilot
+            if pilot is not None:
+                existing_km_ids = [
+                    km_id for (km_id,) in db.query(KillIntelKillmail.killmail_id)
+                    .filter(KillIntelKillmail.character_id == char_id)
+                    .all()
+                ]
+                if existing_km_ids:
+                    db.query(KillIntelItem).filter(
+                        KillIntelItem.killmail_id.in_(existing_km_ids)
+                    ).delete(synchronize_session=False)
+                    db.query(KillIntelKillmail).filter(
+                        KillIntelKillmail.character_id == char_id
+                    ).delete(synchronize_session=False)
+
+            time.sleep(1.0)
+            stats = _zkill_stats(char_id)
+            info = stats.get("info") or {}
+
+            corp_id = int(info.get("corporationID") or info.get("corporation_id") or 0) or None
+            alliance_id = int(info.get("allianceID") or info.get("alliance_id") or 0) or None
+            names_map = _resolve_corp_alliance_names(
+                {corp_id} if corp_id else set(),
+                {alliance_id} if alliance_id else set(),
+            )
+
             if pilot is None:
                 pilot = KillIntelPilot(character_id=char_id)
                 db.add(pilot)
@@ -189,230 +524,14 @@ def analyze_pilots(names: list[str], db: Session) -> list[dict]:
             pilot.isk_lost = int(isk_l) if isk_l else None
             pilot.fetched_at = now
 
-            # 4. Fetch kill stubs
             time.sleep(1.0)
             stubs = _zkill_kills(char_id)
-
-            # Cutoff: last 90 days
-            cutoff = now - timedelta(days=90)
-
-            # Hydrate losses (we need items for fit analysis)
-            # Limit to 50 loss hydrations to avoid hammering ESI
-            hydrated_count = 0
-            type_ids_to_resolve: set[int] = set()
-
-            for stub, is_loss in stubs:
-                km_id = int(stub.get("killmail_id", 0))
-                if not km_id:
-                    continue
-
-                zkb = stub.get("zkb", {})
-                km_hash = zkb.get("hash", "")
-                total_value = int(zkb.get("totalValue", 0) or 0)
-
-                # Check if already in DB
-                existing_km = db.get(KillIntelKillmail, km_id)
-
-                if existing_km and existing_km.hydrated:
-                    # Already have full data, just check timestamp vs cutoff
-                    if existing_km.killmail_time and existing_km.killmail_time < cutoff:
-                        continue
-                    if existing_km.ship_type_id:
-                        type_ids_to_resolve.add(existing_km.ship_type_id)
-                    continue
-
-                # Hydrate from ESI
-                if not km_hash:
-                    continue
-
-                try:
-                    time.sleep(0.1)
-                    esi_km = get_killmail(km_id, km_hash)
-                except Exception as e:
-                    logger.debug("killintel: ESI km %d failed: %s", km_id, e)
-                    continue
-
-                if not esi_km:
-                    continue
-
-                km_time_str = esi_km.get("killmail_time", "")
-                km_time = _parse_timestamp(km_time_str)
-                if km_time and km_time < cutoff:
-                    continue  # too old
-
-                victim = esi_km.get("victim", {})
-                attackers = esi_km.get("attackers", [])
-
-                # Determine ship_type_id: if loss → victim ship; if kill → pilot's attacker ship
-                if is_loss:
-                    ship_type_id = victim.get("ship_type_id")
-                else:
-                    our_attacker = next(
-                        (a for a in attackers if a.get("character_id") == char_id), None
-                    )
-                    ship_type_id = our_attacker.get("ship_type_id") if our_attacker else None
-
-                if ship_type_id:
-                    type_ids_to_resolve.add(ship_type_id)
-
-                # Store killmail
-                if existing_km is None:
-                    existing_km = KillIntelKillmail(killmail_id=km_id)
-                    db.add(existing_km)
-
-                existing_km.character_id = char_id
-                existing_km.ship_type_id = ship_type_id
-                existing_km.is_loss = is_loss
-                existing_km.killmail_time = km_time
-                existing_km.total_value = total_value
-                existing_km.hydrated = True
-                existing_km.fetched_at = now
-
-                # Store items for losses (fit analysis) — cap at 20 to stay fast
-                if is_loss and hydrated_count < 20:
-                    hydrated_count += 1
-                    # Remove old items for this km
-                    db.query(KillIntelItem).filter(KillIntelItem.killmail_id == km_id).delete()
-                    items = victim.get("items", [])
-                    for itm in items:
-                        flag = itm.get("flag", 0)
-                        slot = _slot_for_flag(flag)
-                        if slot == "other":
-                            continue
-                        tid = itm.get("item_type_id")
-                        if not tid:
-                            continue
-                        qty = int(itm.get("quantity_destroyed", 0) or itm.get("quantity_dropped", 0) or 1)
-                        type_ids_to_resolve.add(tid)
-                        db.add(KillIntelItem(
-                            killmail_id=km_id,
-                            type_id=tid,
-                            slot=slot,
-                            quantity=qty,
-                        ))
-
-            # Bulk resolve type names
-            type_name_map = _resolve_type_names(type_ids_to_resolve)
-
-            # Patch names into stored killmails and items
-            for km in db.query(KillIntelKillmail).filter(
-                KillIntelKillmail.character_id == char_id,
-                KillIntelKillmail.ship_type_id.isnot(None),
-                KillIntelKillmail.ship_name.is_(None),
-            ).all():
-                if km.ship_type_id and km.ship_type_id in type_name_map:
-                    km.ship_name = type_name_map[km.ship_type_id]
-
-            for itm in db.query(KillIntelItem).filter(
-                KillIntelItem.killmail_id.in_(
-                    db.query(KillIntelKillmail.killmail_id).filter(
-                        KillIntelKillmail.character_id == char_id
-                    )
-                ),
-                KillIntelItem.type_name.is_(None),
-            ).all():
-                if itm.type_id in type_name_map:
-                    itm.type_name = type_name_map[itm.type_id]
-
+            type_ids = _ingest_stubs(char_id, stubs, db, now, since=None)
+            type_name_map = _resolve_type_names(type_ids)
+            _patch_names(char_id, type_name_map, db)
             db.commit()
 
-        # 5. Aggregate from DB
-        cutoff = now - timedelta(days=90)
-        kms = (
-            db.query(KillIntelKillmail)
-            .filter(
-                KillIntelKillmail.character_id == char_id,
-                KillIntelKillmail.killmail_time >= cutoff,
-            )
-            .all()
-        )
+        results.append(_aggregate_pilot(pilot, char_id, now, db))
 
-        # Last activity
-        times = [km.killmail_time for km in kms if km.killmail_time]
-        last_activity = max(times).isoformat() if times else None
-
-        # Ship usage (all kms, both kills and losses, last 90d)
-        ship_counter: Counter = Counter()
-        for km in kms:
-            if km.ship_type_id and km.ship_type_id not in (670, 33328):  # skip pods/capsules
-                ship_counter[(km.ship_type_id, km.ship_name or f"Type {km.ship_type_id}")] += 1
-
-        total_appearances = sum(ship_counter.values()) or 1
-        top_ships_raw = ship_counter.most_common(3)
-
-        top_ships = []
-        for (ship_type_id, ship_name), count in top_ships_raw:
-            usage_pct = round(count / total_appearances * 100)
-
-            # Gather modules from loss killmails with this ship
-            loss_km_ids = [
-                km.killmail_id for km in kms
-                if km.ship_type_id == ship_type_id and km.is_loss and km.hydrated
-            ]
-
-            module_slot_counter: dict[tuple[int, str, str], int] = defaultdict(int)
-            loss_count = len(loss_km_ids) or 1
-
-            if loss_km_ids:
-                items = (
-                    db.query(KillIntelItem)
-                    .filter(
-                        KillIntelItem.killmail_id.in_(loss_km_ids),
-                        KillIntelItem.slot.in_(["low", "mid", "high", "rig", "sub"]),
-                    )
-                    .all()
-                )
-                for itm in items:
-                    key = (itm.type_id, itm.type_name or f"Type {itm.type_id}", itm.slot)
-                    module_slot_counter[key] += 1
-
-            # Top modules by frequency across losses
-            typical_modules = []
-            for (tid, tname, slot), freq_count in sorted(
-                module_slot_counter.items(), key=lambda x: -x[1]
-            )[:12]:
-                freq = round(freq_count / loss_count, 2)
-                if freq < 0.1:
-                    continue
-                typical_modules.append({
-                    "type_id": tid,
-                    "name": tname,
-                    "slot": slot,
-                    "frequency": freq,
-                })
-
-            # Sort by slot order then frequency
-            slot_order = {"high": 0, "mid": 1, "low": 2, "rig": 3, "sub": 4}
-            typical_modules.sort(key=lambda m: (slot_order.get(m["slot"], 9), -m["frequency"]))
-
-            top_ships.append({
-                "ship_type_id": ship_type_id,
-                "ship_name": ship_name,
-                "usage_percent": usage_pct,
-                "appearances": count,
-                "typical_modules": typical_modules[:10],
-            })
-
-        # Dangerous score: danger_ratio from zKill (0-100), rescaled to 0-5
-        danger_ratio = pilot.danger_ratio or 0
-        dangerous_score = round(danger_ratio / 20, 1)  # 0-100 → 0-5
-
-        results.append({
-            "character_id": char_id,
-            "name": pilot.name,
-            "corporation": pilot.corporation_name or "—",
-            "alliance": pilot.alliance_name or "—",
-            "dangerous_score": dangerous_score,
-            "danger_ratio": danger_ratio,
-            "ships_destroyed": pilot.ships_destroyed or 0,
-            "ships_lost": pilot.ships_lost or 0,
-            "isk_destroyed": pilot.isk_destroyed or 0,
-            "isk_lost": pilot.isk_lost or 0,
-            "zkill_url": f"https://zkillboard.com/character/{char_id}/",
-            "last_activity": last_activity,
-            "top_ships": top_ships,
-        })
-
-    # Sort by dangerous score descending
     results.sort(key=lambda r: r.get("dangerous_score", 0), reverse=True)
     return results

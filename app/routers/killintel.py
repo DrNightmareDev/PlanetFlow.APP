@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import require_account
 from app.models import KillIntelPilot, KillIntelKillmail, KillIntelItem
-from app.services.killintel import analyze_pilots
+from app.services.killintel import analyze_pilots, check_names_in_cache
 from app.templates_env import templates
 
 router = APIRouter(prefix="/intel/killintel", tags=["killintel"])
@@ -35,14 +35,31 @@ async def killintel_analyze(
 ):
     body = await request.json()
     raw_text: str = body.get("names", "")
+    use_cache_only: bool = bool(body.get("use_cache_only", False))
     names = [line.strip() for line in raw_text.splitlines() if line.strip()]
     if not names:
         return JSONResponse({"error": "No names provided"}, status_code=400)
     if len(names) > 50:
         return JSONResponse({"error": "Max 50 pilots per request"}, status_code=400)
 
-    results = analyze_pilots(names, db)
+    results = analyze_pilots(names, db, use_cache_only=use_cache_only)
     return JSONResponse({"results": results})
+
+
+@router.post("/check-cache")
+async def killintel_check_cache(
+    request: Request,
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """Returns {name: bool} — True if the pilot has any cached data in DB."""
+    body = await request.json()
+    raw_text: str = body.get("names", "")
+    names = [line.strip() for line in raw_text.splitlines() if line.strip()]
+    if not names:
+        return JSONResponse({})
+    result = check_names_in_cache(names, db)
+    return JSONResponse(result)
 
 
 @router.get("/pilot/{character_id}")

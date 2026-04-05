@@ -112,6 +112,89 @@
 let RESULTS = [];
 let _cacheCheckTimer = null;
 
+// ── EVE chat parser ───────────────────────────────────────────────────────────
+// Parses lines like:
+//   "Daniel Mentzel > <url=showinfo:1376//2124066205>Mastermind of Escalations</url>  <url=showinfo:5//30004324>JTAU-5</url>"
+//   "Halllow Reaper > <url=showinfo:33468//1051239704964>Astero</url>  <url=showinfo:5//30003625>KMV-CQ</url>  <url=showinfo:1375//2123863523>Mikle Soros</url>"
+//
+// Character showinfo categories: 1373–1380
+// Solar system: 5
+// Everything else with a numeric category ≠ 5 and < 1373: ship/item typeID
+//
+// Returns: array of { name, ship?, system? } — one entry per character found.
+// Plain lines (no url= tags) are treated as bare character names.
+
+const CHAR_CATS = new Set([1373,1374,1375,1376,1377,1378,1379,1380]);
+
+function parseEveChat(text) {
+    const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
+    // name → {name, ship, system}
+    const chars = new Map();
+    const plainNames = [];
+
+    for (const line of lines) {
+        if (!line.includes('<url=showinfo:')) {
+            // Plain name — no tags at all
+            plainNames.push(line);
+            continue;
+        }
+
+        // Extract all showinfo tokens from this line
+        const tokenRe = /<url=showinfo:(\d+)\/\/(\d+)>([^<]*)<\/url>/g;
+        let m;
+        let lineChars = [];
+        let lineShip = null;
+        let lineSystem = null;
+
+        while ((m = tokenRe.exec(line)) !== null) {
+            const cat = parseInt(m[1]);
+            // const entityId = m[2];  // available if needed later
+            const label = m[3].trim();
+
+            if (CHAR_CATS.has(cat)) {
+                lineChars.push(label);
+            } else if (cat === 5) {
+                lineSystem = label;
+            } else {
+                // Treat as ship/item type name (category IS the typeID in EVE showinfo)
+                lineShip = label;
+            }
+        }
+
+        for (const name of lineChars) {
+            if (!chars.has(name)) chars.set(name, {name, ship: null, system: null});
+            const entry = chars.get(name);
+            if (lineShip) entry.ship = lineShip;
+            if (lineSystem) entry.system = lineSystem;
+        }
+    }
+
+    // Plain names go in without metadata
+    for (const name of plainNames) {
+        if (!chars.has(name)) chars.set(name, {name, ship: null, system: null});
+    }
+
+    return [...chars.values()];
+}
+
+// Extra metadata from parsing: name → {ship, system}
+let PARSED_META = {};  // populated when textarea changes
+
+function applyParsedInput(raw) {
+    const parsed = parseEveChat(raw);
+    PARSED_META = {};
+    const names = [];
+    for (const p of parsed) {
+        PARSED_META[p.name] = {ship: p.ship, system: p.system};
+        names.push(p.name);
+    }
+    // If the input contained EVE chat links, rewrite textarea to plain names
+    if (raw.includes('<url=showinfo:')) {
+        document.getElementById('pilotNames').value = names.join('\n');
+    }
+    return names;
+}
+
 // ── Colour helpers ────────────────────────────────────────────────────────────
 function scoreColor(score) {
     if (score >= 3.5) return {bg:'#e6394618', border:'#e6394640', text:'#e63946'};
@@ -173,6 +256,15 @@ function renderCard(r) {
         cachedBadge = `<span class="small text-muted ms-1" title="Cache age: ${ageLabel}"><i class="bi bi-database me-1"></i>${ageLabel}</span>`;
     }
 
+    // Local chat meta (ship / system from parsed EVE chat link)
+    const meta = PARSED_META[r.name] || {};
+    const shipBadge = meta.ship
+        ? `<span class="badge ms-1" style="background:#7ec8e322;color:#7ec8e3;border:1px solid #7ec8e340;font-size:.65rem;" title="Ship spotted in local"><i class="bi bi-rocket me-1"></i>${esc(meta.ship)}</span>`
+        : '';
+    const sysBadge = meta.system
+        ? `<span class="badge ms-1" style="background:#a78bfa22;color:#a78bfa;border:1px solid #a78bfa40;font-size:.65rem;" title="System"><i class="bi bi-geo-alt me-1"></i>${esc(meta.system)}</span>`
+        : '';
+
     // Ships
     let shipsHtml = '';
     for (const ship of (r.top_ships || [])) {
@@ -224,10 +316,12 @@ function renderCard(r) {
                          width="40" height="40" style="border-radius:6px;flex-shrink:0;"
                          onerror="this.src='/static/img/default_char.svg'">
                     <div class="flex-grow-1 min-width-0">
-                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <div class="d-flex align-items-center gap-1 flex-wrap">
                             <span class="fw-semibold" style="color:#e8eaf6;">${esc(r.name)}</span>
                             ${zkillLink}
                             ${cachedBadge}
+                            ${shipBadge}
+                            ${sysBadge}
                         </div>
                         <div class="small text-muted">${esc(r.corporation)}${r.alliance && r.alliance !== '—' ? ' · <span style="color:#f2c46f;">'+esc(r.alliance)+'</span>' : ''}</div>
                     </div>
@@ -356,6 +450,9 @@ function scheduleCacheCheck() {
 
 // ── Analyze (streaming NDJSON) ────────────────────────────────────────────────
 async function runAnalysis(useCacheOnly) {
+    // Parse EVE chat format first (idempotent if already plain names)
+    applyParsedInput(document.getElementById('pilotNames').value);
+
     const text = document.getElementById('pilotNames').value.trim();
     if (!text) return;
 
@@ -466,10 +563,13 @@ function clearAll() {
     RESULTS = [];
 }
 
-// Ctrl+Enter submits; textarea input triggers cache check
+// Ctrl+Enter submits; textarea input triggers parse + cache check
 const ta = document.getElementById('pilotNames');
 ta.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter') runAnalysis(false); });
-ta.addEventListener('input', scheduleCacheCheck);
-ta.addEventListener('paste', () => setTimeout(scheduleCacheCheck, 50));
+ta.addEventListener('input', () => { applyParsedInput(ta.value); scheduleCacheCheck(); });
+ta.addEventListener('paste', e => {
+    // On paste: let browser insert text first, then parse
+    setTimeout(() => { applyParsedInput(ta.value); scheduleCacheCheck(); }, 30);
+});
 </script>
 {% endblock %}

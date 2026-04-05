@@ -103,6 +103,40 @@ def _sde_type_name(type_id: int) -> Optional[str]:
     return raw  # scalar or None
 
 
+def _esi_names_post(ids: list[int]) -> dict[int, str]:
+    """POST to /universe/names/ and return {id: name}. Handles gzip."""
+    import gzip as _gz
+    import json as _json
+    import urllib.request as _ureq
+
+    result: dict[int, str] = {}
+    if not ids:
+        return result
+    body = _json.dumps(ids).encode()
+    req = _ureq.Request(
+        "https://esi.evetech.net/latest/universe/names/?datasource=tranquility",
+        data=body,
+        headers={
+            "User-Agent": HEADERS["User-Agent"],
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Accept-Encoding": "gzip",
+        },
+        method="POST",
+    )
+    try:
+        with _ureq.urlopen(req, timeout=20) as resp:
+            raw = resp.read()
+            if resp.headers.get("Content-Encoding") == "gzip":
+                raw = _gz.decompress(raw)
+            for item in _json.loads(raw):
+                if item.get("id") and item.get("name"):
+                    result[int(item["id"])] = item["name"]
+    except Exception as e:
+        logger.warning("killintel: ESI /universe/names/ failed: %s", e)
+    return result
+
+
 def _resolve_type_names(type_ids: set[int]) -> dict[int, str]:
     result: dict[int, str] = {}
     missing = []
@@ -113,11 +147,14 @@ def _resolve_type_names(type_ids: set[int]) -> dict[int, str]:
         else:
             missing.append(tid)
     if missing:
+        logger.debug("killintel: resolving %d type IDs via ESI /universe/names/", len(missing))
         for chunk_start in range(0, len(missing), 1000):
             chunk = missing[chunk_start:chunk_start + 1000]
-            for item in universe_names(chunk):
-                if item.get("id") and item.get("name"):
-                    result[int(item["id"])] = item["name"]
+            resolved = _esi_names_post(chunk)
+            result.update(resolved)
+        still_missing = [tid for tid in missing if tid not in result]
+        if still_missing:
+            logger.warning("killintel: %d type IDs unresolved: %s", len(still_missing), still_missing[:10])
     return result
 
 
@@ -125,10 +162,7 @@ def _resolve_corp_alliance_names(corp_ids: set[int], alliance_ids: set[int]) -> 
     all_ids = list((corp_ids | alliance_ids) - {0})
     result: dict[int, str] = {}
     for chunk_start in range(0, len(all_ids), 1000):
-        chunk = all_ids[chunk_start:chunk_start + 1000]
-        for item in universe_names(chunk):
-            if item.get("id") and item.get("name"):
-                result[int(item["id"])] = item["name"]
+        result.update(_esi_names_post(all_ids[chunk_start:chunk_start + 1000]))
     return result
 
 

@@ -14,6 +14,7 @@ from app.i18n import bootstrap_pi_type_translations, bootstrap_static_planets, b
 from app.models import Character, SSOState
 from app.page_access import (
     get_access_settings_map,
+    get_billing_enabled,
     get_page_visibility,
     get_subscription_badge_settings_map,
     is_public_path,
@@ -185,6 +186,7 @@ async def impersonate_middleware(request: Request, call_next):
     request.state.page_permissions = {}
     request.state.page_access_levels = {}
     request.state.page_subscription_badges = {}
+    request.state.billing_enabled = False
     request.state.show_director_nav = False
 
     path = request.url.path
@@ -202,14 +204,21 @@ async def impersonate_middleware(request: Request, call_next):
         account_id = session.get("account_id") if session else None
         account = db.query(Account).filter(Account.id == account_id).first() if account_id else None
         request.state.account = account
+        billing_enabled = get_billing_enabled(db)
+        request.state.billing_enabled = billing_enabled
+
         settings_map = get_access_settings_map(db)
-        badge_map = get_subscription_badge_settings_map(db)
         request.state.page_access_levels = settings_map
-        request.state.page_subscription_badges = badge_map
+        # Subscription badges and entitlements are only active when billing is enabled
+        if billing_enabled:
+            badge_map = get_subscription_badge_settings_map(db)
+            request.state.page_subscription_badges = badge_map
+        else:
+            request.state.page_subscription_badges = {}
 
         # Load entitlement cache once per request (only for paid pages, avoids extra query otherwise)
         entitlement_map: dict[str, bool] | None = None
-        if account is not None and any("paid" in str(v).split(",") for v in settings_map.values()):
+        if billing_enabled and account is not None and any("paid" in str(v).split(",") for v in settings_map.values()):
             from app.services.entitlements import get_cached_page_entitlements
             entitlement_map = get_cached_page_entitlements(db, account_id=account.id)
         request.state.entitlement_map = entitlement_map or {}

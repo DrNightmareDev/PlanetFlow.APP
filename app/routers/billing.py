@@ -25,7 +25,7 @@ from app.models import (
     Character,
     PageAccessSetting,
 )
-from app.page_access import get_access_settings_map, get_page_definitions
+from app.page_access import get_access_settings_map, get_billing_enabled, get_page_definitions
 from app.session import validate_csrf
 from app.templates_env import templates
 
@@ -112,6 +112,8 @@ def billing_page(
     account: Account = Depends(require_account),
     db: Session = Depends(get_db),
 ):
+    if not get_billing_enabled(db):
+        return RedirectResponse(url="/dashboard", status_code=303)
     active_periods = _active_periods(db, account=account)
     active_grants = _active_grants(db, account=account)
     receivers = db.query(BillingWalletReceiver).filter(

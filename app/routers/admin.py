@@ -7,8 +7,8 @@ from sqlalchemy import func
 from app.database import get_db
 from app.dependencies import require_admin, require_account, require_manager_or_admin
 from app.i18n import get_translation_rows, save_translation, reseed_translations, SUPPORTED_LANGUAGES
-from app.models import Account, Character, AccessPolicy, AccessPolicyEntry, PageAccessSetting
-from app.page_access import get_access_settings_map, get_page_definitions
+from app.models import Account, Character, AccessPolicy, AccessPolicyEntry, PageAccessSetting, SiteSettings
+from app.page_access import get_access_settings_map, get_billing_enabled, get_page_definitions
 from app.session import create_impersonate_session, create_session, read_session, validate_csrf
 from app.templates_env import templates
 
@@ -185,6 +185,7 @@ def admin_panel(
         "page_access_rows": page_access_rows,
         "translation_rows": get_translation_rows(),
         "translation_languages": [lang for lang in SUPPORTED_LANGUAGES if lang not in ("en", "de")],
+        "billing_enabled": get_billing_enabled(db),
     })
 
 
@@ -263,6 +264,26 @@ def reset_account_errors(
             reset_count += 1
     db.commit()
     return JSONResponse({"ok": True, "reset_count": reset_count})
+
+
+@router.post("/billing-enabled")
+async def set_billing_enabled(
+    request: Request,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Toggle the global billing system on/off."""
+    await validate_csrf(request)
+    form = await request.form()
+    enabled = form.get("enabled") == "1"
+    row = db.query(SiteSettings).filter(SiteSettings.id == 1).first()
+    if row is None:
+        row = SiteSettings(id=1, billing_enabled=enabled)
+        db.add(row)
+    else:
+        row.billing_enabled = enabled
+    db.commit()
+    return RedirectResponse(url="/admin#billing-switch", status_code=303)
 
 
 @router.post("/reset-all-errors")

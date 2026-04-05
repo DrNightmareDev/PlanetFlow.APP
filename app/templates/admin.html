@@ -57,11 +57,58 @@
             {% if account.is_owner %}
             <button type="button" class="btn btn-sm eve-btn-ghost manager-subnav-btn" data-target="manager-section-pages">Page Access</button>
             <button type="button" class="btn btn-sm eve-btn-ghost manager-subnav-btn" data-target="manager-section-policy">Access Policy</button>
+            <button type="button" class="btn btn-sm eve-btn-ghost manager-subnav-btn" data-target="manager-section-billing-switch">Billing</button>
             {% endif %}
             <button type="button" class="btn btn-sm eve-btn-ghost manager-subnav-btn" data-target="translation-editor">Translations</button>
-            <a href="/admin/billing" class="btn btn-sm eve-btn-ghost"><i class="bi bi-currency-exchange me-1"></i>Billing</a>
+            {% if billing_enabled %}
+            <a href="/admin/billing" class="btn btn-sm eve-btn-ghost"><i class="bi bi-currency-exchange me-1"></i>Billing Admin</a>
+            {% endif %}
         </div>
     </div>
+</div>
+
+<!-- ── Billing Switch ────────────────────────────────────────────────────── -->
+<div class="manager-section" id="manager-section-billing-switch">
+{% if account.is_owner %}
+<div class="eve-card card border-0 mb-4">
+    <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-currency-exchange eve-accent me-1"></i>
+            <span class="fw-medium">Billing System</span>
+        </div>
+        <span class="badge" style="background:#f4a30018;color:#f4a300;border:1px solid #f4a30030;font-size:0.7rem;">
+            <i class="bi bi-star-fill me-1"></i>Administrators only
+        </span>
+    </div>
+    <div class="card-body py-3">
+        <div class="d-flex align-items-start gap-4 flex-wrap">
+            <div style="max-width:520px;">
+                <div class="fw-medium mb-1">Enable Billing &amp; Subscriptions</div>
+                <div class="small text-muted mb-3">
+                    When <strong>off</strong> (default): all billing, subscription, and pricing pages are hidden and access to all pages is free for everyone.<br>
+                    When <strong>on</strong>: the billing system is active, subscription badges are shown, and page-level paid access rules are enforced.
+                </div>
+                <form method="post" action="/admin/billing-enabled" class="d-flex align-items-center gap-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch"
+                               id="billingEnabledSwitch" name="enabled" value="1"
+                               {% if billing_enabled %}checked{% endif %}
+                               onchange="this.form.submit()">
+                        <label class="form-check-label fw-medium" for="billingEnabledSwitch">
+                            {% if billing_enabled %}
+                            <span style="color:#2dc653;"><i class="bi bi-check-circle-fill me-1"></i>Billing active</span>
+                            {% else %}
+                            <span class="text-muted"><i class="bi bi-circle me-1"></i>Billing inactive (free for all)</span>
+                            {% endif %}
+                        </label>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 </div>
 
 <div class="manager-section" id="manager-section-pages">

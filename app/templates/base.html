@@ -294,6 +294,7 @@
                             <span id="webhookStatusBadge" class="badge ms-1" style="background:#1a2d3d;color:#7ec8e3;border:1px solid #2a4a6b;font-size:.65rem;vertical-align:middle;">–</span>
                         </button>
                     </li>
+                    {% if request.state.billing_enabled %}
                     <li><hr class="dropdown-divider eve-divider"></li>
                     <li>
                         <a class="dropdown-item {% if request.url.path.startswith('/billing') %}active{% endif %}" href="/billing">
@@ -301,6 +302,7 @@
                             {% if nav_sub_badges.get('billing', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                         </a>
                     </li>
+                    {% endif %}
                     <li><hr class="dropdown-divider eve-divider"></li>
                     <li>
                         <a class="dropdown-item" href="/auth/add-character">

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.models import PageAccessSetting
+from app.models import PageAccessSetting, SiteSettings
 
 
 @dataclass(frozen=True)
@@ -236,6 +236,16 @@ def match_page_for_path(path: str) -> PageDefinition | None:
         if path == prefix or path.startswith(prefix + "/"):
             return page
     return None
+
+
+def get_billing_enabled(db: Session) -> bool:
+    """Returns True if the billing system is enabled site-wide."""
+    try:
+        row = db.query(SiteSettings).filter(SiteSettings.id == 1).first()
+        return bool(row.billing_enabled) if row else False
+    except Exception:
+        db.rollback()
+        return False
 
 
 def is_public_path(path: str) -> bool:

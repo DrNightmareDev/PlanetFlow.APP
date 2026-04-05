@@ -683,3 +683,12 @@ class BillingAuditLog(Base):
     target_account_id = Column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True, index=True)
     detail_json = Column(Text, nullable=False, default="{}", server_default="{}")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class SiteSettings(Base):
+    """Singleton row (id=1) for global site-wide feature flags."""
+    __tablename__ = "site_settings"
+
+    id = Column(Integer, primary_key=True, default=1)
+    billing_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

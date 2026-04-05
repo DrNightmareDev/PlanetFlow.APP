@@ -55,12 +55,17 @@ def _zkill_stats(character_id: int) -> dict:
         return {}
 
 
-def _zkill_kills(character_id: int) -> list[tuple[dict, bool]]:
-    """Fetch the 20 most recent kills and 20 most recent losses for a pilot."""
+def _zkill_kills(character_id: int, start_time: Optional[datetime] = None) -> list[tuple[dict, bool]]:
+    """Fetch the 20 most recent kills and 20 most recent losses for a pilot.
+    If start_time is given, only mails after that date are requested from zKill."""
     result = []
+    time_segment = ""
+    if start_time is not None:
+        time_segment = f"startTime/{start_time.strftime('%Y%m%d%H%I')}/"
     for kind, is_loss in [("kills", False), ("losses", True)]:
         try:
-            data = _fetch_json(f"{ZKILL_BASE}/{kind}/characterID/{character_id}/page/1/")
+            url = f"{ZKILL_BASE}/{kind}/characterID/{character_id}/{time_segment}page/1/"
+            data = _fetch_json(url)
             if isinstance(data, list):
                 result.extend([(k, is_loss) for k in data[:20]])
         except Exception as e:
@@ -409,9 +414,17 @@ def check_names_in_cache(names: list[str], db: Session) -> dict[str, bool]:
 
 # ── Main entry point ─────────────────────────────────────────────────────────
 
-def analyze_pilots(names: list[str], db: Session, use_cache_only: bool = False) -> list[dict]:
+def analyze_pilots(
+    names: list[str],
+    db: Session,
+    use_cache_only: bool = False,
+    time_window_days: Optional[int] = None,
+) -> list[dict]:
     """
     Resolve names → character IDs, fetch/cache pilot data, return aggregated profiles.
+
+    time_window_days: 1, 7, 14 → only fetch kills newer than N days from zKill.
+                      None      → no time restriction (any).
 
     Cache tiers (ignored when use_cache_only=True):
       < 5 min   → use DB as-is, no zKill call
@@ -434,6 +447,9 @@ def analyze_pilots(names: list[str], db: Session, use_cache_only: bool = False) 
                 char_map[item["name"]] = int(item["id"])
 
     now = datetime.now(timezone.utc)
+    zkill_start_time: Optional[datetime] = (
+        now - timedelta(days=time_window_days) if time_window_days else None
+    )
     results = []
 
     for name in names:
@@ -488,7 +504,7 @@ def analyze_pilots(names: list[str], db: Session, use_cache_only: bool = False) 
 
             # Fetch new stubs — incremental (skip IDs already in DB)
             time.sleep(1.0)
-            stubs = _zkill_kills(char_id)
+            stubs = _zkill_kills(char_id, start_time=zkill_start_time)
             since = pilot.fetched_at  # we already updated it above, use now as marker
             type_ids = _ingest_stubs(char_id, stubs, db, now, since=since)
             type_name_map = _resolve_type_names(type_ids)
@@ -544,7 +560,7 @@ def analyze_pilots(names: list[str], db: Session, use_cache_only: bool = False) 
             pilot.fetched_at = now
 
             time.sleep(1.0)
-            stubs = _zkill_kills(char_id)
+            stubs = _zkill_kills(char_id, start_time=zkill_start_time)
             type_ids = _ingest_stubs(char_id, stubs, db, now, since=None)
             type_name_map = _resolve_type_names(type_ids)
             _patch_names(char_id, type_name_map, db)

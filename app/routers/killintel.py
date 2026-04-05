@@ -36,13 +36,16 @@ async def killintel_analyze(
     body = await request.json()
     raw_text: str = body.get("names", "")
     use_cache_only: bool = bool(body.get("use_cache_only", False))
+    raw_days = body.get("time_window_days")
+    time_window_days: int | None = int(raw_days) if raw_days and str(raw_days).isdigit() else None
+
     names = [line.strip() for line in raw_text.splitlines() if line.strip()]
     if not names:
         return JSONResponse({"error": "No names provided"}, status_code=400)
     if len(names) > 50:
         return JSONResponse({"error": "Max 50 pilots per request"}, status_code=400)
 
-    results = analyze_pilots(names, db, use_cache_only=use_cache_only)
+    results = analyze_pilots(names, db, use_cache_only=use_cache_only, time_window_days=time_window_days)
     return JSONResponse({"results": results})
 
 

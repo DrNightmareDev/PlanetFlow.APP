@@ -1,15 +1,14 @@
 {% extends "base.html" %}
-{% block title %}ESS / Sov Timers — {{ t('app.name') }}{% endblock %}
+{% block title %}Sov Timers — {{ t('app.name') }}{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
     <div>
         <h4 class="fw-semibold mb-0" style="color:var(--eve-accent);">
-            <i class="bi bi-bank me-2"></i>ESS / Sovereignty Timers
+            <i class="bi bi-clock-history me-2"></i>Sovereignty Timers
         </h4>
         <div class="text-muted small mt-1">
-            IHub vulnerability windows &amp; ADM for all alliance-held systems.
-            Data cached up to 2 min from ESI.
+            IHub vulnerability windows &amp; ADM for all alliance-held null-sec systems. Updated every 15 min.
         </div>
     </div>
     <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -115,6 +114,7 @@
 // ── Data ─────────────────────────────────────────────────────────────────────
 const CHAR_REGION_ID = {{ char_location.region_id | tojson if char_location else 'null' }};
 const CHAR_REGION_NAME = {{ char_location.region_name | tojson if char_location else '""' }};
+const INITIAL_FETCHED_AT = {{ fetched_at | tojson }};
 
 let ALL_ROWS = {{ rows | tojson }};
 let sortCol = 'secs_until';
@@ -305,7 +305,10 @@ function escapeHtml(s) {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('fetchedAt').textContent = 'Live';
+    if (INITIAL_FETCHED_AT) {
+        const ts = new Date(INITIAL_FETCHED_AT);
+        document.getElementById('fetchedAt').textContent = 'DB snapshot ' + ts.toUTCString().replace(/.*(\d{2}:\d{2}:\d{2}).*/, '$1') + ' UTC';
+    }
     renderTable();
 });
 </script>

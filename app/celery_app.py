@@ -63,5 +63,10 @@ celery_app.conf.update(
             "task": "app.tasks.recompute_entitlements",
             "schedule": 300.0,
         },
+        # Sovereignty structures refresh every 15 minutes
+        "refresh-sov-structures": {
+            "task": "app.tasks.refresh_sov_structures_task",
+            "schedule": 900.0,
+        },
     },
 )

@@ -870,6 +870,104 @@ def recompute_entitlements() -> dict:
     return {"updated": updated, "errors": errors}
 
 
+# ── Task: sovereignty structures refresh ──────────────────────────────────────
+
+@celery_app.task(name="app.tasks.refresh_sov_structures_task")
+def refresh_sov_structures_task() -> dict:
+    """Fetch sovereignty structures + map from ESI and upsert into sov_structures table.
+    Runs every 15 minutes via Celery Beat."""
+    from app.database import SessionLocal
+    from app.models import SovStructure
+    from app.esi import get_sovereignty_map, get_sovereignty_structures, universe_names
+    from app import sde
+
+    logger.info("tasks: refreshing sovereignty structures from ESI")
+    try:
+        sov_map_raw = get_sovereignty_map()
+        sov_structs_raw = get_sovereignty_structures()
+    except Exception as exc:
+        logger.warning("tasks: sov refresh ESI fetch failed: %s", exc)
+        return {"ok": False, "error": str(exc)}
+
+    # system_id -> alliance_id from sov map
+    system_alliance: dict[int, int] = {}
+    for row in sov_map_raw:
+        aid = row.get("alliance_id")
+        if aid:
+            system_alliance[int(row["system_id"])] = int(aid)
+
+    # Collect all alliance IDs for bulk name resolution
+    alliance_ids: set[int] = set(system_alliance.values())
+    for s in sov_structs_raw:
+        if s.get("alliance_id"):
+            alliance_ids.add(int(s["alliance_id"]))
+
+    # Bulk resolve alliance names
+    alliance_names: dict[int, str] = {}
+    id_list = list(alliance_ids)
+    for chunk_start in range(0, len(id_list), 1000):
+        chunk = id_list[chunk_start:chunk_start + 1000]
+        try:
+            for item in universe_names(chunk):
+                if item.get("category") == "alliance":
+                    alliance_names[int(item["id"])] = item["name"]
+        except Exception:
+            pass
+
+    now = datetime.now(timezone.utc)
+    upserted = 0
+    with SessionLocal() as db:
+        for s in sov_structs_raw:
+            sys_id = int(s["solar_system_id"])
+            alliance_id = int(s.get("alliance_id") or system_alliance.get(sys_id) or 0) or None
+            sys_info = sde.get_system_local(sys_id) or {}
+            system_name = sys_info.get("name") or f"System {sys_id}"
+            region_id = int(sys_info.get("region_id") or 0) or None
+            region_name = sys_info.get("region_name") or None
+            alliance_name = alliance_names.get(alliance_id, None) if alliance_id else None
+            adm = float(s.get("vulnerability_occupancy_level") or 0)
+
+            vuln_start = None
+            vuln_end = None
+            try:
+                vs = s.get("vulnerable_start_time")
+                if vs:
+                    vuln_start = datetime.fromisoformat(vs.replace("Z", "+00:00"))
+            except Exception:
+                pass
+            try:
+                ve = s.get("vulnerable_end_time")
+                if ve:
+                    vuln_end = datetime.fromisoformat(ve.replace("Z", "+00:00"))
+            except Exception:
+                pass
+
+            row = db.get(SovStructure, sys_id)
+            if row is None:
+                row = SovStructure(system_id=sys_id)
+                db.add(row)
+            row.alliance_id = alliance_id
+            row.alliance_name = alliance_name
+            row.system_name = system_name
+            row.region_id = region_id
+            row.region_name = region_name
+            row.adm = adm
+            row.vuln_start = vuln_start
+            row.vuln_end = vuln_end
+            row.fetched_at = now
+            upserted += 1
+
+        # Remove stale rows (systems that no longer have sov structures)
+        active_ids = {int(s["solar_system_id"]) for s in sov_structs_raw}
+        deleted = db.query(SovStructure).filter(
+            SovStructure.system_id.notin_(active_ids)
+        ).delete(synchronize_session=False)
+        db.commit()
+
+    logger.info("tasks: sov structures upserted=%d deleted=%d", upserted, deleted)
+    return {"ok": True, "upserted": upserted, "deleted": deleted}
+
+
 # ── Task: SSO state cleanup ───────────────────────────────────────────────────
 
 @celery_app.task(name="app.tasks.cleanup_sso_states_task")

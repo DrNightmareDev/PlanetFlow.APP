@@ -692,3 +692,19 @@ class SiteSettings(Base):
     id = Column(Integer, primary_key=True, default=1)
     billing_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class SovStructure(Base):
+    """Cached sovereignty structure (IHub) data from ESI, refreshed every 15 min."""
+    __tablename__ = "sov_structures"
+
+    system_id = Column(Integer, primary_key=True)
+    alliance_id = Column(Integer, nullable=True, index=True)
+    alliance_name = Column(String(255), nullable=True)
+    system_name = Column(String(100), nullable=True)
+    region_id = Column(Integer, nullable=True)
+    region_name = Column(String(100), nullable=True)
+    adm = Column(Float, nullable=True)
+    vuln_start = Column(DateTime(timezone=True), nullable=True)
+    vuln_end = Column(DateTime(timezone=True), nullable=True)
+    fetched_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

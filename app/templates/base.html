@@ -201,7 +201,7 @@
                         {% if request.state.page_permissions.get('ess', False) %}
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/intel/ess') %}active{% endif %}" href="/intel/ess">
-                                <i class="bi bi-bank me-2 text-muted"></i>ESS / Sov Timers
+                                <i class="bi bi-clock-history me-2 text-muted"></i>Sov Timers
                                 {% if nav_sub_badges.get('ess', False) %}<span class="badge ms-1" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;font-size:.6rem;vertical-align:middle;">Subscription</span>{% endif %}
                             </a>
                         </li>

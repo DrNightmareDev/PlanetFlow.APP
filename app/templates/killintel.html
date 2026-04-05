@@ -190,6 +190,16 @@ function applyParsedInput(raw) {
     return names;
 }
 
+// ── Copy URL ──────────────────────────────────────────────────────────────────
+function copyUrl(url, btn) {
+    navigator.clipboard.writeText(url).then(() => {
+        const icon = btn.querySelector('i');
+        icon.className = 'bi bi-clipboard-check';
+        btn.style.color = '#2dc653';
+        setTimeout(() => { icon.className = 'bi bi-clipboard'; btn.style.color = '#6b7db3'; }, 1500);
+    });
+}
+
 // ── Colour helpers ────────────────────────────────────────────────────────────
 function scoreColor(score) {
     if (score >= 3.5) return {bg:'#e6394618', border:'#e6394640', text:'#e63946'};
@@ -240,7 +250,7 @@ function renderCard(r) {
     }
 
     const c = scoreColor(r.dangerous_score);
-    const zkillLink = `<a href="${esc(r.zkill_url)}" target="_blank" rel="noopener" style="color:var(--eve-accent);" title="zKillboard"><i class="bi bi-box-arrow-up-right"></i></a>`;
+    const zkillLink = `<a href="${esc(r.zkill_url)}" target="_blank" rel="noopener" style="color:var(--eve-accent);" title="zKillboard"><i class="bi bi-box-arrow-up-right"></i></a><button onclick="copyUrl('${esc(r.zkill_url)}',this)" title="Copy zKillboard URL" style="background:none;border:none;padding:0 2px;cursor:pointer;color:#6b7db3;font-size:.8rem;line-height:1;vertical-align:middle;"><i class="bi bi-clipboard"></i></button>`;
     const lastAct = r.last_activity ? new Date(r.last_activity).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) : '—';
 
     let cachedBadge = '';

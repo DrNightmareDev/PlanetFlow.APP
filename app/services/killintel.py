@@ -385,7 +385,13 @@ def _aggregate_pilot(
 
 # ── Cache check ──────────────────────────────────────────────────────────────
 
-def check_names_in_cache(names: list[str], db: Session) -> dict[str, bool]:
+def check_names_in_cache(names: list[str], db: Session) -> dict[str, str]:
+    """
+    Returns {name: status} where status is one of:
+      "fresh"  — in DB, fetched_at < 5 min ago  → green  (instant from cache)
+      "stale"  — in DB, fetched_at >= 5 min ago → orange (partial refresh needed)
+      "none"   — not in DB                       → red    (full fetch needed)
+    """
     from app.models import KillIntelPilot
 
     names = [n.strip() for n in names if n.strip()]
@@ -400,14 +406,19 @@ def check_names_in_cache(names: list[str], db: Session) -> dict[str, bool]:
             if item.get("id") and item.get("name"):
                 char_map[item["name"]] = int(item["id"])
 
-    out: dict[str, bool] = {}
+    now = datetime.now(timezone.utc)
+    out: dict[str, str] = {}
     for name in names:
         char_id = char_map.get(name)
         if not char_id:
-            out[name] = False
+            out[name] = "none"
             continue
         pilot = db.get(KillIntelPilot, char_id)
-        out[name] = pilot is not None
+        if pilot is None:
+            out[name] = "none"
+        else:
+            age = _age(pilot, now)
+            out[name] = "fresh" if (age is not None and age < TTL_FRESH) else "stale"
     return out
 
 

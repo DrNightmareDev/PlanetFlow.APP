@@ -16,14 +16,33 @@
 <!-- Input -->
 <div class="eve-card card border-0 mb-3">
     <div class="card-body py-3">
-        <div class="row g-3 align-items-end">
-            <div class="col-12 col-md-8">
+        <div class="row g-2">
+            <!-- Left: textarea + name status list -->
+            <div class="col-12 col-md-5">
                 <label class="form-label small text-muted mb-1">
                     <i class="bi bi-clipboard me-1"></i>Paste Local Chat names (one per line, max 50)
                 </label>
-                <textarea id="pilotNames" class="form-control eve-input" rows="5"
+                <textarea id="pilotNames" class="form-control eve-input" rows="3"
                           placeholder="Pilot Name&#10;Another Pilot&#10;..."></textarea>
             </div>
+
+            <!-- Middle: cache status list -->
+            <div class="col-12 col-md-3">
+                <div class="small text-muted mb-1" style="line-height:1.8;">
+                    <i class="bi bi-database me-1"></i>Cache status
+                </div>
+                <div id="cacheStatusList" style="max-height:80px;overflow-y:auto;font-size:.78rem;line-height:1.9;">
+                    <span class="text-muted fst-italic">type names to check…</span>
+                </div>
+                <!-- Legend -->
+                <div class="mt-2 d-flex flex-column gap-1" style="font-size:.7rem;">
+                    <span><i class="bi bi-database-fill me-1" style="color:#2dc653;"></i>current — instant</span>
+                    <span><i class="bi bi-database-fill me-1" style="color:#f4a300;"></i>stale — quick refresh</span>
+                    <span><i class="bi bi-database-fill me-1" style="color:#e63946;"></i>none — full fetch</span>
+                </div>
+            </div>
+
+            <!-- Right: controls -->
             <div class="col-12 col-md-4 d-flex flex-column gap-2">
                 <button id="analyzeBtn" class="btn eve-btn-primary w-100" onclick="runAnalysis(false)">
                     <i class="bi bi-search me-1"></i>Analyze
@@ -34,8 +53,8 @@
                 <button class="btn eve-btn-ghost w-100" onclick="clearAll()">
                     <i class="bi bi-x-circle me-1"></i>Clear
                 </button>
-                <div class="d-flex align-items-center gap-2 mt-1">
-                    <label class="form-label small text-muted mb-0">Window:</label>
+                <div class="d-flex align-items-center gap-2">
+                    <label class="form-label small text-muted mb-0 text-nowrap">Window:</label>
                     <select id="timeWindow" class="form-select form-select-sm eve-input">
                         <option value="1">24h</option>
                         <option value="7">7d</option>
@@ -44,7 +63,7 @@
                     </select>
                 </div>
                 <div class="d-flex align-items-center gap-2">
-                    <label class="form-label small text-muted mb-0">Sort:</label>
+                    <label class="form-label small text-muted mb-0 text-nowrap">Sort:</label>
                     <select id="sortSelect" class="form-select form-select-sm eve-input" onchange="sortAndRender()">
                         <option value="dangerous_score">Danger Score</option>
                         <option value="ships_destroyed">Ships Killed</option>
@@ -53,16 +72,13 @@
                         <option value="name">Name</option>
                     </select>
                 </div>
+                <!-- Score legend compact -->
+                <div class="d-flex flex-column gap-1 mt-1" style="font-size:.7rem;">
+                    <span><span style="color:#e63946;">&#9632;</span> &gt;3.5 Dangerous</span>
+                    <span><span style="color:#f4a300;">&#9632;</span> 2–3.5 Moderate</span>
+                    <span><span style="color:#2dc653;">&#9632;</span> &lt;2 Harmless</span>
+                </div>
             </div>
-        </div>
-
-        <!-- Legend -->
-        <div class="d-flex align-items-center gap-3 mt-3 flex-wrap" style="font-size:.75rem;">
-            <span class="text-muted">Score:</span>
-            <span><span class="badge" style="background:#e6394622;color:#e63946;border:1px solid #e6394640;">&#9632; &gt;3.5 Dangerous</span></span>
-            <span><span class="badge" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;">&#9632; 2–3.5 Moderate</span></span>
-            <span><span class="badge" style="background:#2dc65322;color:#2dc653;border:1px solid #2dc65340;">&#9632; &lt;2 Harmless</span></span>
-            <span class="text-muted ms-2"><i class="bi bi-hourglass-split me-1"></i>Analysis may take 10–60s (rate limited)</span>
         </div>
     </div>
 </div>
@@ -288,20 +304,45 @@ function insertCard(r) {
     sortAndRender();
 }
 
+// ── Cache status colours ──────────────────────────────────────────────────────
+const CACHE_COLOR = {fresh: '#2dc653', stale: '#f4a300', none: '#e63946'};
+const CACHE_TITLE = {fresh: 'Current — will load instantly', stale: 'Stale — quick refresh needed', none: 'No data — full fetch required'};
+
 // ── Cache check ───────────────────────────────────────────────────────────────
 async function checkCache() {
     const text = document.getElementById('pilotNames').value.trim();
     const btn = document.getElementById('cacheBtn');
-    if (!text) { btn.classList.add('d-none'); return; }
+    const list = document.getElementById('cacheStatusList');
+
+    if (!text) {
+        btn.classList.add('d-none');
+        list.innerHTML = '<span class="text-muted fst-italic">type names to check…</span>';
+        return;
+    }
+
+    const names = text.split('\n').map(s => s.trim()).filter(Boolean);
+
     try {
         const resp = await fetch('/intel/killintel/check-cache', {
             method: 'POST',
-            headers: {'Content-Type':'application/json'},
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({names: text}),
         });
         if (!resp.ok) { btn.classList.add('d-none'); return; }
-        const data = await resp.json();
-        const anyInCache = Object.values(data).some(v => v === true);
+        const data = await resp.json();  // {name: "fresh"|"stale"|"none"}
+
+        // Render status list — one row per name in input order
+        list.innerHTML = names.map(name => {
+            const status = data[name] || 'none';
+            const color = CACHE_COLOR[status];
+            const title = CACHE_TITLE[status];
+            return `<div class="d-flex align-items-center gap-1" title="${title}">
+                <i class="bi bi-database-fill flex-shrink-0" style="color:${color};font-size:.8rem;"></i>
+                <span class="text-truncate" style="color:#cdd6f4;max-width:140px;">${esc(name)}</span>
+            </div>`;
+        }).join('');
+
+        const anyInCache = Object.values(data).some(v => v === 'fresh' || v === 'stale');
         btn.classList.toggle('d-none', !anyInCache);
     } catch {
         btn.classList.add('d-none');
@@ -396,6 +437,8 @@ async function runAnalysis(useCacheOnly) {
         document.getElementById('statusBar').classList.add('d-none');
         document.getElementById('analyzeBtn').disabled = false;
         document.getElementById('cacheBtn').disabled = false;
+        // Refresh cache status icons now that data is stored
+        checkCache();
     }
 }
 
@@ -418,6 +461,8 @@ function clearAll() {
     document.getElementById('statusBar').classList.add('d-none');
     document.getElementById('cacheBtn').classList.add('d-none');
     document.getElementById('cacheNote').textContent = '';
+    document.getElementById('cacheStatusList').innerHTML =
+        '<span class="text-muted fst-italic">type names to check…</span>';
     RESULTS = [];
 }
 

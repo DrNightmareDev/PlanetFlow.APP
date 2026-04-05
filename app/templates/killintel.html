@@ -129,9 +129,13 @@ function slotBadge(slot) {
 }
 
 // ── Card rendering ────────────────────────────────────────────────────────────
+function cardId(r) {
+    return `ki-card-${r.character_id || r.name.replace(/\W/g,'_')}`;
+}
+
 function renderCard(r) {
     if (r.error) {
-        return `<div class="col-12 col-lg-6">
+        return `<div class="col-12 col-lg-6" id="${cardId(r)}">
             <div class="eve-card card border-0 h-100" style="border-left:3px solid #4a4a6a !important;">
                 <div class="card-body py-2 px-3">
                     <div class="fw-medium">${esc(r.name)}</div>
@@ -184,9 +188,18 @@ function renderCard(r) {
             </div>
         </div>`;
     }
-    if (!shipsHtml) shipsHtml = '<div class="small text-muted">No killmail data in last 90 days</div>';
+    if (!shipsHtml) {
+        if (r.partial) {
+            shipsHtml = `<div class="d-flex align-items-center gap-2 small text-muted">
+                <div class="spinner-border spinner-border-sm" style="color:var(--eve-accent);width:12px;height:12px;border-width:2px;"></div>
+                Loading ship data…
+            </div>`;
+        } else {
+            shipsHtml = '<div class="small text-muted">No killmail data in selected window</div>';
+        }
+    }
 
-    return `<div class="col-12 col-xl-6">
+    return `<div class="col-12 col-xl-6" id="${cardId(r)}">
         <div class="eve-card card border-0 h-100" style="border-left:3px solid ${c.text} !important;">
             <div class="card-body py-3 px-3">
                 <!-- Header -->
@@ -252,8 +265,25 @@ function sortAndRender() {
         `${sorted.length} pilot${sorted.length!==1?'s':''} analyzed`;
 }
 
-// Insert one card into the grid keeping current sort order
+// Insert or update a card in the grid
 function insertCard(r) {
+    const id = cardId(r);
+    const existing = document.getElementById(id);
+
+    if (existing && r.partial) {
+        // Already have a partial — ignore duplicate partial
+        return;
+    }
+    if (existing && !r.partial) {
+        // Replace existing partial card with full card in-place (no re-sort flicker)
+        const idx = RESULTS.findIndex(x => cardId(x) === id);
+        if (idx >= 0) RESULTS[idx] = r; else RESULTS.push(r);
+        existing.outerHTML = renderCard(r);
+        document.getElementById('resultCount').textContent =
+            `${RESULTS.length} pilot${RESULTS.length!==1?'s':''} analyzed`;
+        return;
+    }
+    // New card — add and re-sort
     RESULTS.push(r);
     sortAndRender();
 }

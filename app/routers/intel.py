@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app import sde
 from app.database import SessionLocal, get_db
 from app.dependencies import require_account
-from app.esi import ensure_valid_token, get_character_location
+from app.esi import ensure_valid_token, get_character_location, get_sovereignty_map, get_sovereignty_structures, universe_names
 from app.models import Character, CombatIntelPreference, IntelKillEvent, IntelStreamState, KillActivityCache
 from app.templates_env import templates
 from app.zkill import get_region_kills_db_first, get_system_kill_summary
@@ -656,3 +656,194 @@ def intel_character_location(
         "region_id": int(system_info.get("region_id") or 0),
         "region_name": system_info.get("region_name") or "",
     })
+
+
+# ── ESS / Sovereignty Timers ──────────────────────────────────────────────────
+
+_SOV_CACHE: dict[str, tuple[list, float]] = {}
+_SOV_CACHE_TTL = 120.0  # match ESI cache
+
+
+def _get_sov_data() -> tuple[list[dict], list[dict]]:
+    """Return (sov_map, sov_structures) with in-process cache."""
+    now = time.time()
+    sov_map_cached = _SOV_CACHE.get("map")
+    sov_str_cached = _SOV_CACHE.get("structures")
+    if sov_map_cached and now - sov_map_cached[1] < 3600:
+        sov_map = sov_map_cached[0]
+    else:
+        sov_map = get_sovereignty_map()
+        _SOV_CACHE["map"] = (sov_map, now)
+    if sov_str_cached and now - sov_str_cached[1] < _SOV_CACHE_TTL:
+        sov_structures = sov_str_cached[0]
+    else:
+        sov_structures = get_sovereignty_structures()
+        _SOV_CACHE["structures"] = (sov_structures, now)
+    return sov_map, sov_structures
+
+
+def _build_ess_rows() -> list[dict]:
+    """Merge sov map + sov structures into ESS row dicts."""
+    sov_map, sov_structures = _get_sov_data()
+
+    # Build system_id -> alliance_id from sov map
+    system_alliance: dict[int, int] = {}
+    for row in sov_map:
+        aid = row.get("alliance_id")
+        if aid:
+            system_alliance[int(row["system_id"])] = int(aid)
+
+    # Collect all unique alliance IDs for bulk name resolution
+    alliance_ids: set[int] = set(system_alliance.values())
+    for s in sov_structures:
+        if s.get("alliance_id"):
+            alliance_ids.add(int(s["alliance_id"]))
+
+    # Bulk resolve names (max 1000 per call)
+    alliance_names: dict[int, str] = {}
+    id_list = list(alliance_ids)
+    for chunk_start in range(0, len(id_list), 1000):
+        chunk = id_list[chunk_start:chunk_start + 1000]
+        for item in universe_names(chunk):
+            if item.get("category") == "alliance":
+                alliance_names[int(item["id"])] = item["name"]
+
+    # Bulk resolve system names
+    system_ids = list({int(s["solar_system_id"]) for s in sov_structures})
+    system_names: dict[int, str] = {}
+    for chunk_start in range(0, len(system_ids), 1000):
+        chunk = system_ids[chunk_start:chunk_start + 1000]
+        for item in universe_names(chunk):
+            if item.get("category") == "solar_system":
+                system_names[int(item["id"])] = item["name"]
+
+    now_utc = datetime.now(timezone.utc)
+    rows: list[dict] = []
+    for s in sov_structures:
+        sys_id = int(s["solar_system_id"])
+        alliance_id = int(s.get("alliance_id") or system_alliance.get(sys_id) or 0)
+        system_name = system_names.get(sys_id) or sde.get_system_local(sys_id) or {}.get("name") or f"System {sys_id}"
+        alliance_name = alliance_names.get(alliance_id, f"Alliance {alliance_id}") if alliance_id else "—"
+
+        # Sov system info from SDE
+        sys_local = sde.get_system_local(sys_id) or {}
+        region_name = sys_local.get("region_name") or ""
+        region_id = int(sys_local.get("region_id") or 0)
+
+        adm = float(s.get("vulnerability_occupancy_level") or 0)
+
+        # Vulnerable window parsing
+        vuln_start_str = s.get("vulnerable_start_time") or ""
+        vuln_end_str = s.get("vulnerable_end_time") or ""
+        try:
+            vuln_start = datetime.fromisoformat(vuln_start_str.replace("Z", "+00:00"))
+        except Exception:
+            vuln_start = None
+        try:
+            vuln_end = datetime.fromisoformat(vuln_end_str.replace("Z", "+00:00"))
+        except Exception:
+            vuln_end = None
+
+        # Is currently vulnerable?
+        is_vulnerable = bool(vuln_start and vuln_end and vuln_start <= now_utc <= vuln_end)
+
+        # Time until next vulnerability window starts (or ends if already open)
+        if is_vulnerable and vuln_end:
+            next_event = vuln_end
+            next_event_label = "closes"
+        elif vuln_start and vuln_start > now_utc:
+            next_event = vuln_start
+            next_event_label = "opens"
+        else:
+            # Window is in the past — happens when data is stale
+            next_event = None
+            next_event_label = ""
+
+        secs_until = int((next_event - now_utc).total_seconds()) if next_event else None
+
+        rows.append({
+            "system_id": sys_id,
+            "system_name": system_name,
+            "region_name": region_name,
+            "region_id": region_id,
+            "alliance_id": alliance_id,
+            "alliance_name": alliance_name,
+            "adm": adm,
+            "vuln_start": vuln_start_str,
+            "vuln_end": vuln_end_str,
+            "is_vulnerable": is_vulnerable,
+            "next_event": next_event.isoformat() if next_event else "",
+            "next_event_label": next_event_label,
+            "secs_until": secs_until,
+        })
+
+    return rows
+
+
+@router.get("/ess", response_class=HTMLResponse)
+def ess_page(
+    request: Request,
+    character_id: str | None = Query(None),
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    characters = (
+        db.query(Character)
+        .filter(Character.account_id == account.id)
+        .order_by(Character.character_name.asc())
+        .all()
+    )
+
+    # Determine selected character (prefer main)
+    selected_char = None
+    if character_id:
+        for c in characters:
+            if str(c.id) == character_id:
+                selected_char = c
+                break
+    if selected_char is None and account.main_character_id:
+        for c in characters:
+            if c.id == account.main_character_id:
+                selected_char = c
+                break
+    if selected_char is None and characters:
+        selected_char = characters[0]
+
+    # Character location
+    char_location: dict = {}
+    if selected_char:
+        loc = _get_cached_character_location(selected_char, db)
+        if loc:
+            sys_id = int(loc.get("solar_system_id") or 0)
+            sys_info = sde.get_system_local(sys_id) or {}
+            char_location = {
+                "system_id": sys_id,
+                "system_name": sys_info.get("name") or f"System {sys_id}",
+                "region_id": int(sys_info.get("region_id") or 0),
+                "region_name": sys_info.get("region_name") or "",
+            }
+
+    rows = _build_ess_rows()
+
+    # Collect unique alliances for filter dropdown
+    alliances = sorted({(r["alliance_id"], r["alliance_name"]) for r in rows if r["alliance_id"]}, key=lambda x: x[1].lower())
+
+    return templates.TemplateResponse("ess.html", {
+        "request": request,
+        "account": account,
+        "characters": characters,
+        "selected_char": selected_char,
+        "char_location": char_location,
+        "rows": rows,
+        "alliances": alliances,
+    })
+
+
+@router.get("/ess/data")
+def ess_data(
+    request: Request,
+    account=Depends(require_account),
+):
+    """JSON endpoint returning fresh ESS row data (for auto-refresh)."""
+    rows = _build_ess_rows()
+    return JSONResponse({"rows": rows, "fetched_at": datetime.now(timezone.utc).isoformat()})

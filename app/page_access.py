@@ -29,6 +29,7 @@ PAGE_DEFINITIONS: tuple[PageDefinition, ...] = (
     PageDefinition("system", "System Analysis", "/system", "member,paid"),
     PageDefinition("market", "Market", "/market", "member,paid"),
     PageDefinition("intel_map", "Combat Intel Map", "/intel/map", "manager,paid"),
+    PageDefinition("ess", "ESS / Sov Timers", "/intel/ess", "manager,paid"),
     PageDefinition("admin", "Admin Panel", "/admin", "admin"),
     PageDefinition("director", "Director Panel", "/director", "director,paid"),
     PageDefinition("billing", "Subscription", "/billing", "member", nav_group="account"),

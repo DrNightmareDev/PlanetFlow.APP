@@ -319,6 +319,39 @@ def universe_names(ids: list[int]) -> list[dict]:
         return []
 
 
+def get_sovereignty_map() -> list[dict]:
+    """Return list of {system_id, alliance_id, corporation_id, faction_id} for all sov systems."""
+    try:
+        response = requests.get(
+            f"{ESI_BASE}/sovereignty/map/",
+            params={"datasource": "tranquility"},
+            headers=HEADERS,
+            timeout=20,
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception:
+        return []
+
+
+def get_sovereignty_structures() -> list[dict]:
+    """Return list of IHub sovereignty structures with vulnerability windows.
+    Fields: alliance_id, solar_system_id, structure_id, structure_type_id,
+            vulnerability_occupancy_level, vulnerable_end_time, vulnerable_start_time
+    """
+    try:
+        response = requests.get(
+            f"{ESI_BASE}/sovereignty/structures/",
+            params={"datasource": "tranquility"},
+            headers=HEADERS,
+            timeout=20,
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception:
+        return []
+
+
 def search_systems(query: str) -> dict:
     """Deprecated: ESI /search/ removed. Use search_systems_auth instead."""
     return {}

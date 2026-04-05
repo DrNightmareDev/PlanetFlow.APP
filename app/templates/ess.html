@@ -1,0 +1,312 @@
+{% extends "base.html" %}
+{% block title %}ESS / Sov Timers — {{ t('app.name') }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+        <h4 class="fw-semibold mb-0" style="color:var(--eve-accent);">
+            <i class="bi bi-bank me-2"></i>ESS / Sovereignty Timers
+        </h4>
+        <div class="text-muted small mt-1">
+            IHub vulnerability windows &amp; ADM for all alliance-held systems.
+            Data cached up to 2 min from ESI.
+        </div>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <!-- Character selector -->
+        {% if characters %}
+        <form method="get" action="/intel/ess" class="d-flex align-items-center gap-2 m-0">
+            <select name="character_id" class="form-select form-select-sm eve-input" style="width:180px;" onchange="this.form.submit()">
+                {% for c in characters %}
+                <option value="{{ c.id }}" {% if selected_char and c.id == selected_char.id %}selected{% endif %}>
+                    {{ c.character_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </form>
+        {% endif %}
+        <span class="text-muted small" id="fetchedAt"></span>
+    </div>
+</div>
+
+<!-- Character location banner -->
+{% if char_location %}
+<div class="eve-help-note mb-3 d-flex align-items-center gap-3 flex-wrap" style="padding:10px 14px;">
+    <i class="bi bi-geo-alt-fill" style="color:var(--eve-accent);font-size:1.1rem;"></i>
+    <div>
+        <span class="fw-medium">{{ selected_char.character_name if selected_char else '' }}</span>
+        <span class="text-muted mx-1">is in</span>
+        <strong>{{ char_location.system_name }}</strong>
+        {% if char_location.region_name %}
+        <span class="text-muted ms-1">({{ char_location.region_name }})</span>
+        {% endif %}
+    </div>
+    <button class="btn btn-sm eve-btn-outline ms-auto" id="filterLocationBtn" onclick="filterToLocation()">
+        <i class="bi bi-funnel me-1"></i>Filter to this region
+    </button>
+</div>
+{% endif %}
+
+<!-- Filters -->
+<div class="eve-card card border-0 mb-3">
+    <div class="card-body py-2 px-3">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <div class="d-flex align-items-center gap-2">
+                <label class="small text-muted mb-0" for="filterAlliance">Alliance</label>
+                <select id="filterAlliance" class="form-select form-select-sm eve-input" style="width:220px;" onchange="applyFilters()">
+                    <option value="">All alliances</option>
+                    {% for aid, aname in alliances %}
+                    <option value="{{ aid }}">{{ aname }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <label class="small text-muted mb-0" for="filterRegion">Region</label>
+                <input id="filterRegion" type="text" class="form-control form-control-sm eve-input" style="width:160px;" placeholder="Region name…" oninput="applyFilters()">
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <label class="small text-muted mb-0" for="filterMinAdm">Min ADM</label>
+                <input id="filterMinAdm" type="number" class="form-control form-control-sm eve-input" style="width:80px;" min="0" max="6" step="0.1" placeholder="0" oninput="applyFilters()">
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <label class="small text-muted mb-0" for="filterVulnOnly">
+                    <input type="checkbox" id="filterVulnOnly" class="form-check-input me-1" onchange="applyFilters()">
+                    Vulnerable now
+                </label>
+            </div>
+            <button class="btn btn-sm eve-btn-ghost ms-auto" onclick="clearFilters()">
+                <i class="bi bi-x-circle me-1"></i>Clear
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Table -->
+<div class="eve-card card border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover eve-table mb-0" id="essTable">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-col="system_name" style="cursor:pointer;">System <i class="bi bi-arrow-down-up ms-1 sort-icon"></i></th>
+                        <th class="sortable" data-col="region_name" style="cursor:pointer;">Region <i class="bi bi-arrow-down-up ms-1 sort-icon"></i></th>
+                        <th class="sortable" data-col="alliance_name" style="cursor:pointer;">Alliance <i class="bi bi-arrow-down-up ms-1 sort-icon"></i></th>
+                        <th class="sortable text-end" data-col="adm" style="cursor:pointer;">ADM <i class="bi bi-arrow-down-up ms-1 sort-icon"></i></th>
+                        <th class="sortable text-center" data-col="is_vulnerable" style="cursor:pointer;">Status <i class="bi bi-arrow-down-up ms-1 sort-icon"></i></th>
+                        <th class="sortable text-end" data-col="secs_until" style="cursor:pointer;">Timer <i class="bi bi-arrow-down-up ms-1 sort-icon"></i></th>
+                        <th class="text-end small text-muted">Window UTC</th>
+                    </tr>
+                </thead>
+                <tbody id="essTableBody">
+                    <!-- populated by JS -->
+                </tbody>
+            </table>
+        </div>
+        <div id="essEmpty" class="text-muted small py-4 text-center d-none">
+            <i class="bi bi-search me-1"></i>No systems match the current filters.
+        </div>
+    </div>
+</div>
+<div class="text-muted small mt-2" id="rowCount"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ── Data ─────────────────────────────────────────────────────────────────────
+const CHAR_REGION_ID = {{ char_location.region_id | tojson if char_location else 'null' }};
+const CHAR_REGION_NAME = {{ char_location.region_name | tojson if char_location else '""' }};
+
+let ALL_ROWS = {{ rows | tojson }};
+let sortCol = 'secs_until';
+let sortAsc = true;
+
+// ── Sort ──────────────────────────────────────────────────────────────────────
+function sortRows(rows) {
+    return [...rows].sort((a, b) => {
+        let va = a[sortCol], vb = b[sortCol];
+        // Nulls last
+        if (va === null || va === undefined || va === '') va = sortAsc ? Infinity : -Infinity;
+        if (vb === null || vb === undefined || vb === '') vb = sortAsc ? Infinity : -Infinity;
+        if (typeof va === 'string') va = va.toLowerCase();
+        if (typeof vb === 'string') vb = vb.toLowerCase();
+        if (va < vb) return sortAsc ? -1 : 1;
+        if (va > vb) return sortAsc ? 1 : -1;
+        return 0;
+    });
+}
+
+// ── Filters ───────────────────────────────────────────────────────────────────
+function getFilters() {
+    return {
+        alliance: document.getElementById('filterAlliance').value,
+        region: (document.getElementById('filterRegion').value || '').toLowerCase().trim(),
+        minAdm: parseFloat(document.getElementById('filterMinAdm').value) || 0,
+        vulnOnly: document.getElementById('filterVulnOnly').checked,
+    };
+}
+
+function filterRows(rows) {
+    const f = getFilters();
+    return rows.filter(r => {
+        if (f.alliance && String(r.alliance_id) !== f.alliance) return false;
+        if (f.region && !r.region_name.toLowerCase().includes(f.region)) return false;
+        if (f.minAdm > 0 && r.adm < f.minAdm) return false;
+        if (f.vulnOnly && !r.is_vulnerable) return false;
+        return true;
+    });
+}
+
+function clearFilters() {
+    document.getElementById('filterAlliance').value = '';
+    document.getElementById('filterRegion').value = '';
+    document.getElementById('filterMinAdm').value = '';
+    document.getElementById('filterVulnOnly').checked = false;
+    applyFilters();
+}
+
+function filterToLocation() {
+    if (!CHAR_REGION_NAME) return;
+    document.getElementById('filterRegion').value = CHAR_REGION_NAME;
+    applyFilters();
+}
+
+// ── Timer formatting ──────────────────────────────────────────────────────────
+function formatDuration(secs) {
+    if (secs === null || secs === undefined) return '—';
+    if (secs <= 0) return 'now';
+    const d = Math.floor(secs / 86400);
+    const h = Math.floor((secs % 86400) / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    if (d > 0) return `${d}d ${h}h ${m}m`;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+}
+
+function timerBar(row) {
+    // Show a progress bar for the vulnerability window
+    if (!row.vuln_start || !row.vuln_end) return '';
+    const start = new Date(row.vuln_start).getTime();
+    const end = new Date(row.vuln_end).getTime();
+    const now = Date.now();
+    const total = end - start;
+    if (total <= 0) return '';
+    if (row.is_vulnerable) {
+        const elapsed = now - start;
+        const pct = Math.min(100, Math.max(0, (elapsed / total) * 100));
+        return `<div class="mt-1" style="height:4px;background:#2a3a4a;border-radius:2px;width:100px;">
+            <div style="height:4px;background:#e63946;border-radius:2px;width:${pct.toFixed(1)}%;"></div>
+        </div>`;
+    }
+    return '';
+}
+
+function admBar(adm) {
+    const pct = Math.min(100, (adm / 6) * 100);
+    const color = adm >= 5 ? '#2dc653' : adm >= 3 ? '#f4a300' : '#e63946';
+    return `<div class="d-flex align-items-center gap-2">
+        <span class="fw-medium">${adm.toFixed(1)}</span>
+        <div style="height:6px;background:#1a2a3a;border-radius:3px;width:60px;flex-shrink:0;">
+            <div style="height:6px;background:${color};border-radius:3px;width:${pct.toFixed(1)}%;"></div>
+        </div>
+    </div>`;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderTable() {
+    const filtered = filterRows(ALL_ROWS);
+    const sorted = sortRows(filtered);
+    const tbody = document.getElementById('essTableBody');
+    const empty = document.getElementById('essEmpty');
+    const count = document.getElementById('rowCount');
+
+    if (sorted.length === 0) {
+        tbody.innerHTML = '';
+        empty.classList.remove('d-none');
+        count.textContent = '';
+        return;
+    }
+    empty.classList.add('d-none');
+    count.textContent = `Showing ${sorted.length.toLocaleString()} of ${ALL_ROWS.length.toLocaleString()} systems`;
+
+    // Compute live seconds_until from next_event timestamp
+    const now = Date.now();
+    const html = sorted.map(r => {
+        const secsUntil = r.next_event ? Math.max(0, Math.floor((new Date(r.next_event).getTime() - now) / 1000)) : null;
+        const timerText = secsUntil !== null ? formatDuration(secsUntil) : '—';
+        const labelText = r.next_event_label ? `<span class="text-muted" style="font-size:.7rem;">${r.next_event_label}</span>` : '';
+        const statusBadge = r.is_vulnerable
+            ? `<span class="badge" style="background:#e6394622;color:#e63946;border:1px solid #e6394640;">Vulnerable</span>`
+            : `<span class="badge" style="background:#1a2a3a;color:#7ec8e3;border:1px solid #2a4a6b;">Reinforced</span>`;
+
+        const vuln_start_fmt = r.vuln_start ? r.vuln_start.replace('T', ' ').replace('+00:00', '').replace('Z', '') : '—';
+        const vuln_end_fmt = r.vuln_end ? r.vuln_end.replace('T', ' ').replace('+00:00', '').replace('Z', '') : '—';
+
+        return `<tr>
+            <td class="fw-medium" style="white-space:nowrap;">${escapeHtml(r.system_name)}</td>
+            <td class="text-muted small">${escapeHtml(r.region_name)}</td>
+            <td class="small">${escapeHtml(r.alliance_name)}</td>
+            <td class="text-end">${admBar(r.adm)}</td>
+            <td class="text-center">${statusBadge}${r.is_vulnerable ? timerBar(r) : ''}</td>
+            <td class="text-end" style="white-space:nowrap;">
+                <span class="fw-medium ${r.is_vulnerable ? 'text-danger' : ''}">${timerText}</span>
+                <br>${labelText}
+            </td>
+            <td class="text-end small text-muted" style="white-space:nowrap;font-size:.72rem;">
+                ${vuln_start_fmt}<br>${vuln_end_fmt}
+            </td>
+        </tr>`;
+    }).join('');
+    tbody.innerHTML = html;
+}
+
+function applyFilters() { renderTable(); }
+
+// ── Sort headers ──────────────────────────────────────────────────────────────
+document.querySelectorAll('th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+        const col = th.dataset.col;
+        if (sortCol === col) {
+            sortAsc = !sortAsc;
+        } else {
+            sortCol = col;
+            sortAsc = true;
+        }
+        document.querySelectorAll('th.sortable').forEach(h => {
+            const ico = h.querySelector('.sort-icon');
+            if (!ico) return;
+            ico.className = 'bi ms-1 sort-icon ' + (h.dataset.col === sortCol ? (sortAsc ? 'bi-arrow-up' : 'bi-arrow-down') : 'bi-arrow-down-up');
+        });
+        renderTable();
+    });
+});
+
+// ── Auto-refresh every 60s ────────────────────────────────────────────────────
+async function refreshData() {
+    try {
+        const res = await fetch('/intel/ess/data');
+        const data = await res.json();
+        ALL_ROWS = data.rows;
+        const ts = new Date(data.fetched_at);
+        document.getElementById('fetchedAt').textContent = 'Updated ' + ts.toLocaleTimeString();
+        renderTable();
+    } catch(e) {}
+}
+setInterval(refreshData, 60000);
+
+// ── Live timer countdown every second ────────────────────────────────────────
+setInterval(renderTable, 1000);
+
+function escapeHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('fetchedAt').textContent = 'Live';
+    renderTable();
+});
+</script>
+{% endblock %}

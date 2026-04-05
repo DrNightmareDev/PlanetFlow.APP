@@ -342,15 +342,20 @@ def _aggregate_pilot(
     last_activity = max(times).isoformat() if times else None
 
     ship_counter: Counter = Counter()
+    ship_loss_counter: Counter = Counter()
     for km in kms:
         if km.ship_type_id and km.ship_type_id not in (670, 33328):
-            ship_counter[(km.ship_type_id, km.ship_name or f"#{km.ship_type_id}")] += 1
+            key = (km.ship_type_id, km.ship_name or f"#{km.ship_type_id}")
+            ship_counter[key] += 1
+            if km.is_loss:
+                ship_loss_counter[key] += 1
 
     total_appearances = sum(ship_counter.values()) or 1
 
     top_ships = []
     for (ship_type_id, ship_name), count in ship_counter.most_common(3):
         usage_pct = round(count / total_appearances * 100)
+        loss_appearances = ship_loss_counter.get((ship_type_id, ship_name), 0)
 
         loss_km_ids = [
             km.killmail_id for km in kms
@@ -389,6 +394,7 @@ def _aggregate_pilot(
             "ship_name": ship_name,
             "usage_percent": usage_pct,
             "appearances": count,
+            "loss_appearances": loss_appearances,
             "typical_modules": typical_modules[:10],
         })
 

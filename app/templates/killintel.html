@@ -28,17 +28,12 @@
 
             <!-- Middle: cache status list -->
             <div class="col-12 col-md-3">
-                <div class="small text-muted mb-1" style="line-height:1.8;">
-                    <i class="bi bi-database me-1"></i>Cache status
+                <div class="small text-muted mb-1" style="line-height:1.8;cursor:default;"
+                     title="🟢 current — loads instantly&#10;🟠 stale — quick refresh needed&#10;🔴 none — full fetch required">
+                    <i class="bi bi-database me-1"></i>Cache status <i class="bi bi-info-circle" style="font-size:.7rem;opacity:.6;"></i>
                 </div>
                 <div id="cacheStatusList" style="max-height:80px;overflow-y:auto;font-size:.78rem;line-height:1.9;">
                     <span class="text-muted fst-italic">type names to check…</span>
-                </div>
-                <!-- Legend -->
-                <div class="mt-2 d-flex flex-column gap-1" style="font-size:.7rem;">
-                    <span><i class="bi bi-database-fill me-1" style="color:#2dc653;"></i>current — instant</span>
-                    <span><i class="bi bi-database-fill me-1" style="color:#f4a300;"></i>stale — quick refresh</span>
-                    <span><i class="bi bi-database-fill me-1" style="color:#e63946;"></i>none — full fetch</span>
                 </div>
             </div>
 
@@ -268,6 +263,18 @@ function renderCard(r) {
     // Ships
     let shipsHtml = '';
     for (const ship of (r.top_ships || [])) {
+        const zkillShipUrl = `https://zkillboard.com/ship/${ship.ship_type_id}/`;
+        // Color: mostly losses → red, mostly kills → blue, mixed → accent
+        const isLoss = ship.loss_appearances > (ship.appearances - ship.loss_appearances);
+        const shipNameColor = isLoss ? '#e63946' : '#7ec8e3';
+        const shipTitle = isLoss
+            ? `${ship.loss_appearances} loss(es), ${ship.appearances - ship.loss_appearances} kill(s)`
+            : `${ship.appearances - ship.loss_appearances} kill(s), ${ship.loss_appearances} loss(es)`;
+
+        const displayName = ship.ship_name && !ship.ship_name.startsWith('#')
+            ? esc(ship.ship_name)
+            : `<span style="opacity:.5">#${ship.ship_type_id}</span>`;
+
         const mods = (ship.typical_modules || []).slice(0, 8);
         const modsHtml = mods.length ? mods.map(m =>
             `<div class="d-flex align-items-center gap-2 py-1" style="border-bottom:1px solid #1a2a3a;">
@@ -280,11 +287,15 @@ function renderCard(r) {
         shipsHtml += `
         <div class="mb-3">
             <div class="d-flex align-items-center gap-2 mb-1">
-                <img src="https://images.evetech.net/types/${ship.ship_type_id}/icon?size=32"
-                     width="28" height="28" style="border-radius:4px;flex-shrink:0;"
-                     onerror="this.style.display='none'">
+                <a href="${zkillShipUrl}" target="_blank" rel="noopener" style="flex-shrink:0;line-height:0;" title="View on zKillboard">
+                    <img src="https://images.evetech.net/types/${ship.ship_type_id}/icon?size=32"
+                         width="28" height="28" style="border-radius:4px;"
+                         onerror="this.style.display='none'">
+                </a>
                 <div class="flex-grow-1">
-                    <div class="fw-medium small">${esc(ship.ship_name)}</div>
+                    <a href="${zkillShipUrl}" target="_blank" rel="noopener"
+                       class="fw-medium small text-decoration-none"
+                       style="color:${shipNameColor};" title="${shipTitle}">${displayName}</a>
                     <div style="height:4px;background:#1a2a3a;border-radius:2px;margin-top:3px;">
                         <div style="height:4px;background:${c.text};border-radius:2px;width:${ship.usage_percent}%;"></div>
                     </div>

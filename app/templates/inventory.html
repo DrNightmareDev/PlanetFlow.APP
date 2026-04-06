@@ -546,10 +546,19 @@ function getCsrfToken() {
         for (const line of String(rawText || '').split(/\r?\n/)) {
             const trimmed = line.trim();
             if (!trimmed) continue;
+            let rawName = '';
+            let qtyRaw = '';
             const parts = trimmed.split('\t');
-            if (parts.length < 2) continue;
-            const rawName = String(parts[0] || '').trim();
-            const qtyRaw = String(parts[1] || '').trim().replace(/,/g, '');
+            if (parts.length >= 2) {
+                rawName = String(parts[0] || '').trim();
+                qtyRaw = String(parts[1] || '').trim();
+            } else {
+                const dashMatch = trimmed.match(/^(.*?)\s[-–—]\s([0-9][0-9.,\s]*)$/);
+                if (!dashMatch) continue;
+                rawName = String(dashMatch[1] || '').trim();
+                qtyRaw = String(dashMatch[2] || '').trim();
+            }
+            qtyRaw = qtyRaw.replace(/,/g, '').replace(/\s/g, '');
             const quantity = parseInt(qtyRaw, 10);
             if (!rawName || !Number.isFinite(quantity) || quantity <= 0) continue;
             const catalogItem = nameMap.get(rawName.toLowerCase()) || null;

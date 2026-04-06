@@ -59,7 +59,7 @@ docker compose down -v   # removes volumes too — irreversible
 | Admin panel | `/manager` | `/admin` |
 | Background workers | Celery + APScheduler fallback | Celery only (RabbitMQ required) |
 | Config key | `CELERY_BROKER_URL` | `RABBITMQ_USER` / `RABBITMQ_PASS` |
-| Local HTTP mode | `COOKIE_SECURE=false` | `COOKIE_SECURE=false` + `NGINX_MODE=proxy` |
+| Local HTTP mode | `COOKIE_SECURE=false` | `COOKIE_SECURE=false` + `NGINX_MODE=local` |
 
 ---
 
@@ -82,7 +82,7 @@ Before starting, you need an EVE Online API key.
    - **Name:** anything you like (e.g. `My PlanetFlow`)
    - **Connection Type:** `Authentication & API Access`
    - **Callback URL:**
-     - Local setup: `http://localhost/auth/callback`
+     - Local setup: `http://localhost:8080/auth/callback` (or your custom `NGINX_HTTP_PORT`)
      - Server with domain: `https://yourdomain.com/auth/callback`
    - **Scopes** — add all of these:
      ```
@@ -127,20 +127,25 @@ EVE_OWNER_CHARACTER_ID=123456789
 # From your EVE developer application (Step 1)
 EVE_CLIENT_ID=your_client_id
 EVE_CLIENT_SECRET=your_client_secret
-EVE_CALLBACK_URL=http://localhost/auth/callback
+EVE_CALLBACK_URL=http://localhost:8080/auth/callback
 
-# Generate a random secret key:
-# Run this in your terminal: python -c "import secrets; print(secrets.token_hex(32))"
+# Generate a strong secret key (must include lower/upper/digit/special):
+# python3 -c "import secrets,string; l=string.ascii_lowercase; u=string.ascii_uppercase; d=string.digits; s='!@#$%^&*()-_=+[]{}:,.?'; a=l+u+d+s; p=[secrets.choice(l),secrets.choice(u),secrets.choice(d),secrets.choice(s)]+[secrets.choice(a) for _ in range(44)]; secrets.SystemRandom().shuffle(p); print(''.join(p))"
 SECRET_KEY=paste_your_generated_key_here
 
 # A password for the internal message queue — pick anything
+RABBITMQ_USER=planetflow
 RABBITMQ_PASS=my_local_rabbit_password
 
 # IMPORTANT for local: must be false (no HTTPS locally)
 COOKIE_SECURE=false
 
-# IMPORTANT for local: use proxy mode — no TLS certificate needed
-NGINX_MODE=proxy
+# IMPORTANT for local: use local mode — no TLS certificate needed
+NGINX_MODE=local
+
+# Optional local port mapping on host (defaults shown)
+NGINX_HTTP_PORT=8080
+NGINX_HTTPS_PORT=8443
 ```
 
 Leave everything else as-is.
@@ -155,7 +160,7 @@ Docker will download and build everything automatically. This takes a few minute
 
 ### 4. Open in browser
 
-[http://localhost](http://localhost)
+[http://localhost:8080](http://localhost:8080)
 
 Log in with EVE SSO. The first account to log in becomes the Owner (admin).
 
@@ -198,6 +203,8 @@ SECRET_KEY=your_generated_secret_key
 RABBITMQ_PASS=strong_rabbit_password
 COOKIE_SECURE=true
 NGINX_MODE=https
+NGINX_HTTP_PORT=80
+NGINX_HTTPS_PORT=443
 ```
 
 ### 3. Start (with automatic TLS)
@@ -213,6 +220,45 @@ This validates your config, obtains a Let's Encrypt certificate, and starts all 
 ```bash
 bash scripts/update.sh
 ```
+
+---
+
+## Environment Variables Reference
+
+PlanetFlow validates environment variables at startup using `.env.example`.  
+If you add a new variable to `.env.example`, it must also exist in your `.env` file.
+
+| Variable | Required | Example | Description / Usage |
+|---|---|---|---|
+| `DB_PASSWORD` | Yes | `change_me` | PostgreSQL password used by Docker Compose. |
+| `DATABASE_URL` | No | `postgresql://planetflow:PASSWORD@db/planetflow` | Optional explicit DB URL (external DB setups). |
+| `EVE_OWNER_CHARACTER_ID` | Yes | `123456789` | Main EVE character ID that is permanently Owner/Admin. |
+| `EVE_CLIENT_ID` | Yes | `your_client_id` | EVE SSO application client ID. |
+| `EVE_CLIENT_SECRET` | Yes | `your_client_secret` | EVE SSO application client secret. |
+| `EVE_CALLBACK_URL` | Yes | Local: `http://localhost:8080/auth/callback` | Must exactly match callback in EVE developer portal. |
+| `EVE_SCOPES` | Yes | `esi-planets.manage_planets.v1 ...` | Space-separated ESI scopes configured on your EVE app. |
+| `SECRET_KEY` | Yes | random 48-char mixed string | Session signing/encryption key. Must be strong (lower+upper+digit+special). |
+| `COOKIE_SECURE` | Yes | Local: `false`, HTTPS: `true` | Set `true` only if users access via HTTPS. |
+| `AUTH_RATE_LIMIT_WINDOW_SECONDS` | No | `300` | Login rate-limit window in seconds. |
+| `AUTH_RATE_LIMIT_MAX_ATTEMPTS` | No | `30` | Max auth attempts per window/IP+action. |
+| `RABBITMQ_USER` | Yes | `planetflow` | RabbitMQ username for Celery. |
+| `RABBITMQ_PASS` | Yes | `change_me_rabbit` | RabbitMQ password for Celery. |
+| `RABBITMQ_HOST` | No | `rabbitmq` | Broker host override (advanced/external setups). |
+| `RABBITMQ_PORT` | No | `5672` | Broker port override (advanced/external setups). |
+| `WEB_WORKERS` | No | `2` | Gunicorn worker count for the web app container. |
+| `DEBUG` | No | `false` | Application debug mode toggle. |
+| `SENTRY_DSN` | No | *(empty)* | Enables Sentry error reporting if set. |
+| `JANICE_API_KEY` | No | *(empty)* | Enables Janice appraisal integration. |
+| `FLOWER_USER` | No | `admin` | Basic auth username for Flower (`--profile monitoring`). |
+| `FLOWER_PASS` | No | `replace_me` | Basic auth password for Flower. |
+| `NGINX_MODE` | Yes | `local`, `proxy`, or `https` | `local`: HTTP local dev. `proxy`: upstream TLS terminates. `https`: Let's Encrypt TLS on host. |
+| `NGINX_HTTP_PORT` | Yes | Local: `8080`, Server: `80` | Host port mapped to nginx container `:80`. |
+| `NGINX_HTTPS_PORT` | Yes | Local: `8443`, Server: `443` | Host port mapped to nginx container `:443` (unused in `local/proxy` mode). |
+
+Mode summary:
+- `local`: best for single-machine local dev. No certificate wait. Use `COOKIE_SECURE=false`.
+- `proxy`: for reverse-proxy setups (OPNsense/Traefik/Caddy). Upstream handles TLS; keep `COOKIE_SECURE=true` if users access via HTTPS.
+- `https`: nginx handles TLS directly with Let's Encrypt.
 
 ---
 
@@ -249,7 +295,7 @@ docker compose down
 
 **Login does not work / callback error**
 - Make sure `EVE_CALLBACK_URL` in `.env` exactly matches what you registered on the EVE developer portal
-- For local: must be `http://localhost/auth/callback` (not https)
+- For local default: `http://localhost:8080/auth/callback` (or match your custom `NGINX_HTTP_PORT`)
 - For local: `COOKIE_SECURE` must be `false`
 
 **Page loads but shows no data**
@@ -257,9 +303,10 @@ docker compose down
 - Check the worker logs: `docker compose logs -f celery_worker`
 
 **Port 80 already in use**
-- Another program (IIS, another web server) is using port 80. Stop it, or change the port in `docker-compose.yml`
+- Another program (IIS, another web server) is using port 80.
+- Change `NGINX_HTTP_PORT` in `.env` (for example `8080`) and update `EVE_CALLBACK_URL` accordingly.
 
-**"Connection refused" on http://localhost**
+**"Connection refused" on local URL**
 - Wait 30–60 seconds after `docker compose up -d` — the app needs time to start
 - Check: `docker compose ps` — all services should show `healthy` or `running`
 

@@ -135,6 +135,9 @@
       <a href="/templates/{{ tmpl.id }}/download" class="btn btn-sm eve-btn-primary">
         <i class="bi bi-download me-1"></i>Download JSON
       </a>
+      <button type="button" class="btn btn-sm eve-btn-outline" id="copyTemplateJsonBtn">
+        <i class="bi bi-clipboard me-1"></i>Copy JSON
+      </button>
       {% if not tmpl.is_community and tmpl.account_id == account.id or account.is_admin %}
       <button class="btn btn-sm btn-outline-danger" style="font-size:.78rem;" onclick="deleteTemplate({{ tmpl.id }})">
         <i class="bi bi-trash me-1"></i>Delete
@@ -529,5 +532,17 @@ async function deleteTemplate(id) {
   if (resp.ok) { window.location.href = '/templates'; }
   else { const d = await resp.json(); alert(d.detail || 'Error deleting template'); }
 }
+
+document.getElementById('copyTemplateJsonBtn')?.addEventListener('click', async (event) => {
+  const btn = event.currentTarget;
+  const original = btn.innerHTML;
+  try {
+    await navigator.clipboard.writeText(rawLayout || '');
+    btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Copied';
+  } catch (_) {
+    btn.innerHTML = '<i class="bi bi-x-lg me-1"></i>Failed';
+  }
+  setTimeout(() => { btn.innerHTML = original; }, 1500);
+});
 </script>
 {% endblock %}

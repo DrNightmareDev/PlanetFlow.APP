@@ -426,7 +426,7 @@ async function submitUpload() {
   try {
     const resp = await fetch('/templates/upload', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', ...csrfHeader()},
       body: JSON.stringify({ name, description: document.getElementById('uploadDesc').value.trim(), layout_json }),
     });
     const data = await resp.json();
@@ -518,7 +518,7 @@ async function runSeed() {
   document.getElementById('seedProgressBar').style.width = '30%';
 
   try {
-    const resp = await fetch('/templates/admin/seed', { method: 'POST' });
+    const resp = await fetch('/templates/admin/seed', { method: 'POST', headers: csrfHeader() });
     const data = await resp.json();
     document.getElementById('seedProgressBar').style.width = '100%';
     document.getElementById('seedProgress').style.display = 'none';

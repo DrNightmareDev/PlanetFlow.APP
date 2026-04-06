@@ -432,7 +432,7 @@ async function toggleFavorite() {
     try {
         const res = await fetch('/planner/favorites/toggle', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', ...csrfHeader()},
             body: JSON.stringify({product_name: selectedProduct.name}),
         });
         const data = await res.json();
@@ -449,7 +449,7 @@ async function removeFavorite(name) {
     try {
         await fetch('/planner/favorites/toggle', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', ...csrfHeader()},
             body: JSON.stringify({product_name: name}),
         });
         favorites.delete(name);

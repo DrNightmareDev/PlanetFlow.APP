@@ -224,7 +224,7 @@ async function persistPreferences() {
     try {
         await fetch('/intel/preferences', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...csrfHeader() },
             body: JSON.stringify({
                 region: intelState.selectedRegion,
                 window: intelState.window,

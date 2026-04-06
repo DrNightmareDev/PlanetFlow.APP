@@ -18,6 +18,7 @@ from app.database import SessionLocal, get_db
 from app.dependencies import require_account
 from app.esi import ensure_valid_token, get_character_location, get_sovereignty_map, get_sovereignty_structures, universe_names  # get_sovereignty_* used in fallback
 from app.models import Character, CombatIntelPreference, IntelKillEvent, IntelStreamState, KillActivityCache
+from app.session import validate_csrf_header
 from app.templates_env import templates
 from app.zkill import get_region_kills_db_first, get_system_kill_summary
 
@@ -429,6 +430,7 @@ async def intel_preferences_save(
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
+    validate_csrf_header(request)
     payload = await request.json()
     region_id = payload.get("region")
     window = str(payload.get("window") or "60m")

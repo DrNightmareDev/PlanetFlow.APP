@@ -699,7 +699,7 @@ async function saveEntry(ri) {
     try {
         const res = await fetch('/skyhook/entry', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...csrfHeader() },
             body: JSON.stringify({ planet_id: planetId, character_name: charName, items })
         });
         if (!res.ok) throw new Error();

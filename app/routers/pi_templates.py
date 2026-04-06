@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import require_account
 from app.models import PlanetTemplate
+from app.session import validate_csrf_header
 from app.templates_env import templates
 
 logger = logging.getLogger(__name__)
@@ -272,6 +273,7 @@ async def upload_template(
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
+    validate_csrf_header(request)
     body = await request.json()
     name = (body.get("name") or "").strip()
     description = (body.get("description") or "").strip() or None
@@ -305,9 +307,11 @@ async def upload_template(
 @router.delete("/{template_id}")
 def delete_template(
     template_id: int,
+    request: Request,
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
+    validate_csrf_header(request)
     tmpl = db.get(PlanetTemplate, template_id)
     if not tmpl:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -381,6 +385,7 @@ async def seed_community_templates(
     """Fetch all templates from all seed sources on GitHub and seed them as community templates."""
     if not account.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
+    validate_csrf_header(request)
 
     import urllib.request
 

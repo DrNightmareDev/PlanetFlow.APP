@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database import engine, get_db
 from app.dependencies import require_account
+from app.session import validate_csrf_header
 from app.i18n import get_language_from_request, translate_type_name
 from app.market import get_prices_by_mode, PI_TYPE_IDS
 from app.models import SkyhookEntry, SkyhookItem, SkyhookValueCache
@@ -311,10 +312,12 @@ def get_history(
 
 @router.post("/entry")
 def save_entry(
+    request: Request,
     body: EntryIn,
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
+    validate_csrf_header(request)
     valid = [i for i in body.items if i.product_name and i.quantity >= 0]
 
     entry = SkyhookEntry(

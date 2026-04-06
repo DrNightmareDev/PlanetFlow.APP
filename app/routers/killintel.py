@@ -106,6 +106,7 @@ async def killintel_check_cache(
     validate_csrf_header(request)
     body = await request.json()
     raw_text: str = body.get("names", "")
+    raw_days = body.get("time_window_days")
     time_window_days: int | None = int(raw_days) if raw_days and str(raw_days).isdigit() else None
     names = [line.strip() for line in raw_text.splitlines() if line.strip()]
     if not names:

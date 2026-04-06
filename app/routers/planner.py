@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, get_db
 from app.dependencies import require_account
+from app.session import validate_csrf_header
 from app.inventory_service import get_inventory_summary_map
 from app.i18n import get_language_from_request, translate, translate_type_name
 from app.market import PI_TYPE_IDS
@@ -115,10 +116,12 @@ def _get_valid_pi_products() -> frozenset[str]:
 
 @router.post("/favorites/toggle")
 def toggle_favorite(
+    request: Request,
     body: FavoriteToggle,
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
+    validate_csrf_header(request)
     from fastapi import HTTPException
     if body.product_name not in _get_valid_pi_products():
         raise HTTPException(status_code=400, detail="Unbekanntes PI-Produkt")

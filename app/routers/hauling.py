@@ -24,6 +24,7 @@ from app.i18n import translate
 from app.market import PI_TYPE_IDS
 from app.models import Character, CorpBridgeConnection, HaulingPreference, MarketCache, StaticPlanet, SystemGateDistance
 from app.routers.dashboard import _apply_price_mode, _load_colony_cache, _recompute_expiry
+from app.session import validate_csrf_header
 from app.templates_env import templates
 
 logger = logging.getLogger(__name__)
@@ -1144,10 +1145,12 @@ def hauling_page(
 
 @router.post("/api/preferences")
 def save_hauling_preferences(
+    request: Request,
     payload: dict = Body(...),
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
+    validate_csrf_header(request)
     pref = db.get(HaulingPreference, int(account.id))
     if pref is None:
         pref = HaulingPreference(account_id=int(account.id))
@@ -1250,10 +1253,12 @@ def export_bridge_connections_smt(
 
 @router.post("/api/bridge-connections")
 def save_bridge_connection(
+    request: Request,
     payload: dict = Body(...),
     account=Depends(require_manager_or_admin),
     db: Session = Depends(get_db),
 ):
+    validate_csrf_header(request)
     corporation_id = int(payload.get("corporation_id") or 0)
     if not corporation_id:
         raise HTTPException(status_code=400, detail=translate("hauling.error_missing_corporation", default="Corporation is required"))
@@ -1322,10 +1327,12 @@ def save_bridge_connection(
 
 @router.post("/api/bridge-connections/import-dotlan")
 def import_dotlan_bridge_connections(
+    request: Request,
     payload: dict = Body(...),
     account=Depends(require_manager_or_admin),
     db: Session = Depends(get_db),
 ):
+    validate_csrf_header(request)
     corporation_id = int(payload.get("corporation_id") or 0)
     if not corporation_id:
         raise HTTPException(status_code=400, detail=translate("hauling.error_missing_corporation", default="Corporation is required"))
@@ -1385,9 +1392,11 @@ def import_dotlan_bridge_connections(
 @router.delete("/api/bridge-connections/{bridge_id}")
 def delete_bridge_connection(
     bridge_id: int,
+    request: Request,
     account=Depends(require_manager_or_admin),
     db: Session = Depends(get_db),
 ):
+    validate_csrf_header(request)
     entry = db.query(CorpBridgeConnection).filter(CorpBridgeConnection.id == bridge_id).first()
     if not entry:
         raise HTTPException(status_code=404, detail=translate("hauling.error_bridge_not_found", default="Bridge connection not found"))
@@ -1401,10 +1410,12 @@ def delete_bridge_connection(
 
 @router.post("/api/route")
 def get_route(
+    request: Request,
     payload: dict = Body(...),
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
+    validate_csrf_header(request)
     origin_system_id = int(payload.get("origin_system_id") or 0)
     system_ids = [int(system_id) for system_id in (payload.get("system_ids") or []) if system_id]
     use_ansiblex = bool(payload.get("use_ansiblex", True))

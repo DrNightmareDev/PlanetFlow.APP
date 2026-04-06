@@ -1031,7 +1031,7 @@ async function forceRefresh() {
     const btn = document.getElementById('refreshBtn');
     if (btn) btn.style.display = 'none';
     try {
-        const res = await fetch('/dashboard/refresh', {method: 'POST'});
+        const res = await fetch('/dashboard/refresh', {method: 'POST', headers: csrfHeader()});
         const data = await res.json();
         if (data.ok) {
             showColoniesOverlay();
@@ -1183,7 +1183,7 @@ function setPriceMode(mode) {
     });
     fetch('/dashboard/price-mode', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', ...csrfHeader()},
         body: JSON.stringify({mode})
     }).then(r => r.json()).then(d => {
         if (d.ok) window.location.reload();

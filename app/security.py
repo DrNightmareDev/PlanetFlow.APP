@@ -17,9 +17,12 @@ _auth_attempts: dict[tuple[str, str], deque[datetime]] = {}
 
 
 def client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    # X-Real-IP is set by nginx from $remote_addr (the actual client IP, not
+    # spoofable by the client). X-Forwarded-For is client-controlled and must
+    # not be used for rate limiting.
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
     return request.client.host if request.client else "unknown"
 
 

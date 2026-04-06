@@ -51,6 +51,7 @@
                 <span class="inventory-panel-badge">{{ t('inventory.add_badge') }}</span>
             </div>
             <form method="post" action="/inventory/lots" class="inventory-form-grid">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                 <div>
                     <label class="form-label">{{ t('inventory.field_item') }}</label>
                     <select name="type_id" class="form-select eve-input" required>
@@ -96,6 +97,7 @@
                 <span class="inventory-panel-badge">{{ t('inventory.adjust_badge') }}</span>
             </div>
             <form method="post" action="/inventory/adjust" class="inventory-form-grid">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                 <div>
                     <label class="form-label">{{ t('inventory.field_item') }}</label>
                     <select name="type_id" class="form-select eve-input" required>
@@ -179,6 +181,7 @@
                         <td class="text-end inventory-col-onhand">{{ "{:,}".format(row.quantity_on_hand) }}</td>
                         <td class="text-end">
                             <form method="post" action="/inventory/rate" class="inventory-rate-form d-inline-flex align-items-center gap-1">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                                 <input type="hidden" name="type_id" value="{{ row.type_id }}">
                                 <input type="hidden" name="tier" value="{{ selected_tier }}">
                                 <input
@@ -206,6 +209,7 @@
                         >{% if row.estimated_value_split is not none %}{{ "{:,.2f}".format(row.estimated_value_split) }} ISK{% else %}<span class="text-muted">n/a</span>{% endif %}</td>
                         <td class="text-end">
                             <form method="post" action="/inventory/remove" class="inventory-remove-form">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                                 <input type="hidden" name="type_id" value="{{ row.type_id }}">
                                 <input type="hidden" name="tier" value="{{ selected_tier }}">
                                 <button type="submit" class="btn btn-sm eve-btn-ghost inventory-remove-btn">{{ t('inventory.btn_remove') }}</button>
@@ -296,6 +300,7 @@
                             <td class="text-end">
                                 {% if entry.kind != 'stock' and entry.status == 'active' %}
                                 <form method="post" action="/inventory/transaction/remove-page" class="inventory-remove-form">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                                     <input type="hidden" name="transaction_kind" value="{{ entry.kind }}">
                                     <input type="hidden" name="transaction_id" value="{{ entry.id }}">
                                     <input type="hidden" name="tier" value="{{ selected_tier }}">
@@ -587,6 +592,7 @@
         button.disabled = true;
         try {
             const form = new URLSearchParams();
+            form.set('csrf_token', document.cookie.split('; ').find(r => r.startsWith('planetflow_csrf='))?.split('=')[1] || '');
             form.set('transaction_kind', button.dataset.transactionKind || '');
             form.set('transaction_id', button.dataset.transactionId || '');
             const response = await fetch('/inventory/transaction/remove', {

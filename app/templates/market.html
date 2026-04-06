@@ -389,7 +389,7 @@ async function forceRefresh() {
     btn.disabled = true;
     document.getElementById('refreshBtnText').textContent = {{ t('market.loading') | tojson }};
     try {
-        const res = await fetch('/market/refresh', {method: 'POST'});
+        const res = await fetch('/market/refresh', {method: 'POST', headers: csrfHeader()});
         const data = await res.json();
         if (data.ok) {
             startCooldownUI(data.cooldown_remaining || 300);

@@ -747,7 +747,7 @@ function shSetPriceMode(mode) {
     document.querySelectorAll('#shPriceModeButtons .sh-price-btn').forEach(b => b.disabled = true);
     fetch('/dashboard/price-mode', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', ...csrfHeader()},
         body: JSON.stringify({mode})
     }).then(r => r.json()).then(d => {
         if (d.ok) window.location.reload();

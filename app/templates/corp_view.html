@@ -516,7 +516,7 @@ async function startForceLoad() {
     }
 
     startBtn.disabled = true;
-    const startRes = await fetch(`/dashboard/corp/load-all/start?corp_id=${corpId}`, { method: 'POST' });
+    const startRes = await fetch(`/dashboard/corp/load-all/start?corp_id=${corpId}`, { method: 'POST', headers: csrfHeader() });
     const startData = await startRes.json().catch(() => ({}));
     if (!startRes.ok || startData.running) {
         forceLoadRunning = true;
@@ -537,7 +537,7 @@ async function startForceLoad() {
             '<span class="spinner-border spinner-border-sm" style="width:.75rem;height:.75rem;border-width:2px;color:var(--eve-accent);"></span>';
         document.getElementById(`status_${acc.account_id}`).textContent = 'laedt...';
         try {
-            const response = await fetch(`/dashboard/corp/load-account/${acc.account_id}`, { method: 'POST' });
+            const response = await fetch(`/dashboard/corp/load-account/${acc.account_id}`, { method: 'POST', headers: csrfHeader() });
             const result = await response.json();
             document.getElementById(`spin_${acc.account_id}`).innerHTML =
                 result.ok ? '<i class="bi bi-check-circle-fill" style="color:#2dc653;"></i>'
@@ -552,7 +552,7 @@ async function startForceLoad() {
         remaining--;
         remainingNode.textContent = remaining;
     }
-    await fetch(`/dashboard/corp/load-all/finish?corp_id=${corpId}`, { method: 'POST' }).catch(() => null);
+    await fetch(`/dashboard/corp/load-all/finish?corp_id=${corpId}`, { method: 'POST', headers: csrfHeader() }).catch(() => null);
     forceLoadRunning = false;
     spinner.style.display = 'none';
     remainingNode.textContent = '0';

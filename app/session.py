@@ -88,3 +88,14 @@ def validate_csrf(request: Request, token: str) -> None:
     expected = request.cookies.get(CSRF_COOKIE_NAME)
     if not expected or not token or not secrets.compare_digest(expected, token):
         raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+
+def validate_csrf_header(request: Request) -> None:
+    """Validate CSRF for JSON endpoints that use the X-CSRF-Token request header.
+
+    JS reads the CSRF cookie value and sends it back as a header — same
+    double-submit cookie pattern, but header-based instead of form field.
+    Cross-origin requests cannot set custom headers, so this stops CSRF attacks.
+    """
+    token = request.headers.get("x-csrf-token", "")
+    validate_csrf(request, token)

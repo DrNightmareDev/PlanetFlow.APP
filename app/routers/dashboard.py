@@ -21,6 +21,7 @@ from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import joinedload as _joinedload
 from app.pi_data import PLANET_TYPE_COLORS, ALL_P1, ALL_P2, ALL_P3, ALL_P4
 from app import sde as _sde
+from app.session import validate_csrf_header
 from app.templates_env import templates
 
 logger = logging.getLogger(__name__)
@@ -28,16 +29,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 # Allowed webhook hostnames — prevents SSRF by ensuring the server only calls
-# known external services, not internal IPs or arbitrary hosts.
-_ALLOWED_WEBHOOK_PREFIXES = (
-    "https://discord.com/api/webhooks/",
-    "https://discordapp.com/api/webhooks/",
-    "https://ptb.discord.com/api/webhooks/",
-    "https://canary.discord.com/api/webhooks/",
-)
+# known Discord endpoints, not internal IPs or arbitrary hosts.
+# Uses proper URL parsing instead of startswith() to prevent bypasses like
+# https://discord.com.evil.com/ or https://discord.com@evil.com/
+_ALLOWED_WEBHOOK_HOSTS = frozenset({
+    "discord.com",
+    "discordapp.com",
+    "ptb.discord.com",
+    "canary.discord.com",
+})
 
 def _is_safe_webhook_url(url: str) -> bool:
-    return any(url.startswith(p) for p in _ALLOWED_WEBHOOK_PREFIXES)
+    try:
+        from urllib.parse import urlparse
+        p = urlparse(url)
+        return (
+            p.scheme == "https"
+            and (p.hostname or "") in _ALLOWED_WEBHOOK_HOSTS
+            and p.path.startswith("/api/webhooks/")
+        )
+    except Exception:
+        return False
 
 DASHBOARD_PAGE_SIZES: tuple[int, ...] = (6, 25, 100, 0)
 DASHBOARD_PAGE_WINDOW_RADIUS = 2
@@ -1582,8 +1594,9 @@ def pi_check(
 
 
 @router.post("/refresh")
-def force_refresh(account=Depends(require_account)):
+def force_refresh(request: Request, account=Depends(require_account)):
     """Cache für diesen Account invalidieren — max. 1× pro 60 Sekunden."""
+    validate_csrf_header(request)
     now = _time.time()
     last = _refresh_cooldown.get(account.id, 0)
     wait = int(REFRESH_COOLDOWN_SEC - (now - last)) + 1
@@ -1612,11 +1625,13 @@ def force_refresh(account=Depends(require_account)):
 
 @router.post("/price-mode")
 def set_price_mode(
+    request: Request,
     mode: str = Body(..., embed=True),
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
     """Speichert den Preis-Modus (sell/buy/split) für den Account."""
+    validate_csrf_header(request)
     if mode not in ("sell", "buy", "split"):
         raise HTTPException(status_code=400, detail="Ungültiger Modus")
     account.price_mode = mode
@@ -1962,11 +1977,13 @@ def corp_load_all_status(
 
 @router.post("/corp/load-all/start")
 def corp_load_all_start(
+    request: Request,
     corp_id: int,
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
     """Acquires a corp-wide load lock before the UI starts processing accounts."""
+    validate_csrf_header(request)
     main_char = db.query(Character).filter(Character.id == account.main_character_id).first() if account.main_character_id else None
     access = _corp_access_flags(account, main_char, db)
     if not access["can_manage"] or access["corp_id"] != corp_id:
@@ -1988,11 +2005,13 @@ def corp_load_all_start(
 
 @router.post("/corp/load-all/finish")
 def corp_load_all_finish(
+    request: Request,
     corp_id: int,
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
     """Releases the corp-wide load lock after the UI finishes processing."""
+    validate_csrf_header(request)
     main_char = db.query(Character).filter(Character.id == account.main_character_id).first() if account.main_character_id else None
     access = _corp_access_flags(account, main_char, db)
     if not access["can_manage"] or access["corp_id"] != corp_id:
@@ -2006,10 +2025,12 @@ def corp_load_all_finish(
 @router.post("/corp/load-account/{target_account_id}")
 def force_load_account(
     target_account_id: int,
+    request: Request,
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
     """Force-loads dashboard data for a target account in the viewer's corp."""
+    validate_csrf_header(request)
     main_char = db.query(Character).filter(Character.id == account.main_character_id).first() if account.main_character_id else None
     access = _corp_access_flags(account, main_char, db)
     if not access["can_manage"]:
@@ -2394,11 +2415,13 @@ def get_webhook_settings(
 
 @router.post("/webhook-settings")
 def save_webhook_settings(
+    request: Request,
     data: dict = Body(...),
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
     """Save Discord/webhook alert settings."""
+    validate_csrf_header(request)
     from app.models import WebhookAlert
     webhook_url = (data.get("webhook_url") or "").strip()
     alert_hours = int(data.get("alert_hours") or 2)
@@ -2428,10 +2451,12 @@ def save_webhook_settings(
 
 @router.post("/webhook-test")
 def test_webhook(
+    request: Request,
     data: dict = Body(default={}),
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
+    validate_csrf_header(request)
     """Send a test message to the webhook URL.
 
     Accepts an optional ``webhook_url`` in the request body so the URL
@@ -2506,9 +2531,11 @@ def characters_page(
 @router.post("/characters/{character_id}/vacation")
 def toggle_character_vacation(
     character_id: int,
+    request: Request,
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
+    validate_csrf_header(request)
     char = (
         db.query(Character)
         .filter(Character.id == character_id, Character.account_id == account.id)

@@ -16,6 +16,7 @@ from app.market import (
 )
 from app.models import MarketCache
 from app.pi_data import P1_TO_P2, P2_TO_P3, P3_TO_P4, ALL_P4
+from app.session import validate_csrf_header
 from app.templates_env import templates
 
 router = APIRouter(prefix="/market", tags=["market"])
@@ -121,10 +122,12 @@ def market_status(
 
 @router.post("/refresh")
 def market_refresh(
+    request: Request,
     account=Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """Admin-only: erzwingt einen sofortigen Marktdaten-Refresh (server-weite 5-Min-Sperre)."""
+    validate_csrf_header(request)
     can_refresh, cooldown_remaining = can_force_market_refresh()
     if not can_refresh:
         return JSONResponse(

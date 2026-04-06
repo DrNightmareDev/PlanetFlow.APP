@@ -20,6 +20,15 @@
         })();
     </script>
     <script>
+        // Global helper: read the CSRF cookie and return it as a header object.
+        // Use in all fetch() POST calls: fetch(url, {method:'POST', headers:{...csrfHeader(),...}})
+        function csrfHeader() {
+            const token = document.cookie.split('; ')
+                .find(r => r.startsWith('planetflow_csrf='))?.split('=').slice(1).join('=') || '';
+            return {'X-CSRF-Token': token};
+        }
+    </script>
+    <script>
         window.EVE_I18N = {
             lang: "{{ current_lang() }}",
             supportedLanguages: {{ supported_languages | tojson }},
@@ -741,7 +750,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const msg = document.getElementById('webhookSaveMsg');
         fetch('/dashboard/webhook-settings', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', ...csrfHeader()},
             body: JSON.stringify({webhook_url: url, alert_hours: hours, enabled}),
         })
         .then(r => r.json())
@@ -765,7 +774,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (msg) { msg.style.display = ''; msg.style.color = '#7ec8e3'; msg.textContent = webhookI18n.testSending; }
         fetch('/dashboard/webhook-test', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', ...csrfHeader()},
             body: JSON.stringify({webhook_url: url}),
         })
         .then(r => r.json())

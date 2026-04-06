@@ -326,14 +326,17 @@ def health_check():
         status["database"] = "error"
 
     # RabbitMQ / Celery broker (optional)
+    # Parse credentials server-side only — never expose them in the response.
     broker_url = settings.celery_broker_url
     if broker_url:
         try:
             import amqp
-            parts = broker_url.replace("amqp://", "").split("@")
-            creds, hostpart = parts[0], parts[1].split("/")[0]
-            user, pwd = creds.split(":", 1)
-            host, port = (hostpart.split(":") + ["5672"])[:2]
+            from urllib.parse import urlparse as _urlparse
+            parsed = _urlparse(broker_url)
+            host = parsed.hostname or "localhost"
+            port = parsed.port or 5672
+            user = parsed.username or "guest"
+            pwd = parsed.password or "guest"
             conn = amqp.Connection(host=f"{host}:{port}", userid=user, password=pwd)
             conn.connect()
             conn.close()

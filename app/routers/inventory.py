@@ -22,6 +22,7 @@ from app.inventory_service import (
     sync_inventory_summaries,
 )
 from app.models import InventoryAdjustment, InventoryItemSummary, InventoryLot
+from app.session import validate_csrf
 from app.templates_env import templates
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
@@ -168,14 +169,17 @@ def inventory_page(
 
 @router.post("/lots")
 def create_inventory_lot(
+    request: Request,
     account=Depends(require_account),
     db: Session = Depends(get_db),
+    csrf_token: str = Form(...),
     type_id: int = Form(...),
     quantity: int = Form(...),
     source_kind: str = Form(...),
     unit_cost: str = Form(""),
     note: str = Form(""),
 ):
+    validate_csrf(request, csrf_token)
     _catalog, by_type_id, _by_name = get_pi_catalog_maps()
     item = by_type_id.get(int(type_id))
     if not item:
@@ -199,14 +203,17 @@ def create_inventory_lot(
 
 @router.post("/adjust")
 def adjust_inventory_stock(
+    request: Request,
     account=Depends(require_account),
     db: Session = Depends(get_db),
+    csrf_token: str = Form(...),
     type_id: int = Form(...),
     direction: str = Form(...),
     quantity: int = Form(...),
     unit_cost: str = Form(""),
     note: str = Form(""),
 ):
+    validate_csrf(request, csrf_token)
     _catalog, by_type_id, _by_name = get_pi_catalog_maps()
     item = by_type_id.get(int(type_id))
     if not item:
@@ -230,11 +237,14 @@ def adjust_inventory_stock(
 
 @router.post("/remove")
 def remove_inventory_row(
+    request: Request,
     account=Depends(require_account),
     db: Session = Depends(get_db),
+    csrf_token: str = Form(...),
     type_id: int = Form(...),
     tier: str = Form(""),
 ):
+    validate_csrf(request, csrf_token)
     try:
         if not soft_delete_inventory_summary(db, int(account.id), int(type_id)):
             db.rollback()
@@ -248,11 +258,14 @@ def remove_inventory_row(
 
 @router.post("/transaction/remove")
 def remove_inventory_transaction(
+    request: Request,
     account=Depends(require_account),
     db: Session = Depends(get_db),
+    csrf_token: str = Form(...),
     transaction_kind: str = Form(...),
     transaction_id: int = Form(...),
 ):
+    validate_csrf(request, csrf_token)
     try:
         type_id = soft_delete_inventory_transaction(db, int(account.id), str(transaction_kind), int(transaction_id))
         if type_id is None:
@@ -267,12 +280,15 @@ def remove_inventory_transaction(
 
 @router.post("/transaction/remove-page")
 def remove_inventory_transaction_page(
+    request: Request,
     account=Depends(require_account),
     db: Session = Depends(get_db),
+    csrf_token: str = Form(...),
     transaction_kind: str = Form(...),
     transaction_id: int = Form(...),
     tier: str = Form(""),
 ):
+    validate_csrf(request, csrf_token)
     try:
         type_id = soft_delete_inventory_transaction(db, int(account.id), str(transaction_kind), int(transaction_id))
         if type_id is None:
@@ -287,12 +303,15 @@ def remove_inventory_transaction_page(
 
 @router.post("/rate")
 def set_inventory_rate(
+    request: Request,
     account=Depends(require_account),
     db: Session = Depends(get_db),
+    csrf_token: str = Form(...),
     type_id: int = Form(...),
     net_rate_per_hour: str = Form(""),
     tier: str = Form(""),
 ):
+    validate_csrf(request, csrf_token)
     try:
         summary = (
             db.query(InventoryItemSummary)

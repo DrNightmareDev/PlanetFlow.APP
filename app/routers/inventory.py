@@ -17,6 +17,7 @@ from app.inventory_service import (
     get_inventory_rows,
     get_inventory_summary_map,
     get_pi_catalog_maps,
+    recalculate_inventory_summary,
     soft_delete_inventory_transaction,
     soft_delete_inventory_summary,
     sync_inventory_summaries,
@@ -102,6 +103,7 @@ def inventory_page(
             "item_name": row.item_name,
             "reason": row.source_kind.replace("_", " ").title(),
             "note": row.note,
+            "unit_cost": row.unit_cost or "",
             "delta_quantity": int(row.quantity_added or 0),
             "created_at": format_utc_compact(row.deleted_at or row.created_at),
             "created_sort": (row.deleted_at or row.created_at).isoformat() if (row.deleted_at or row.created_at) else "",
@@ -371,3 +373,41 @@ def inventory_item_detail(type_id: int, account=Depends(require_account), db: Se
     if detail is None:
         return JSONResponse({"error": "Inventory item not found."}, status_code=404)
     return JSONResponse(detail)
+
+
+@router.post("/lot/{lot_id}/cost")
+async def update_lot_cost(
+    lot_id: int,
+    request: Request,
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    from app.session import validate_csrf_header
+    validate_csrf_header(request)
+    body = await request.json()
+    raw = str(body.get("unit_cost") or "").strip()
+
+    lot = db.query(InventoryLot).filter(
+        InventoryLot.id == lot_id,
+        InventoryLot.account_id == int(account.id),
+        InventoryLot.deleted_at.is_(None),
+    ).first()
+    if not lot:
+        return JSONResponse({"error": "Lot not found."}, status_code=404)
+
+    if raw == "":
+        lot.unit_cost = None
+        lot.total_cost = None
+    else:
+        try:
+            value = Decimal(raw)
+            if value < 0:
+                return JSONResponse({"error": "Unit cost must be zero or greater."}, status_code=400)
+            lot.unit_cost = format(value.quantize(Decimal("0.01")), "f")
+            lot.total_cost = format((value * Decimal(lot.quantity_added)).quantize(Decimal("0.01")), "f")
+        except (InvalidOperation, ValueError):
+            return JSONResponse({"error": "Invalid unit cost."}, status_code=400)
+
+    recalculate_inventory_summary(db, int(account.id), int(lot.type_id))
+    db.commit()
+    return JSONResponse({"ok": True, "unit_cost": lot.unit_cost or ""})

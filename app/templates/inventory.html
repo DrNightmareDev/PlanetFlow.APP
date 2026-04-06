@@ -48,7 +48,12 @@
                     <div class="inventory-panel-kicker">{{ t('inventory.add_kicker') }}</div>
                     <div class="inventory-panel-title"><i class="bi bi-plus-square me-2"></i>{{ t('inventory.add_title') }}</div>
                 </div>
-                <span class="inventory-panel-badge">{{ t('inventory.add_badge') }}</span>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="inventory-panel-badge">{{ t('inventory.add_badge') }}</span>
+                    <button type="button" class="btn btn-sm eve-btn-outline" data-bs-toggle="modal" data-bs-target="#inventoryBulkImportModal">
+                        <i class="bi bi-clipboard-plus me-1"></i>Bulk Import
+                    </button>
+                </div>
             </div>
             <form method="post" action="/inventory/lots" class="inventory-form-grid">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
@@ -282,13 +287,18 @@
                             <th>{{ t('inventory.col_status') }}</th>
                             <th>{{ t('inventory.col_reason') }}</th>
                             <th class="text-end">{{ t('inventory.col_delta') }}</th>
+                            <th class="text-end">{{ t('inventory.col_unit_cost') }}</th>
                             <th>{{ t('inventory.col_created') }}</th>
                             <th class="text-end">{{ t('inventory.col_actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for entry in inventory_transactions %}
-                        <tr class="{% if entry.status != 'active' %}inventory-audit-removed{% endif %}">
+                        <tr
+                            class="{% if entry.status != 'active' %}inventory-audit-removed{% endif %}"
+                            data-lot-id="{% if entry.kind == 'batch' %}{{ entry.id }}{% endif %}"
+                            data-unit-cost="{% if entry.kind == 'batch' %}{{ entry.unit_cost or '' }}{% endif %}"
+                        >
                             <td>{{ entry.tier }} - {{ entry.item_name }}</td>
                             <td>{{ entry.kind }}</td>
                             <td>
@@ -296,9 +306,21 @@
                             </td>
                             <td>{{ entry.reason }}{% if entry.note %}<div class="text-muted small">{{ entry.note }}</div>{% endif %}</td>
                             <td class="text-end {% if entry.delta_quantity < 0 %}text-danger{% else %}text-success{% endif %}">{{ "{:+,}".format(entry.delta_quantity) }}</td>
+                            <td class="text-end inventory-audit-unit-cost">{% if entry.kind == 'batch' and entry.unit_cost %}{{ entry.unit_cost }} ISK{% else %}<span class="text-muted">n/a</span>{% endif %}</td>
                             <td>{{ entry.created_at }}</td>
                             <td class="text-end">
-                                {% if entry.kind != 'stock' and entry.status == 'active' %}
+                                {% if entry.kind == 'batch' and entry.status == 'active' %}
+                                <div class="d-inline-flex align-items-center gap-1">
+                                    <button class="btn btn-sm eve-btn-ghost" type="button" onclick="event.stopPropagation(); openCostEditor(this, {{ entry.id }})"><i class="bi bi-pencil"></i></button>
+                                    <form method="post" action="/inventory/transaction/remove-page" class="inventory-remove-form">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                                        <input type="hidden" name="transaction_kind" value="{{ entry.kind }}">
+                                        <input type="hidden" name="transaction_id" value="{{ entry.id }}">
+                                        <input type="hidden" name="tier" value="{{ selected_tier }}">
+                                        <button type="submit" class="btn btn-sm eve-btn-ghost inventory-remove-btn">{{ t('inventory.btn_remove') }}</button>
+                                    </form>
+                                </div>
+                                {% elif entry.kind != 'stock' and entry.status == 'active' %}
                                 <form method="post" action="/inventory/transaction/remove-page" class="inventory-remove-form">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                                     <input type="hidden" name="transaction_kind" value="{{ entry.kind }}">
@@ -312,7 +334,7 @@
                             </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="7" class="text-center text-muted py-4">{{ t('inventory.no_transactions') }}</td></tr>
+                        <tr><td colspan="8" class="text-center text-muted py-4">{{ t('inventory.no_transactions') }}</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -320,6 +342,63 @@
             </div>
         </div>
     </section>
+</div>
+
+<div class="modal fade" id="inventoryBulkImportModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content inventory-modal">
+            <div class="modal-header border-0 pb-0">
+                <div>
+                    <div class="inventory-kicker mb-2">Bulk Import</div>
+                    <h5 class="modal-title mb-0">Import from EVE List</h5>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="bulkImportStepPaste">
+                    <div class="small text-muted mb-2">Paste a tab-separated EVE item list (name + quantity).</div>
+                    <textarea id="bulkImportTextarea" class="form-control eve-input" rows="11" placeholder="Tritanium	150,000&#10;Isogen	12,500&#10;Oxygen	300"></textarea>
+                </div>
+                <div id="bulkImportStepReview" class="d-none">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                        <div class="small text-muted" id="bulkImportSummaryText">0 parsed rows</div>
+                        <div class="small" id="bulkImportProgressText"></div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-dark table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Item</th>
+                                    <th class="text-end">Quantity</th>
+                                    <th class="text-end">Unit Cost (ISK)</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bulkImportReviewBody">
+                                <tr><td colspan="4" class="text-center text-muted py-3">No parsed rows yet.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="bulkImportResult" class="small mt-2"></div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0 d-flex justify-content-between">
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn eve-btn-ghost d-none" id="bulkImportBackBtn">
+                        <i class="bi bi-arrow-left me-1"></i>Back
+                    </button>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn eve-btn-outline" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn eve-btn-primary" id="bulkImportNextBtn">
+                        Next <i class="bi bi-arrow-right ms-1"></i>
+                    </button>
+                    <button type="button" class="btn eve-btn-primary d-none" id="bulkImportSubmitBtn">Submit All</button>
+                    <button type="button" class="btn eve-btn-primary d-none" id="bulkImportReloadBtn">Close &amp; Reload</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="modal fade" id="inventoryItemModal" tabindex="-1" aria-hidden="true">
@@ -399,9 +478,259 @@
                     </table>
                 </div>
             </div>
-        </div>
-    </div>
 </div>
+</div>
+</div>
+
+<script>
+const _inventoryCatalog = {{ inventory_catalog | tojson }};
+
+function getCsrfToken() {
+    return document.cookie.split('; ')
+        .find(r => r.startsWith('planetflow_csrf='))?.split('=').slice(1).join('=') || '';
+}
+
+(() => {
+    const nameMap = new Map();
+    for (const item of _inventoryCatalog) {
+        const normalizedName = String(item.name || '').trim().toLowerCase();
+        const normalizedDisplay = String(item.display_name || '').trim().toLowerCase();
+        if (normalizedName && !nameMap.has(normalizedName)) nameMap.set(normalizedName, item);
+        if (normalizedDisplay && !nameMap.has(normalizedDisplay)) nameMap.set(normalizedDisplay, item);
+    }
+
+    const modalEl = document.getElementById('inventoryBulkImportModal');
+    if (!modalEl) return;
+    const stepPaste = document.getElementById('bulkImportStepPaste');
+    const stepReview = document.getElementById('bulkImportStepReview');
+    const textarea = document.getElementById('bulkImportTextarea');
+    const reviewBody = document.getElementById('bulkImportReviewBody');
+    const summaryText = document.getElementById('bulkImportSummaryText');
+    const progressText = document.getElementById('bulkImportProgressText');
+    const resultText = document.getElementById('bulkImportResult');
+    const nextBtn = document.getElementById('bulkImportNextBtn');
+    const backBtn = document.getElementById('bulkImportBackBtn');
+    const submitBtn = document.getElementById('bulkImportSubmitBtn');
+    const reloadBtn = document.getElementById('bulkImportReloadBtn');
+    let parsedRows = [];
+
+    const escapeHtml = (value) => String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const showPasteStep = () => {
+        stepPaste.classList.remove('d-none');
+        stepReview.classList.add('d-none');
+        backBtn.classList.add('d-none');
+        submitBtn.classList.add('d-none');
+        reloadBtn.classList.add('d-none');
+        nextBtn.classList.remove('d-none');
+        progressText.textContent = '';
+        resultText.textContent = '';
+        resultText.className = 'small mt-2';
+    };
+
+    const showReviewStep = () => {
+        stepPaste.classList.add('d-none');
+        stepReview.classList.remove('d-none');
+        backBtn.classList.remove('d-none');
+        submitBtn.classList.remove('d-none');
+        nextBtn.classList.add('d-none');
+        reloadBtn.classList.add('d-none');
+    };
+
+    const parseInput = (rawText) => {
+        const rows = [];
+        for (const line of String(rawText || '').split(/\r?\n/)) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            const parts = trimmed.split('\t');
+            if (parts.length < 2) continue;
+            const rawName = String(parts[0] || '').trim();
+            const qtyRaw = String(parts[1] || '').trim().replace(/,/g, '');
+            const quantity = parseInt(qtyRaw, 10);
+            if (!rawName || !Number.isFinite(quantity) || quantity <= 0) continue;
+            const catalogItem = nameMap.get(rawName.toLowerCase()) || null;
+            rows.push({
+                raw_name: rawName,
+                quantity,
+                known: !!catalogItem,
+                type_id: catalogItem ? Number(catalogItem.type_id) : null,
+                display_name: catalogItem ? String(catalogItem.display_name || catalogItem.name || rawName) : rawName,
+                tier: catalogItem ? String(catalogItem.tier || '') : '',
+                unit_cost: '',
+            });
+        }
+        return rows;
+    };
+
+    const renderReview = () => {
+        if (!parsedRows.length) {
+            reviewBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">No valid rows parsed.</td></tr>';
+            summaryText.textContent = '0 parsed rows';
+            return;
+        }
+        const knownCount = parsedRows.filter(r => r.known).length;
+        const unknownCount = parsedRows.length - knownCount;
+        summaryText.textContent = `${parsedRows.length} parsed rows, ${knownCount} valid, ${unknownCount} unknown`;
+        reviewBody.innerHTML = parsedRows.map((row, index) => `
+            <tr data-bulk-index="${index}">
+                <td>${row.known ? `${escapeHtml(row.tier)} - ${escapeHtml(row.display_name)}` : `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>${escapeHtml(row.raw_name)}</span>`}</td>
+                <td class="text-end">${Number(row.quantity || 0).toLocaleString()}</td>
+                <td class="text-end">
+                    ${row.known
+                        ? `<input type="number" min="0" step="0.01" class="form-control form-control-sm eve-input bulk-unit-cost-input ms-auto" style="max-width:170px;" data-index="${index}" value="${escapeHtml(row.unit_cost)}" placeholder="optional">`
+                        : '<span class="text-muted">-</span>'}
+                </td>
+                <td>${row.known ? '<span class="text-success">ready</span>' : '<span class="text-danger">unknown item (skipped)</span>'}</td>
+            </tr>
+        `).join('');
+    };
+
+    const readRowUnitCosts = () => {
+        document.querySelectorAll('.bulk-unit-cost-input').forEach((input) => {
+            const idx = Number(input.dataset.index);
+            if (!Number.isInteger(idx) || !parsedRows[idx]) return;
+            parsedRows[idx].unit_cost = String(input.value || '').trim();
+        });
+    };
+
+    nextBtn?.addEventListener('click', () => {
+        parsedRows = parseInput(textarea?.value || '');
+        renderReview();
+        showReviewStep();
+    });
+
+    backBtn?.addEventListener('click', () => {
+        readRowUnitCosts();
+        showPasteStep();
+    });
+
+    submitBtn?.addEventListener('click', async () => {
+        readRowUnitCosts();
+        const csrfToken = getCsrfToken();
+        if (!csrfToken) {
+            resultText.className = 'small mt-2 text-danger';
+            resultText.textContent = 'Missing CSRF token. Please reload the page.';
+            return;
+        }
+        const validRows = parsedRows.filter(r => r.known && r.type_id && r.quantity > 0);
+        if (!validRows.length) {
+            resultText.className = 'small mt-2 text-danger';
+            resultText.textContent = 'No valid rows to submit.';
+            return;
+        }
+        submitBtn.disabled = true;
+        backBtn.disabled = true;
+        let successCount = 0;
+        let failedCount = 0;
+        for (let i = 0; i < validRows.length; i++) {
+            const row = validRows[i];
+            progressText.textContent = `Submitting ${i + 1}/${validRows.length}...`;
+            const unitCost = String(row.unit_cost || '').trim();
+            const formData = new FormData();
+            formData.append('csrf_token', csrfToken);
+            formData.append('type_id', String(row.type_id));
+            formData.append('quantity', String(row.quantity));
+            formData.append('source_kind', unitCost ? 'purchase' : 'production');
+            formData.append('unit_cost', unitCost);
+            formData.append('note', '');
+            try {
+                const response = await fetch('/inventory/lots', {
+                    method: 'POST',
+                    body: formData,
+                });
+                if (response.ok) {
+                    successCount += 1;
+                } else {
+                    failedCount += 1;
+                }
+            } catch (_) {
+                failedCount += 1;
+            }
+        }
+        progressText.textContent = '';
+        const skippedCount = parsedRows.length - validRows.length;
+        resultText.className = `small mt-2 ${failedCount > 0 ? 'text-warning' : 'text-success'}`;
+        resultText.textContent = `Done. Imported ${successCount}/${validRows.length}. Failed ${failedCount}. Skipped unknown ${skippedCount}.`;
+        submitBtn.classList.add('d-none');
+        backBtn.classList.add('d-none');
+        reloadBtn.classList.remove('d-none');
+        reloadBtn.disabled = false;
+    });
+
+    reloadBtn?.addEventListener('click', () => {
+        window.location.reload();
+    });
+
+    modalEl.addEventListener('show.bs.modal', () => {
+        parsedRows = [];
+        submitBtn.disabled = false;
+        backBtn.disabled = false;
+        submitBtn.classList.remove('d-none');
+        showPasteStep();
+    });
+})();
+
+function openCostEditor(btn, lotId) {
+    const row = btn.closest('tr');
+    if (!row) return;
+    const actionsCell = row.querySelector('td:last-child');
+    if (!actionsCell) return;
+    const existing = actionsCell.querySelector('.inventory-cost-editor-wrap');
+    if (existing) {
+        existing.remove();
+        return;
+    }
+    actionsCell.querySelectorAll('.inventory-cost-editor-wrap').forEach(el => el.remove());
+    const currentRaw = String(row.getAttribute('data-unit-cost') || '').trim();
+    const wrapper = document.createElement('div');
+    wrapper.className = 'inventory-cost-editor-wrap d-flex align-items-center justify-content-end gap-1 mt-2';
+    wrapper.innerHTML = `
+        <input type="number" min="0" step="0.01" class="form-control form-control-sm eve-input inventory-cost-input" style="max-width:140px;" value="${currentRaw}">
+        <button type="button" class="btn btn-sm eve-btn-primary inventory-cost-save">Save</button>
+        <button type="button" class="btn btn-sm eve-btn-ghost inventory-cost-cancel"><i class="bi bi-x-lg"></i></button>
+    `;
+    actionsCell.appendChild(wrapper);
+    const input = wrapper.querySelector('.inventory-cost-input');
+    const saveBtn = wrapper.querySelector('.inventory-cost-save');
+    const cancelBtn = wrapper.querySelector('.inventory-cost-cancel');
+    cancelBtn?.addEventListener('click', () => wrapper.remove());
+    saveBtn?.addEventListener('click', async () => {
+        const nextValue = String(input?.value || '').trim();
+        saveBtn.disabled = true;
+        try {
+            const response = await fetch(`/inventory/lot/${lotId}/cost`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...csrfHeader() },
+                body: JSON.stringify({ unit_cost: nextValue }),
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) {
+                window.alert(payload.error || 'Could not update unit cost.');
+                saveBtn.disabled = false;
+                return;
+            }
+            row.setAttribute('data-unit-cost', payload.unit_cost || '');
+            const cell = row.querySelector('.inventory-audit-unit-cost');
+            if (cell) {
+                if (payload.unit_cost) {
+                    cell.textContent = `${payload.unit_cost} ISK`;
+                } else {
+                    cell.innerHTML = '<span class="text-muted">n/a</span>';
+                }
+            }
+            wrapper.remove();
+        } catch (_) {
+            window.alert('Could not update unit cost.');
+            saveBtn.disabled = false;
+        }
+    });
+}
+</script>
 {% endblock %}
 
 {% block extra_scripts %}

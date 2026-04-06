@@ -37,6 +37,9 @@
     </script>
 </head>
 <body class="eve-body">
+{# Ensure the CSRF cookie is always set/refreshed on every page load,
+   even on pages that have no HTML forms (e.g. KillIntel). #}
+<span hidden aria-hidden="true" data-csrf="{{ csrf_token(request) }}"></span>
 
 {% if request.state.is_impersonating %}
 <div style="background:#7c2d12;border-bottom:2px solid #f97316;padding:6px 16px;display:flex;align-items:center;justify-content:space-between;font-size:.85rem;position:sticky;top:0;z-index:2000;">

@@ -2,19 +2,11 @@
 
 [Deutsch](README.de.md) | [English](README.en.md) | [ZH-CN](README.zh-Hans.md)
 
-Self-hosted Planetary Industry platform for EVE Online with page-based access control, billing, planning tools, background refresh workers, and production-ready Docker deployment.
+Self-hosted Planetary Industry platform for EVE Online — dashboard, inventory, hauling, intel, killboard, skyhooks, and more.
 
-> **[planetflow.app](https://planetflow.app)** — try the hosted version or get started with self-hosting.
+> **[planetflow.app](https://planetflow.app)** — try the hosted version, or self-host it yourself.
 
-If the project is useful to you, in-game ISK donations to `DrNightmare` are welcome.
-
-## Highlights
-
-- PI dashboard plus inventory, hauling, intel, killboard, skyhooks, and templates
-- Billing and access management pages built into the app
-- Planner, colony assignment, system analysis, market, and corporation workflows
-- FastAPI + PostgreSQL + Celery + RabbitMQ deployment with nginx and certbot
-- German, English, and Simplified Chinese UI translations
+If this project is useful to you, in-game ISK donations to `DrNightmare` are welcome.
 
 ## Screenshots
 
@@ -30,29 +22,10 @@ If the project is useful to you, in-game ISK donations to `DrNightmare` are welc
 
 ## Quick Start
 
-```bash
-cp .env.example .env
-docker compose up -d
-```
+Choose your setup:
 
-Required `.env` values:
-
-- `DB_PASSWORD`
-- `EVE_CLIENT_ID`
-- `EVE_CLIENT_SECRET`
-- `EVE_CALLBACK_URL`
-- `SECRET_KEY`
-- `RABBITMQ_PASS`
-
-## Included Scripts
-
-| Script | Purpose |
-|---|---|
-| `scripts/setup_hetzner.sh` | Prepare a fresh Hetzner Ubuntu server |
-| `scripts/start.sh` | Validate `.env`, obtain TLS certs, and start the stack |
-| `scripts/update.sh` | Pull, rebuild, restart, and run migrations |
-| `scripts/add_administrator.py` | Grant administrator access |
-| `scripts/remove_administrator.py` | Remove administrator access |
+- **Local (your own PC, no domain needed)** → [README.en.md — Local Setup](README.en.md#local-setup-your-pc-no-domain)
+- **Server with a domain (HTTPS)** → [README.en.md — Server Setup](README.en.md#server-setup-with-domain--https)
 
 ## Full Documentation
 

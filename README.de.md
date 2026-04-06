@@ -1,152 +1,296 @@
-# PlanetFlow
+# PlanetFlow — Deutsch
 
 [Deutsch](README.de.md) | [English](README.en.md) | [ZH-CN](README.zh-Hans.md)
 
-`PlanetFlow` ist eine selbst gehostete EVE-Online-PI-Plattform, die das klassische Dashboard um Billing, seitenbasierte Zugriffskontrolle und ein produktionsnahes Docker-Deployment mit TLS erweitert.
+Selbst gehostete Planetary-Industry-Plattform für EVE Online.
 
-> **[planetflow.app](https://planetflow.app)** — gehostete Version ausprobieren oder direkt mit dem Self-Hosting loslegen.
+> **[planetflow.app](https://planetflow.app)** — gehostete Version ausprobieren oder selbst hosten.
 
 Wenn dir das Projekt hilft, freue ich mich über Ingame-ISK an `DrNightmare`.
 
-## Funktionsumfang
+---
 
-- Dashboard mit Koloniestatus, Ablaufzeiten, ISK/Tag, CSV-Export und Paginierung
-- Werkzeuge für Characters, Corporation, Inventory, Hauling, Intel, Killboard, Skyhooks und Templates
-- PI Chain Planner, Colony Assignment Planner, System Analyzer, System Mix, Compare und Fittings
-- Billing-Seiten und zugriffsgesteuerte Routen im UI
-- Hintergrundjobs über Celery + RabbitMQ
-- HTTPS-Deployment mit nginx + certbot in Docker Compose
-- UI-Übersetzungen für Deutsch, Englisch und vereinfachtes Chinesisch
+## Umstieg von EVE PI Manager?
 
-## Hauptseiten
+EVE PI Manager wurde archiviert. PlanetFlow ist der Nachfolger — alle Funktionen wurden portiert und erweitert.
 
-- `Dashboard`
-- `Characters`
-- `Corporation`
-- `Inventory`
-- `Hauling`
-- `Intel`
-- `Killboard`
-- `Skyhooks`
-- `PI Templates`
-- `Jita Market`
-- `PI Chain Planner`
-- `Colony Assignment Planner`
-- `System Analyzer`
-- `System Mix`
-- `Compare`
-- `Fittings`
-- `Billing`
-- `Admin`
-- `Director`
+**Deine Daten werden nicht automatisch übernommen.** Beide Apps verwenden separate Datenbanken. Die Migration ist aber unkompliziert:
 
-## Benötigte ESI-Scopes
+### Schritt 1 — PlanetFlow frisch aufsetzen
 
-```text
-esi-planets.manage_planets.v1
-esi-planets.read_customs_offices.v1
-esi-location.read_location.v1
-esi-characters.read_corporation_roles.v1
-esi-skills.read_skills.v1
-esi-fittings.read_fittings.v1
+Folge der [Lokalen Installation](#lokale-installation-eigener-pc-keine-domain-nötig) oder [Server-Installation](#server-installation-mit-domain--https) weiter unten. PlanetFlow ist eine Neuinstallation — du brauchst nur dein EVE-SSO-Login.
+
+### Schritt 2 — EVE-Entwickleranwendung neu registrieren (oder bestehende wiederverwenden)
+
+- Du kannst deine bestehende EVE-Entwickleranwendung von EVE PI Manager wiederverwenden — ändere einfach die **Callback URL** auf PlanetFlow.
+- Oder erstelle eine neue App auf [https://developers.eveonline.com](https://developers.eveonline.com). Die benötigten Scopes sind identisch.
+
+### Schritt 3 — Einloggen und Charaktere neu hinzufügen
+
+PlanetFlow nutzt denselben EVE-SSO-Ablauf. Einloggen, zu Characters gehen und jeden Charakter neu autorisieren. ESI-Daten werden automatisch im Hintergrund synchronisiert — Kolonien, Ablaufzeiten und Planetendaten erscheinen innerhalb weniger Minuten.
+
+### Schritt 4 — Manuelle Daten neu eingeben
+
+Daten, die lokal in EVE PI Manager gespeichert waren und nicht aus ESI kommen, müssen manuell neu eingegeben werden:
+- **Inventory-Bestände** — über die Inventory-Seite neu hinzufügen
+- **Hauling-Routen / Bridge-Verbindungen** — im Hauling-Bereich neu konfigurieren
+- **Skyhook-Einträge** — in Skyhooks neu eintragen
+- **PI-Templates** — in PI Templates neu hochladen
+
+### Schritt 5 — EVE PI Manager abschalten
+
+Sobald PlanetFlow läuft und synchronisiert ist:
+```bash
+# im alten eve-pi-manager-Verzeichnis
+docker compose down
 ```
 
-Für strukturbezogene Abläufe ist `esi-search.search_structures.v1` zusätzlich empfehlenswert.
+Das alte Datenbankvolume kann als Backup behalten oder vollständig entfernt werden:
+```bash
+docker compose down -v   # entfernt auch Volumes — nicht rückgängig zu machen
+```
 
-## Schnellstart
+### Wichtigste Unterschiede zu EVE PI Manager
+
+| | EVE PI Manager | PlanetFlow |
+|---|---|---|
+| HTTPS / TLS | Optionales nginx-Profil | Eingebaut (Let's Encrypt oder Proxy-Modus) |
+| Billing & Zugriffskontrolle | Nicht vorhanden | Eingebaut |
+| Admin-Bereich | `/manager` | `/admin` |
+| Hintergrundworker | Celery + APScheduler-Fallback | Nur Celery (RabbitMQ erforderlich) |
+| Konfigurationsschlüssel | `CELERY_BROKER_URL` | `RABBITMQ_USER` / `RABBITMQ_PASS` |
+| Lokaler HTTP-Modus | `COOKIE_SECURE=false` | `COOKIE_SECURE=false` + `NGINX_MODE=proxy` |
+
+---
+
+## Voraussetzungen
+
+Du brauchst nur **Docker Desktop**. Das war's.
+
+- Windows / Mac: [https://www.docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop)
+- Linux: `docker` + `docker compose` über den Paketmanager installieren
+
+---
+
+## Schritt 1 — EVE-Entwickleranwendung erstellen
+
+Du brauchst einen EVE-Online-API-Key.
+
+1. Öffne [https://developers.eveonline.com](https://developers.eveonline.com) und logge dich ein
+2. Klicke auf **Create New Application**
+3. Fülle aus:
+   - **Name:** beliebig (z. B. `Mein PlanetFlow`)
+   - **Connection Type:** `Authentication & API Access`
+   - **Callback URL:**
+     - Lokal: `http://localhost/auth/callback`
+     - Server mit Domain: `https://deinedomain.de/auth/callback`
+   - **Scopes** — alle diese hinzufügen:
+     ```
+     esi-planets.manage_planets.v1
+     esi-planets.read_customs_offices.v1
+     esi-location.read_location.v1
+     esi-characters.read_corporation_roles.v1
+     esi-skills.read_skills.v1
+     esi-fittings.read_fittings.v1
+     ```
+4. Speichern und **Client ID** sowie **Client Secret** kopieren
+
+---
+
+## Lokale Installation (eigener PC, keine Domain nötig)
+
+PlanetFlow läuft auf deinem Computer unter `http://localhost`.  
+Keine Domain, kein TLS-Zertifikat, keine nginx-Konfiguration nötig.
+
+### 1. Projekt herunterladen
+
+```bash
+git clone https://github.com/your-org/planetflow.app.git
+cd planetflow.app
+```
+
+### 2. Konfigurationsdatei anlegen
 
 ```bash
 cp .env.example .env
-docker compose up -d
 ```
 
-Mindestens diese Werte setzen:
+Öffne `.env` in einem Texteditor und trage diese Werte ein:
 
 ```env
-DB_PASSWORD=change_me
-EVE_CLIENT_ID=your_client_id
-EVE_CLIENT_SECRET=your_client_secret
-EVE_CALLBACK_URL=https://planetflow.app/auth/callback
-SECRET_KEY=replace_me_with_a_long_random_secret_key
-RABBITMQ_PASS=change_me_rabbit
+# Passwort für die interne Datenbank — beliebig wählen
+DB_PASSWORD=mein_lokales_passwort
+
+# Deine EVE-Charakter-ID (findest du auf https://evewho.com)
+EVE_OWNER_CHARACTER_ID=123456789
+
+# Aus deiner EVE-Entwickleranwendung (Schritt 1)
+EVE_CLIENT_ID=dein_client_id
+EVE_CLIENT_SECRET=dein_client_secret
+EVE_CALLBACK_URL=http://localhost/auth/callback
+
+# Geheimen Schlüssel generieren:
+# Terminal: python -c "import secrets; print(secrets.token_hex(32))"
+SECRET_KEY=deinen_generierten_schluessel_hier_eintragen
+
+# Passwort für die interne Message Queue — beliebig wählen
+RABBITMQ_PASS=mein_lokales_rabbit_passwort
+
+# WICHTIG für lokal: muss false sein (kein HTTPS lokal)
+COOKIE_SECURE=false
+
+# WICHTIG für lokal: proxy-Modus — kein TLS-Zertifikat nötig
+NGINX_MODE=proxy
 ```
 
-Wichtige Hinweise:
+Alles andere kann so bleiben wie es ist.
 
-- `COOKIE_SECURE=true`, wenn die Anwendung über HTTPS ausgeliefert wird
-- Das Standard-Compose-Setup enthält bereits `nginx` und `certbot`
-- `sde_init` bereitet das beschreibbare SDE-Volume für den App-User vor
-
-## Docker-Compose-Dienste
-
-- `db`
-- `rabbitmq`
-- `sde_init`
-- `app`
-- `celery_worker`
-- `celery_wallet`
-- `celery_beat`
-- `nginx`
-- `certbot`
-
-Optionale Profile:
-
-- `pgbouncer`
-- `monitoring`
-
-Nützliche Befehle:
+### 3. Starten
 
 ```bash
 docker compose up -d
-docker compose logs -f app
-docker compose logs -f celery_worker
-docker compose logs -f celery_wallet
-docker compose logs -f celery_beat
-docker compose ps
 ```
 
-## Skripte
+Docker lädt und baut alles automatisch. Beim ersten Mal dauert das ein paar Minuten.
 
-Frischer Hetzner-Ubuntu-Server:
+### 4. Im Browser öffnen
+
+[http://localhost](http://localhost)
+
+Mit EVE-SSO einloggen. Der erste Account, der sich anmeldet, wird automatisch Owner (Admin).
+
+### 5. Stoppen
+
+```bash
+docker compose down
+```
+
+---
+
+## Server-Installation (mit Domain + HTTPS)
+
+### 1. Server vorbereiten
+
+Auf einem frischen Ubuntu-Server (getestet auf Hetzner):
 
 ```bash
 bash scripts/setup_hetzner.sh
 ```
 
-Konfiguration prüfen, Zertifikate holen und Stack starten:
+Das installiert Docker und alle Abhängigkeiten.
+
+### 2. Konfigurationsdatei anlegen
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+Pflichtfelder:
+
+```env
+DB_PASSWORD=sicheres_datenbankpasswort
+EVE_OWNER_CHARACTER_ID=123456789
+EVE_CLIENT_ID=dein_client_id
+EVE_CLIENT_SECRET=dein_client_secret
+EVE_CALLBACK_URL=https://deinedomain.de/auth/callback
+SECRET_KEY=deinen_generierten_schluessel
+RABBITMQ_PASS=sicheres_rabbit_passwort
+COOKIE_SECURE=true
+NGINX_MODE=https
+```
+
+### 3. Starten (mit automatischem TLS)
 
 ```bash
 bash scripts/start.sh
 ```
 
-Bestehendes Deployment aktualisieren:
+Dieses Skript prüft die Konfiguration, holt ein Let's-Encrypt-Zertifikat und startet alle Dienste.
+
+### 4. Bestehendes Deployment aktualisieren
 
 ```bash
 bash scripts/update.sh
 ```
 
-## Administrator-Werkzeuge
+---
 
-- `scripts/add_administrator.py`
-- `scripts/remove_administrator.py`
-- Admin-Seiten in der App für Zugriffspolitik, Account-Verwaltung und Übersetzungen
+## Adminrechte vergeben
 
-## Health-Check
+Nach dem ersten Login:
 
-```text
-GET /health
+```bash
+docker compose exec app python scripts/add_administrator.py
 ```
 
-Der Endpunkt liefert den Status von Datenbank und RabbitMQ und wird von den Container-Healthchecks verwendet.
+---
+
+## Nützliche Befehle
+
+```bash
+# Logs anzeigen
+docker compose logs -f app
+docker compose logs -f celery_worker
+
+# Status aller Container
+docker compose ps
+
+# Alles neu starten
+docker compose restart
+
+# Container stoppen (Daten bleiben erhalten)
+docker compose down
+```
+
+---
+
+## Fehlerbehebung
+
+**Login funktioniert nicht / Callback-Fehler**
+- `EVE_CALLBACK_URL` in `.env` muss exakt mit der Callback-URL in der EVE-Entwickleranwendung übereinstimmen
+- Lokal: muss `http://localhost/auth/callback` sein (kein https)
+- Lokal: `COOKIE_SECURE` muss `false` sein
+
+**Seite lädt, zeigt aber keine Daten**
+- App-Logs prüfen: `docker compose logs -f app`
+- Worker-Logs prüfen: `docker compose logs -f celery_worker`
+
+**Port 80 bereits belegt**
+- Ein anderes Programm (IIS, anderer Webserver) nutzt Port 80. Dieses beenden oder den Port in `docker-compose.yml` ändern
+
+**"Connection refused" auf http://localhost**
+- 30–60 Sekunden nach `docker compose up -d` warten — die App braucht etwas Zeit zum Starten
+- Prüfen: `docker compose ps` — alle Dienste sollten `healthy` oder `running` anzeigen
+
+---
+
+## Dienste im Überblick
+
+| Dienst | Aufgabe |
+|---|---|
+| `db` | PostgreSQL-Datenbank |
+| `rabbitmq` | Message Queue für Hintergrundjobs |
+| `app` | Die Webanwendung |
+| `celery_worker` | Hintergrundjob-Worker (ESI-Sync usw.) |
+| `celery_beat` | Job-Scheduler (zeitgesteuerte Aufgaben) |
+| `nginx` | Webserver / Reverse Proxy |
+| `certbot` | Automatische TLS-Zertifikatserneuerung (nur Server) |
+
+---
+
+## Funktionsumfang
+
+- Dashboard mit Koloniestatus, Ablaufzeiten, ISK/Tag, CSV-Export
+- Characters, Corporation, Inventory, Hauling, Intel, Killboard, Skyhooks, Templates
+- PI Chain Planner, Colony Assignment Planner, System Analyzer, Compare, Fittings
+- Billing-Seiten und seitenbasierte Zugriffskontrolle
+- Deutsch, Englisch und vereinfachtes Chinesisch
 
 ## Tech Stack
 
-- FastAPI + Jinja2
-- PostgreSQL + SQLAlchemy + Alembic
-- Celery + RabbitMQ
-- Gunicorn / Uvicorn
-- nginx + certbot
-- Bootstrap 5
+- FastAPI + PostgreSQL + Celery + RabbitMQ + nginx
+- Bootstrap 5 · Deployment via Docker Compose
 
 ## Lizenz
 

@@ -59,7 +59,7 @@ docker compose down -v   # entfernt auch Volumes — nicht rückgängig zu mache
 | Admin-Bereich | `/manager` | `/admin` |
 | Hintergrundworker | Celery + APScheduler-Fallback | Nur Celery (RabbitMQ erforderlich) |
 | Konfigurationsschlüssel | `CELERY_BROKER_URL` | `RABBITMQ_USER` / `RABBITMQ_PASS` |
-| Lokaler HTTP-Modus | `COOKIE_SECURE=false` | `COOKIE_SECURE=false` + `NGINX_MODE=proxy` |
+| Lokaler HTTP-Modus | `COOKIE_SECURE=false` | `COOKIE_SECURE=false` + `NGINX_MODE=local` |
 
 ---
 
@@ -82,7 +82,7 @@ Du brauchst einen EVE-Online-API-Key.
    - **Name:** beliebig (z. B. `Mein PlanetFlow`)
    - **Connection Type:** `Authentication & API Access`
    - **Callback URL:**
-     - Lokal: `http://localhost/auth/callback`
+     - Lokal: `http://localhost:8080/auth/callback` (oder dein eigener `NGINX_HTTP_PORT`)
      - Server mit Domain: `https://deinedomain.de/auth/callback`
    - **Scopes** — alle diese hinzufügen:
      ```
@@ -127,20 +127,25 @@ EVE_OWNER_CHARACTER_ID=123456789
 # Aus deiner EVE-Entwickleranwendung (Schritt 1)
 EVE_CLIENT_ID=dein_client_id
 EVE_CLIENT_SECRET=dein_client_secret
-EVE_CALLBACK_URL=http://localhost/auth/callback
+EVE_CALLBACK_URL=http://localhost:8080/auth/callback
 
-# Geheimen Schlüssel generieren:
-# Terminal: python -c "import secrets; print(secrets.token_hex(32))"
+# Geheimen Schlüssel generieren (muss lower/UPPER/Zahl/Sonderzeichen enthalten):
+# python3 -c "import secrets,string; l=string.ascii_lowercase; u=string.ascii_uppercase; d=string.digits; s='!@#$%^&*()-_=+[]{}:,.?'; a=l+u+d+s; p=[secrets.choice(l),secrets.choice(u),secrets.choice(d),secrets.choice(s)]+[secrets.choice(a) for _ in range(44)]; secrets.SystemRandom().shuffle(p); print(''.join(p))"
 SECRET_KEY=deinen_generierten_schluessel_hier_eintragen
 
 # Passwort für die interne Message Queue — beliebig wählen
+RABBITMQ_USER=planetflow
 RABBITMQ_PASS=mein_lokales_rabbit_passwort
 
 # WICHTIG für lokal: muss false sein (kein HTTPS lokal)
 COOKIE_SECURE=false
 
-# WICHTIG für lokal: proxy-Modus — kein TLS-Zertifikat nötig
-NGINX_MODE=proxy
+# WICHTIG für lokal: local-Modus — kein TLS-Zertifikat nötig
+NGINX_MODE=local
+
+# Optional: lokale Host-Ports (Standardwerte)
+NGINX_HTTP_PORT=8080
+NGINX_HTTPS_PORT=8443
 ```
 
 Alles andere kann so bleiben wie es ist.
@@ -155,7 +160,7 @@ Docker lädt und baut alles automatisch. Beim ersten Mal dauert das ein paar Min
 
 ### 4. Im Browser öffnen
 
-[http://localhost](http://localhost)
+[http://localhost:8080](http://localhost:8080)
 
 Mit EVE-SSO einloggen. Der erste Account, der sich anmeldet, wird automatisch Owner (Admin).
 
@@ -198,6 +203,8 @@ SECRET_KEY=deinen_generierten_schluessel
 RABBITMQ_PASS=sicheres_rabbit_passwort
 COOKIE_SECURE=true
 NGINX_MODE=https
+NGINX_HTTP_PORT=80
+NGINX_HTTPS_PORT=443
 ```
 
 ### 3. Starten (mit automatischem TLS)
@@ -249,7 +256,7 @@ docker compose down
 
 **Login funktioniert nicht / Callback-Fehler**
 - `EVE_CALLBACK_URL` in `.env` muss exakt mit der Callback-URL in der EVE-Entwickleranwendung übereinstimmen
-- Lokal: muss `http://localhost/auth/callback` sein (kein https)
+- Lokal (Standard): `http://localhost:8080/auth/callback` (oder passend zu deinem `NGINX_HTTP_PORT`)
 - Lokal: `COOKIE_SECURE` muss `false` sein
 
 **Seite lädt, zeigt aber keine Daten**
@@ -257,9 +264,10 @@ docker compose down
 - Worker-Logs prüfen: `docker compose logs -f celery_worker`
 
 **Port 80 bereits belegt**
-- Ein anderes Programm (IIS, anderer Webserver) nutzt Port 80. Dieses beenden oder den Port in `docker-compose.yml` ändern
+- Ein anderes Programm (IIS, anderer Webserver) nutzt Port 80.
+- Setze `NGINX_HTTP_PORT` in `.env` z. B. auf `8080` und passe `EVE_CALLBACK_URL` entsprechend an.
 
-**"Connection refused" auf http://localhost**
+**"Connection refused" auf lokaler URL**
 - 30–60 Sekunden nach `docker compose up -d` warten — die App braucht etwas Zeit zum Starten
 - Prüfen: `docker compose ps` — alle Dienste sollten `healthy` oder `running` anzeigen
 

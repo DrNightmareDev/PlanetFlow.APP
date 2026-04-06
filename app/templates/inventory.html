@@ -49,7 +49,6 @@
                     <div class="inventory-panel-title"><i class="bi bi-plus-square me-2"></i>{{ t('inventory.add_title') }}</div>
                 </div>
                 <div class="d-flex align-items-center gap-2">
-                    <span class="inventory-panel-badge">{{ t('inventory.add_badge') }}</span>
                     <button type="button" class="btn btn-sm eve-btn-outline" data-bs-toggle="modal" data-bs-target="#inventoryBulkImportModal">
                         <i class="bi bi-clipboard-plus me-1"></i>Bulk Import
                     </button>
@@ -576,7 +575,10 @@ function getCsrfToken() {
         const knownCount = parsedRows.filter(r => r.known).length;
         const unknownCount = parsedRows.length - knownCount;
         summaryText.textContent = `${parsedRows.length} parsed rows, ${knownCount} valid, ${unknownCount} unknown`;
-        reviewBody.innerHTML = parsedRows.map((row, index) => `
+        const sortedRows = parsedRows
+            .map((row, index) => ({ row, index }))
+            .sort((left, right) => Number(right.row.known) - Number(left.row.known));
+        reviewBody.innerHTML = sortedRows.map(({ row, index }) => `
             <tr data-bulk-index="${index}">
                 <td>${row.known ? `${escapeHtml(row.tier)} - ${escapeHtml(row.display_name)}` : `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>${escapeHtml(row.raw_name)}</span>`}</td>
                 <td class="text-end">${Number(row.quantity || 0).toLocaleString()}</td>

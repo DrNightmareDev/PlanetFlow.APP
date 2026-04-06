@@ -45,6 +45,10 @@
                 <button id="analyzeBtn" class="btn eve-btn-primary w-100" onclick="runAnalysis(false)">
                     <i class="bi bi-search me-1"></i>Analyze
                 </button>
+                <button id="stopBtn" class="btn w-100 d-none" onclick="stopAnalysis()"
+                        style="background:#e6394618;border:1px solid #e6394640;color:#e63946;">
+                    <i class="bi bi-stop-circle me-1"></i>Stop
+                </button>
                 <button id="cacheBtn" class="btn eve-btn-ghost w-100 d-none" onclick="runAnalysis(true)" title="Show results from DB cache — no zKillboard call">
                     <i class="bi bi-database me-1"></i>Use Cache
                 </button>
@@ -108,6 +112,7 @@
 {% block extra_scripts %}
 <script>
 let RESULTS = [];
+let _abortController = null;
 let _cacheCheckTimer = null;
 
 // ── EVE chat parser ───────────────────────────────────────────────────────────
@@ -516,6 +521,14 @@ function scheduleCacheCheck() {
     _cacheCheckTimer = setTimeout(checkCache, 600);
 }
 
+// ── Stop analysis ─────────────────────────────────────────────────────────────
+function stopAnalysis() {
+    if (_abortController) {
+        _abortController.abort();
+        _abortController = null;
+    }
+}
+
 // ── Analyze (streaming NDJSON) ────────────────────────────────────────────────
 async function runAnalysis(useCacheOnly) {
     // Parse EVE chat format first (idempotent if already plain names)
@@ -531,8 +544,13 @@ async function runAnalysis(useCacheOnly) {
     const windowLabel = timeWindow === '1' ? '24h' : timeWindow === '7' ? '7d' : timeWindow === '14' ? '14d' : 'any';
 
     RESULTS = [];
+    // Cancel any in-flight analysis
+    if (_abortController) _abortController.abort();
+    _abortController = new AbortController();
+
     document.getElementById('analyzeBtn').disabled = true;
     document.getElementById('cacheBtn').disabled = true;
+    document.getElementById('stopBtn').classList.remove('d-none');
     document.getElementById('errorBar').classList.add('d-none');
     document.getElementById('resultsGrid').innerHTML = '';
     document.getElementById('resultsHeader').classList.add('d-none');
@@ -555,6 +573,7 @@ async function runAnalysis(useCacheOnly) {
             method: 'POST',
             headers: {'Content-Type':'application/json', ...csrfHeader()},
             body: JSON.stringify(bodyObj),
+            signal: _abortController.signal,
         });
 
         if (!resp.ok) {
@@ -597,11 +616,13 @@ async function runAnalysis(useCacheOnly) {
             document.getElementById('cacheNote').textContent = `Window: last ${windowLabel}`;
         }
     } catch(e) {
-        showError('Network error: ' + e.message);
+        if (e.name !== 'AbortError') showError('Network error: ' + e.message);
     } finally {
+        _abortController = null;
         document.getElementById('statusBar').classList.add('d-none');
         document.getElementById('analyzeBtn').disabled = false;
         document.getElementById('cacheBtn').disabled = false;
+        document.getElementById('stopBtn').classList.add('d-none');
         // Refresh cache status icons now that data is stored
         checkCache();
     }
@@ -625,6 +646,7 @@ function clearAll() {
     document.getElementById('errorBar').classList.add('d-none');
     document.getElementById('statusBar').classList.add('d-none');
     document.getElementById('cacheBtn').classList.add('d-none');
+    document.getElementById('stopBtn').classList.add('d-none');
     document.getElementById('copyUrlBtn').classList.add('d-none');
     document.getElementById('cacheNote').textContent = '';
     document.getElementById('cacheStatusList').innerHTML =

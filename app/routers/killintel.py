@@ -13,10 +13,11 @@ from app.database import get_db, SessionLocal
 from app.dependencies import require_account
 from app.session import validate_csrf_header
 
-# Per-account rate limit: one full analysis per 60 seconds.
-_analyze_cooldown: dict[int, float] = {}
+# Per-account rate limit: 30s cooldown only when the time window changed.
+_analyze_cooldown: dict[int, float] = {}   # account_id -> last run timestamp
+_analyze_last_window: dict[int, str] = {}  # account_id -> last time_window_days value
 _analyze_lock = threading.Lock()
-_ANALYZE_COOLDOWN_SEC = 60
+_ANALYZE_COOLDOWN_SEC = 30
 from app.models import KillIntelPilot, KillIntelKillmail, KillIntelItem
 from app.services.killintel import check_names_in_cache, stream_pilots
 from app.templates_env import templates
@@ -49,21 +50,28 @@ async def killintel_analyze(
     """
     body = await request.json()
     use_cache_only: bool = bool(body.get("use_cache_only", False))
+    raw_days = body.get("time_window_days")
+    window_key = str(raw_days) if raw_days is not None else "none"
 
-    # Rate limit live analysis to 1 request per 60s per account (cache-only exempt)
+    # Rate limit: 30s cooldown only when the time window changed vs last run.
+    # Same window = no cooldown (re-running same search is fine).
     if not use_cache_only:
         now = time.monotonic()
         with _analyze_lock:
             last = _analyze_cooldown.get(account.id, 0)
+            last_window = _analyze_last_window.get(account.id)
+            window_changed = last_window != window_key
             wait = _ANALYZE_COOLDOWN_SEC - (now - last)
-            if wait > 0:
+            if window_changed and wait > 0:
                 return JSONResponse(
-                    {"error": f"Please wait {int(wait) + 1}s before running another analysis."},
+                    {"error": f"Please wait {int(wait) + 1}s before changing the time window again."},
                     status_code=429,
                 )
             _analyze_cooldown[account.id] = now
+            _analyze_last_window[account.id] = window_key
 
     raw_text: str = body.get("names", "")
+    raw_days = body.get("time_window_days")
     raw_days = body.get("time_window_days")
     time_window_days: int | None = int(raw_days) if raw_days and str(raw_days).isdigit() else None
 
@@ -98,7 +106,6 @@ async def killintel_check_cache(
     validate_csrf_header(request)
     body = await request.json()
     raw_text: str = body.get("names", "")
-    raw_days = body.get("time_window_days")
     time_window_days: int | None = int(raw_days) if raw_days and str(raw_days).isdigit() else None
     names = [line.strip() for line in raw_text.splitlines() if line.strip()]
     if not names:

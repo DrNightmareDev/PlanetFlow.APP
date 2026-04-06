@@ -12,8 +12,12 @@
 # NGINX_MODE values:
 #   https  (default) — Let's Encrypt TLS, port 80+443
 #   proxy            — upstream terminates TLS (OPNsense/Traefik/etc.), port 80 only
+#   local            — local development, HTTP only (same behavior as proxy)
 
 NGINX_MODE="${NGINX_MODE:-https}"
+if [ "$NGINX_MODE" = "local" ]; then
+    NGINX_MODE="proxy"
+fi
 
 CERT="/etc/letsencrypt/live/planetflow.app/fullchain.pem"
 ACTIVE="/etc/nginx/conf.d/active.conf"

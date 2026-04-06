@@ -811,6 +811,14 @@ function openCostEditor(btn, lotId) {
                 <td class="text-end">${formatIsk(entry.total_cost)}</td>
                 <td>${entry.note ? entry.note : '<span class="text-muted">-</span>'}</td>
                 <td class="text-end">
+                    ${entry.kind === 'batch' ? `
+                    <button
+                        type="button"
+                        class="btn btn-sm eve-btn-ghost inventory-modal-cost-edit-btn"
+                        data-lot-id="${entry.id}"
+                        data-current-unit-cost="${entry.unit_cost ?? ''}"
+                        title="Edit unit cost"
+                    ><i class="bi bi-pencil"></i></button>` : ''}
                     <button
                         type="button"
                         class="btn btn-sm eve-btn-ghost inventory-transaction-remove-btn"
@@ -922,6 +930,39 @@ function openCostEditor(btn, lotId) {
     });
 
     document.getElementById('inventoryModalTransactions')?.addEventListener('click', async (event) => {
+        const editButton = event.target.closest('.inventory-modal-cost-edit-btn');
+        if (editButton && currentItemDetail) {
+            const lotId = editButton.dataset.lotId;
+            const currentValue = String(editButton.dataset.currentUnitCost || '');
+            const nextValue = window.prompt('Unit cost (ISK per unit). Leave empty to clear.', currentValue);
+            if (nextValue === null) {
+                return;
+            }
+            editButton.disabled = true;
+            try {
+                const response = await fetch(`/inventory/lot/${lotId}/cost`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...csrfHeader() },
+                    body: JSON.stringify({ unit_cost: String(nextValue || '').trim() }),
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.error || `HTTP ${response.status}`);
+                }
+                const refreshed = await fetch(`/inventory/item/${currentItemDetail.type_id}`, { headers: { Accept: 'application/json' } });
+                if (!refreshed.ok) {
+                    throw new Error(`HTTP ${refreshed.status}`);
+                }
+                currentItemDetail = await refreshed.json();
+                renderModal();
+                await refreshSummaryRow(currentItemDetail.type_id);
+            } catch (_error) {
+                window.alert('Could not update unit cost.');
+                editButton.disabled = false;
+            }
+            return;
+        }
+
         const button = event.target.closest('.inventory-transaction-remove-btn');
         if (!button || !currentItemDetail) {
             return;

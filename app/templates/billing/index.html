@@ -293,6 +293,7 @@
         Der Code funktioniert nur fÃ¼r Accounts in derselben Corporation oder Alliance.
       </p>
       <form method="post" action="/billing/join-code/redeem" class="d-flex gap-2 flex-wrap">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
         <input type="text" name="code" class="form-control"
                placeholder="JOIN-CODE"
                style="font-family:monospace;text-transform:uppercase;max-width:280px;background:#0a1220;border-color:#1e2d3d;color:#cdd6f4;"
@@ -312,6 +313,7 @@
     <div class="card-body">
       <p class="text-muted small mb-3">Hast du einen Bonus-Code erhalten? Gib ihn hier ein, um Subscription-Tage oder Sonderzugänge zu aktivieren.</p>
       <form method="post" action="/billing/redeem" class="d-flex gap-2 flex-wrap">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
         <input type="text" name="code" class="form-control"
                placeholder="CODE-HIER-EINGEBEN"
                style="font-family:monospace;text-transform:uppercase;max-width:280px;background:#0a1220;border-color:#1e2d3d;color:#cdd6f4;"

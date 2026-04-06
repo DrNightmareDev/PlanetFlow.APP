@@ -180,6 +180,14 @@ def create_inventory_lot(
     note: str = Form(""),
 ):
     validate_csrf(request, csrf_token)
+    if quantity <= 0:
+        return _status_redirect("Quantity must be greater than zero.", "danger")
+    if unit_cost.strip():
+        try:
+            if Decimal(unit_cost) < 0:
+                return _status_redirect("Unit cost must be zero or greater.", "danger")
+        except (InvalidOperation, ValueError):
+            return _status_redirect("Invalid unit cost.", "danger")
     _catalog, by_type_id, _by_name = get_pi_catalog_maps()
     item = by_type_id.get(int(type_id))
     if not item:
@@ -196,9 +204,9 @@ def create_inventory_lot(
         )
         db.commit()
         return _status_redirect("Inventory batch added.")
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        return _status_redirect(str(exc), "danger")
+        return _status_redirect("Operation failed. Please try again.", "danger")
 
 
 @router.post("/adjust")
@@ -214,6 +222,14 @@ def adjust_inventory_stock(
     note: str = Form(""),
 ):
     validate_csrf(request, csrf_token)
+    if quantity <= 0:
+        return _status_redirect("Quantity must be greater than zero.", "danger")
+    if unit_cost.strip():
+        try:
+            if Decimal(unit_cost) < 0:
+                return _status_redirect("Unit cost must be zero or greater.", "danger")
+        except (InvalidOperation, ValueError):
+            return _status_redirect("Invalid unit cost.", "danger")
     _catalog, by_type_id, _by_name = get_pi_catalog_maps()
     item = by_type_id.get(int(type_id))
     if not item:
@@ -230,9 +246,9 @@ def adjust_inventory_stock(
         )
         db.commit()
         return _status_redirect("Inventory adjusted.")
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        return _status_redirect(str(exc), "danger")
+        return _status_redirect("Operation failed. Please try again.", "danger")
 
 
 @router.post("/remove")
@@ -251,9 +267,9 @@ def remove_inventory_row(
             return _status_redirect("Inventory row not found.", "danger", tier=tier or None)
         db.commit()
         return _status_redirect("Inventory row hidden from current stock.", "success", tier=tier or None)
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        return _status_redirect(str(exc), "danger", tier=tier or None)
+        return _status_redirect("Operation failed. Please try again.", "danger", tier=tier or None)
 
 
 @router.post("/transaction/remove")
@@ -296,9 +312,9 @@ def remove_inventory_transaction_page(
             return _status_redirect("Transaction not found.", "danger", tier=tier or None)
         db.commit()
         return _status_redirect("Transaction hidden.", "success", tier=tier or None)
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        return _status_redirect(str(exc), "danger", tier=tier or None)
+        return _status_redirect("Operation failed. Please try again.", "danger", tier=tier or None)
 
 
 @router.post("/rate")
@@ -337,9 +353,9 @@ def set_inventory_rate(
     except (InvalidOperation, ValueError):
         db.rollback()
         return _status_redirect("Invalid hourly rate.", "danger", tier=tier or None)
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        return _status_redirect(str(exc), "danger", tier=tier or None)
+        return _status_redirect("Operation failed. Please try again.", "danger", tier=tier or None)
 
 
 @router.get("/summary")

@@ -1189,7 +1189,7 @@ async function saveTranslationRow(idx) {
     try {
         const res = await fetch('/admin/i18n/update', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...csrfHeader() },
             body: JSON.stringify({ key: row.key, updates })
         });
         if (!res.ok) throw new Error('save failed');
@@ -1208,7 +1208,7 @@ document.getElementById('i18nReseedBtn')?.addEventListener('click', async () => 
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Reseeding…';
     try {
-        const res = await fetch('/admin/i18n/reseed', { method: 'POST' });
+        const res = await fetch('/admin/i18n/reseed', { method: 'POST', headers: csrfHeader() });
         const data = await res.json();
         if (data.ok) {
             showToast(`Reseed: ${data.inserted} eingefügt, ${data.updated} aktualisiert`, 'success');
@@ -1317,7 +1317,7 @@ document.getElementById('adminReloadStartBtn')?.addEventListener('click', async 
             '<span class="spinner-border spinner-border-sm" style="width:.75rem;height:.75rem;border-width:2px;color:var(--eve-accent);"></span>';
         document.getElementById(`adminStatus_${acc.account_id}`).textContent = 'lädt…';
         try {
-            const res = await fetch(`/admin/reload-account/${acc.account_id}`, { method: 'POST' });
+            const res = await fetch(`/admin/reload-account/${acc.account_id}`, { method: 'POST', headers: csrfHeader() });
             const data = await res.json();
             const count = data.colony_count || 0;
             totalColonies += count;
@@ -1346,7 +1346,7 @@ async function adminResetCharErrors(charId, charName, btn) {
     if (!confirm(`ESI-Fehler für ${charName} zurücksetzen?`)) return;
     btn.disabled = true;
     try {
-        const resp = await fetch(`/admin/reset-char-errors/${charId}`, { method: 'POST' });
+        const resp = await fetch(`/admin/reset-char-errors/${charId}`, { method: 'POST', headers: csrfHeader() });
         if (resp.ok) {
             showToast(`ESI-Fehler für ${charName} zurückgesetzt`, 'success');
             btn.closest('tr').querySelector('.badge.bg-danger')?.remove();
@@ -1364,7 +1364,7 @@ async function adminResetCharErrors(charId, charName, btn) {
 async function adminResetAccountErrors(accountId, btn) {
     btn.disabled = true;
     try {
-        const resp = await fetch(`/admin/reset-account-errors/${accountId}`, { method: 'POST' });
+        const resp = await fetch(`/admin/reset-account-errors/${accountId}`, { method: 'POST', headers: csrfHeader() });
         const data = await resp.json();
         if (data.ok) {
             showToast(`${data.reset_count} ESI-Fehler zurückgesetzt`, 'success');
@@ -1387,7 +1387,7 @@ async function adminResetAllErrors(btn) {
     if (!confirm('ESI-Fehler aller Charaktere auf der gesamten Instanz zurücksetzen?')) return;
     btn.disabled = true;
     try {
-        const resp = await fetch('/admin/reset-all-errors', { method: 'POST' });
+        const resp = await fetch('/admin/reset-all-errors', { method: 'POST', headers: csrfHeader() });
         const data = await resp.json();
         if (data.ok) {
             showToast(`${data.reset_count} ESI-Fehler zurückgesetzt`, 'success');
@@ -1410,7 +1410,7 @@ async function adminTriggerRefresh(accountId, btn) {
     const icon = btn.querySelector('i');
     if (icon) icon.className = 'spinner-border spinner-border-sm';
     try {
-        const resp = await fetch(`/admin/trigger-refresh/${accountId}`, { method: 'POST' });
+        const resp = await fetch(`/admin/trigger-refresh/${accountId}`, { method: 'POST', headers: csrfHeader() });
         const data = await resp.json();
         if (data.ok) {
             showToast('Reload gestartet — Daten werden im Hintergrund aktualisiert', 'success');

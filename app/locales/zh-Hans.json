@@ -102,7 +102,7 @@
   "footer.powered_by": "由 EVE ESI 驱动",
   "footer.mit": "采用 MIT 许可证。",
   "footer.ccp_notice": "EVE Online 及其相关标志与设计均为 CCP ehf. 的商标或注册商标。与 CCP ehf. 无关联，亦未获得其认可。",
-  "footer.donate": "如果你喜欢这个工具，欢迎向 {name} 捐赠 ISK！",
+  "footer.donate": "如果你喜欢这个工具，欢迎向 ",
   "footer.esi_checking": "正在检查 ESI...",
   "footer.esi_status": "ESI 状态",
   "footer.esi_online": "ESI：在线 · {players} 名玩家",

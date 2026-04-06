@@ -9,7 +9,7 @@ from app.dependencies import require_admin, require_account, require_manager_or_
 from app.i18n import get_translation_rows, save_translation, reseed_translations, SUPPORTED_LANGUAGES
 from app.models import Account, Character, AccessPolicy, AccessPolicyEntry, PageAccessSetting, SiteSettings
 from app.page_access import get_access_settings_map, get_billing_enabled, get_page_definitions
-from app.session import create_impersonate_session, create_session, read_session, validate_csrf
+from app.session import create_impersonate_session, create_session, read_session, validate_csrf, validate_csrf_header
 from app.templates_env import templates
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -194,6 +194,7 @@ async def update_translation(
     request: Request,
     account=Depends(require_admin),
 ):
+    validate_csrf_header(request)
     payload = await request.json()
     key = (payload.get("key") or "").strip()
     updates = payload.get("updates") or {}
@@ -211,20 +212,24 @@ async def update_translation(
 
 @router.post("/i18n/reseed")
 async def reseed_translations_endpoint(
+    request: Request,
     account=Depends(require_admin),
 ):
     """Force-upsert all seed JSON translations into the DB (insert new + update changed)."""
+    validate_csrf_header(request)
     result = reseed_translations()
     return JSONResponse({"ok": True, **result})
 
 
 @router.post("/reset-char-errors/{character_id}")
 def reset_char_errors(
+    request: Request,
     character_id: int,
     account=Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """Reset esi_consecutive_errors for a stuck character so it is retried immediately."""
+    validate_csrf_header(request)
     import logging as _logging
     _logger = _logging.getLogger(__name__)
     char = db.get(Character, character_id)
@@ -243,11 +248,13 @@ def reset_char_errors(
 
 @router.post("/reset-account-errors/{account_id}")
 def reset_account_errors(
+    request: Request,
     account_id: int,
     account=Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """Reset esi_consecutive_errors for all characters in an account."""
+    validate_csrf_header(request)
     import logging as _logging
     _logger = _logging.getLogger(__name__)
     chars = db.query(Character).filter(Character.account_id == account_id).all()
@@ -288,10 +295,12 @@ async def set_billing_enabled(
 
 @router.post("/reset-all-errors")
 def reset_all_errors(
+    request: Request,
     account=Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """Reset esi_consecutive_errors for every character site-wide."""
+    validate_csrf_header(request)
     import logging as _logging
     _logger = _logging.getLogger(__name__)
     chars = db.query(Character).filter(
@@ -700,11 +709,13 @@ def search_access_policy_entity(
 
 @router.post("/reload-account/{target_account_id}")
 def admin_reload_account(
+    request: Request,
     target_account_id: int,
     account=Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """Admin: force-refresh colony cache for any account (no corp restriction)."""
+    validate_csrf_header(request)
     from app.routers.dashboard import _build_dashboard_payload, _save_colony_cache, _dashboard_cache
     import logging as _logging
     _logger = _logging.getLogger(__name__)
@@ -724,11 +735,13 @@ def admin_reload_account(
 
 @router.post("/trigger-refresh/{target_account_id}")
 def admin_trigger_refresh(
+    request: Request,
     target_account_id: int,
     account=Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """Admin: dispatch async Celery refresh for any account — returns immediately."""
+    validate_csrf_header(request)
     target = db.query(Account).filter(Account.id == target_account_id).first()
     if not target:
         raise HTTPException(status_code=404)

@@ -89,7 +89,7 @@
   "footer.powered_by": "Powered by EVE ESI",
   "footer.mit": "MIT Licensed.",
   "footer.ccp_notice": "EVE Online and all related logos and designs are trademarks or registered trademarks of CCP ehf. Not affiliated with or endorsed by CCP ehf.",
-  "footer.donate": "Like the tool? Send an ISK donation to {name}!",
+  "footer.donate": "Like the tool? Send an ISK donation to ",
   "footer.esi_checking": "Checking ESI...",
   "footer.esi_status": "ESI status",
   "footer.esi_online": "ESI: Online · {players} players",

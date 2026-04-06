@@ -224,9 +224,11 @@ async def billing_admin_page_access(
 def redeem_code(
     request: Request,
     code: str = Form(...),
+    csrf_token: str = Form(...),
     account: Account = Depends(require_account),
     db: Session = Depends(get_db),
 ):
+    validate_csrf(request, csrf_token)
     from app.services.billing import redeem_bonus_code
 
     success, message = redeem_bonus_code(db, code_value=code, account_id=account.id)
@@ -240,9 +242,11 @@ def redeem_code(
 def redeem_join_code(
     request: Request,
     code: str = Form(...),
+    csrf_token: str = Form(...),
     account: Account = Depends(require_account),
     db: Session = Depends(get_db),
 ):
+    validate_csrf(request, csrf_token)
     from app.services.billing import redeem_subscription_join_code
 
     success, message = redeem_subscription_join_code(db, code_value=code, account_id=account.id)

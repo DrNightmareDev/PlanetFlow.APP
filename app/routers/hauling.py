@@ -381,6 +381,8 @@ def _parse_dotlan_bridge_pairs(dotlan_url: str) -> list[tuple[str, str]]:
         raise HTTPException(status_code=400, detail=translate("hauling.error_dotlan_scheme", default="Dotlan link must start with http or https"))
     if parsed.netloc != "evemaps.dotlan.net":
         raise HTTPException(status_code=400, detail=translate("hauling.error_dotlan_host", default="Only evemaps.dotlan.net links are allowed"))
+    if not (parsed.path or "").startswith("/bridges"):
+        raise HTTPException(status_code=400, detail="Only evemaps.dotlan.net/bridges/... links are allowed")
     if "/bridges/" not in parsed.path:
         raise HTTPException(status_code=400, detail=translate("hauling.error_dotlan_bridge_link", default="Please use a Dotlan bridge link"))
 

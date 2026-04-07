@@ -427,17 +427,17 @@ def _aggregate_pilot(
 
 def _window_covered(pilot, requested_days: Optional[int]) -> bool:
     """
-    Returns True if the stored kill data covers the requested time window.
+    Returns True if stored kill data covers the requested time window.
     - stored None (all-time) covers any request
     - stored N covers requests for N or fewer days
-    - stored N does NOT cover a request for more days (or all-time)
+    - stored N does NOT cover requests for more than N days (or all-time)
     """
     stored = pilot.kills_window_days  # None = all-time
     if stored is None:
         return True  # all-time data covers everything
     if requested_days is None:
         return False  # need all-time, only have N days
-    return stored <= requested_days  # stored window is same or narrower → data is a superset
+    return stored >= requested_days  # stored window is same or wider → data is a superset
 
 
 def check_names_in_cache(

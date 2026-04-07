@@ -9,6 +9,7 @@ limit_req_zone $binary_remote_addr zone=planetflow_auth:10m rate=10r/m;
 
 server {
     listen 80;
+    listen [::]:80;
     server_name _;
 
     # Static files served directly by nginx
